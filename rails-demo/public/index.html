@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Sandbox Rail Checker</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">HACKATHON CONNECTIVITY LAB</p>
+          <h1>Four rails. One proof surface.</h1>
+          <p class="lede">Call the real provider sandboxes, show their IDs and QR artifacts, then refresh canonical status.</p>
+        </div>
+        <button id="run-all" class="primary">Run all configured rails</button>
+      </header>
+
+      <section id="rail-grid" class="rail-grid" aria-live="polite"></section>
+
+      <section class="inspector">
+        <div class="inspector-head">
+          <div>
+            <p class="eyebrow">SELECTED RESULT</p>
+            <h2 id="result-title">Run a rail to inspect it</h2>
+          </div>
+          <span id="result-status" class="status idle">IDLE</span>
+        </div>
+        <div id="artifact" class="artifact empty">Provider QR or card details will appear here.</div>
+        <pre id="result-json">{}</pre>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
