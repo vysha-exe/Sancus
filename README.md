@@ -132,4 +132,4 @@ Get testnet USDC from the [Circle faucet](https://faucet.circle.com).
 
 ## License
 
-TBD.
+[MIT](LICENSE)
