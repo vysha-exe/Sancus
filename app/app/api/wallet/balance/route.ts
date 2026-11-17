@@ -1,0 +1,170 @@
+/**
+ * Copyright 2026 Circle Internet Group, Inc.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { NextResponse } from "next/server";
+import { circleDeveloperSdk } from "@/lib/circle/developer-controlled-wallets-client";
+import { getUsdcBalance, type SupportedChain } from "@/lib/circle/gateway-sdk";
+import type { Address } from "viem";
+import { withAuth } from "@/lib/api/with-auth";
+
+export const POST = withAuth(async (req, { user, supabase }) => {
+  try {
+    // Extract walletIds from the request body
+    const body = await req.json();
+    let walletIds: string[] = body?.walletIds;
+    const token: "USDC" | "EURC" = body?.token === "EURC" ? "EURC" : "USDC";
+
+    if (!walletIds || !Array.isArray(walletIds) || walletIds.length === 0) {
+      return NextResponse.json({ error: "Invalid walletIds provided" }, { status: 400 });
+    }
+
+    // 1. Batch fetch wallet info from Supabase for all requested wallets.
+    // CRITICAL: scope to user_id so a caller cannot pass another user's
+    // circle_wallet_id and have us proxy a Circle SDK call against it.
+    const { data: walletMetadata, error: dbError } = await supabase
+      .from("wallets")
+      .select("circle_wallet_id, blockchain, type, address")
+      .eq("user_id", user.id)
+      .in("circle_wallet_id", walletIds);
+
+    if (dbError) {
+      console.error("Database error fetching wallet metadata:", dbError);
+      throw new Error("Failed to retrieve wallet metadata");
+    }
+
+    // Restrict the rest of the function to wallet IDs we just verified are
+    // owned by this user. Anything else gets dropped silently.
+    const ownedWalletIds = new Set(
+      (walletMetadata ?? [])
+        .map((w) => w.circle_wallet_id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    );
+    walletIds = walletIds.filter((id: string) => ownedWalletIds.has(id));
+
+    // Create lookup maps for O(1) access
+    const chainMap = new Map<string, string>();
+    const typeMap = new Map<string, string>();
+    const addressMap = new Map<string, string>();
+    
+    walletMetadata?.forEach((w) => {
+      if (w.circle_wallet_id) {
+        chainMap.set(w.circle_wallet_id, w.blockchain || "Unknown Chain");
+        typeMap.set(w.circle_wallet_id, w.type || "");
+        addressMap.set(w.circle_wallet_id, w.address || "");
+      }
+    });
+
+    const balancesMap: Record<string, string> = {};
+
+    // 2. Filter out Gateway signer wallets and fetch balances for Circle-managed wallets
+    const circleWalletIds = walletIds.filter((id: string) => {
+      const walletType = typeMap.get(id);
+      return walletType !== "gateway_signer";
+    });
+
+    // 3. Use Promise.all to fetch balances concurrently from Circle SDK
+    await Promise.all(
+      circleWalletIds.map(async (id: string) => {
+        // Retrieve chain name from our lookup map
+        const chainName = chainMap.get(id) || "";
+        const chainSuffix = chainName ? ` (${chainName})` : "";
+
+        try {
+          const response = await circleDeveloperSdk.getWalletTokenBalance({
+            id,
+            includeAll: true
+          });
+
+          // The SDK returns an array of token balances for this specific wallet
+          const tokenBalances = response.data?.tokenBalances || [];
+
+          // USDC symbols come back as "USDC" or "USDC-TESTNET"; EURC is exact.
+          const tokenBalance =
+            token === "USDC"
+              ? tokenBalances.find((b) => b.token.symbol?.startsWith("USDC"))
+              : tokenBalances.find((b) => b.token.symbol === "EURC");
+
+          const symbol = token === "EURC" ? "€" : "$";
+          if (tokenBalance) {
+            const amount = parseFloat(tokenBalance.amount).toFixed(2);
+            balancesMap[id] = `${symbol}${amount}${chainSuffix}`;
+          } else {
+            balancesMap[id] = `${symbol}0.00${chainSuffix}`;
+          }
+        } catch (innerError) {
+          console.error(`Failed to fetch balance for wallet ${id}:`, innerError);
+          // We default to 0.00 if fetching fails for a specific wallet
+          balancesMap[id] = `${token === "EURC" ? "€" : "$"}0.00${chainSuffix}`;
+        }
+      })
+    );
+
+    // 4. For Gateway signer wallets, fetch on-chain USDC balance
+    const gatewayWalletIds = walletIds.filter((id: string) => {
+      const walletType = typeMap.get(id);
+      return walletType === "gateway_signer";
+    });
+
+    // Helper to map blockchain names to SupportedChain types
+    const blockchainToChain: Record<string, SupportedChain> = {
+      "ETH-SEPOLIA": "ethSepolia",
+      "BASE-SEPOLIA": "baseSepolia",
+      "AVAX-FUJI": "avalancheFuji",
+      "ARC-TESTNET": "arcTestnet",
+    };
+
+    await Promise.all(
+      gatewayWalletIds.map(async (id: string) => {
+        // Gateway signer wallets only custody USDC on-chain — they never hold
+        // EURC. Emit an empty marker for the EURC pass so the client doesn't
+        // render a duplicate USDC-denominated line under the wallet.
+        if (token === "EURC") {
+          balancesMap[id] = "";
+          return;
+        }
+
+        const blockchain = chainMap.get(id) || "";
+        const address = addressMap.get(id);
+        const chain = blockchainToChain[blockchain];
+
+        if (!address || !chain) {
+          balancesMap[id] = `$0.00 (${blockchain})`;
+          return;
+        }
+
+        try {
+          const balance = await getUsdcBalance(address as Address, chain);
+          const balanceInUsdc = Number(balance) / 1_000_000;
+          balancesMap[id] = `$${balanceInUsdc.toFixed(2)} (${blockchain})`;
+        } catch (error) {
+          console.error(`Failed to fetch on-chain balance for Gateway wallet ${id}:`, error);
+          balancesMap[id] = `$0.00 (${blockchain})`;
+        }
+      })
+    );
+
+    return NextResponse.json(balancesMap);
+
+  } catch (error: unknown) {
+    console.error("Failed to fetch wallet balances:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch balances" },
+      { status: 500 }
+    );
+  }
+});
