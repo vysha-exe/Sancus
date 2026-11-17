@@ -58,7 +58,7 @@ export default function ActivityPage() {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return live.payments
-      .map((p) => ({ p, x: extras[p.id] ?? fallback }))
+      .map((p) => ({ p, x: extras[p.id] ?? p.ledger ?? fallback }))
       .filter(({ p, x }) => {
         const railLabel = x.rail ?? p.rail
         if (q && !`${p.who} ${p.amount} ${p.meta}`.toLowerCase().includes(q)) return false

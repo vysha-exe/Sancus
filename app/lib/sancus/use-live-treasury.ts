@@ -21,7 +21,8 @@ function usdLabel(minor: string): string {
   return `${neg ? "-" : ""}$${displayMinor(abs, USDC_DECIMALS, "", 2)}`
 }
 
-export function useLiveTreasury(): LiveBalance {
+/** Pass `refreshKey` (e.g. a payout status) to re-read the treasury when it changes. */
+export function useLiveTreasury(refreshKey?: string | number): LiveBalance {
   const [summary, setSummary] = useState<TreasurySummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -62,7 +63,7 @@ export function useLiveTreasury(): LiveBalance {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [refreshKey])
 
   if (!summary) {
     return {

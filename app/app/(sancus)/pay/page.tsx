@@ -56,13 +56,16 @@ export default function PayWhoPage() {
                     <span className="body-strong trunc">{r.name}</span>
                     <span className="body-s trunc">{r.detail}</span>
                   </span>
+                  {r.payout ? <span className="sx-pill sx-pill--settled">Live</span> : null}
                   <span className="sx-rail">{r.rail}</span>
                 </button>
               )
             })}
           </div>
           <div className="tile-foot">
-            <span className="body-s muted">5 of 12 recipients</span>
+            <span className="body-s muted">
+              {recipients.length} recipients · <b>Live</b> ones are paid through the Sancus backend
+            </span>
             <button type="button" className="sx-btn sx-btn--quiet">
               Show all
             </button>

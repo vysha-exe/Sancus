@@ -40,6 +40,8 @@ export type Payment = {
   status: Status
   simulated?: boolean
   href?: string
+  /** Ledger columns for live rows (Activity table: when, by, they got, fee). */
+  ledger?: { when: string; by: string; theyGot: string; fee: string; rail?: string }
 }
 
 export const approvals = [
@@ -258,9 +260,44 @@ export type Recipient = {
   country: string
   methods: { rail: string; detail: string; tag: string }[]
   history: string
+  /**
+   * Set for recipients the backend can actually pay (Singapore PayNow / FAST).
+   * The Pay flow then uses live quotes and creates a real payout
+   * (POST /api/sancus/payouts). Recipients without it stay demo-only.
+   */
+  payout?: {
+    proxyType: "MOBILE" | "UEN" | "BANK"
+    proxyValue: string
+    bankCode?: string
+    currency: "SGD"
+  }
 }
 
 export const recipients: Recipient[] = [
+  {
+    id: "lim-trading",
+    name: "Lim Trading Pte Ltd",
+    initials: "LT",
+    kind: "Supplier",
+    detail: "Supplier · Singapore · PayNow UEN 201912345K",
+    rail: "PayNow",
+    country: "Singapore",
+    methods: [{ rail: "PayNow", detail: "UEN 201912345K", tag: "Default" }],
+    history: "Live: paid through the Sancus backend",
+    payout: { proxyType: "UEN", proxyValue: "201912345K", currency: "SGD" },
+  },
+  {
+    id: "tan-logistics",
+    name: "Tan Logistics",
+    initials: "TL",
+    kind: "Contractor",
+    detail: "Contractor · Singapore · PayNow mobile •••• 4567",
+    rail: "PayNow",
+    country: "Singapore",
+    methods: [{ rail: "PayNow", detail: "mobile •••• 4567", tag: "Default" }],
+    history: "Live: paid through the Sancus backend",
+    payout: { proxyType: "MOBILE", proxyValue: "+6591234567", currency: "SGD" },
+  },
   {
     id: "juliana",
     name: "Juliana Costa",

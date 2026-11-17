@@ -1,11 +1,10 @@
 import Link from "next/link"
 import { HomeBalance } from "@/components/sancus-ui/home-balance"
-import { PaymentRow } from "@/components/sancus-ui/payment-row"
+import { LatestPayments } from "@/components/sancus-ui/latest-payments"
 import {
   agents,
   approvals,
   bills,
-  latestPayments,
   monthStats,
   teamSpending,
   workspace,
@@ -58,17 +57,7 @@ export default function HomePage() {
               See all
             </Link>
           </div>
-          <div className="sx-rows">
-            {latestPayments.map((p) => (
-              <PaymentRow key={p.id} payment={p} />
-            ))}
-          </div>
-          <div className="tile-foot">
-            <span className="body-s muted">5 of 7 this month</span>
-            <Link href="/activity" className="sx-btn sx-btn--quiet">
-              Open Activity
-            </Link>
-          </div>
+          <LatestPayments />
         </section>
 
         <section className="tile s4" aria-labelledby="month">

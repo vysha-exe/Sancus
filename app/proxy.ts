@@ -31,8 +31,21 @@ import { createSupabaseReqResClient } from "@/lib/supabase/server-client";
 import { DEMO_LOGIN_PATH, isDemoLoginEnabled } from "@/lib/sancus/demo-login";
 import { hasEnvVars } from "@/lib/utils";
 
-// Circle dashboard chrome was removed; Sancus app routes are public in the mock phase.
-const PROTECTED_PREFIXES: string[] = [];
+// Sancus app screens. Only enforced when Supabase is configured (see the
+// hasEnvVars check below); without it the screens run as a mock UI with demo
+// data. With demo login on, signed-out visitors are signed in automatically, so
+// the screens load live data from the backend.
+const PROTECTED_PREFIXES: string[] = [
+  "/home",
+  "/pay",
+  "/activity",
+  "/receive",
+  "/spending",
+  "/team",
+  "/invoices",
+  "/agents",
+  "/settings",
+];
 
 function startsWithAny(pathname: string, prefixes: string[]): boolean {
   return prefixes.some((prefix) => pathname.startsWith(prefix));

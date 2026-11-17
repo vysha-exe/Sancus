@@ -25,10 +25,16 @@ function mapPayout(p: PayoutDto): Payment {
     who: p.recipientName,
     amount: `−$${usdc}`,
     meta: `S$ ${sgd} · ${new Date(p.createdAt).toLocaleString()}`,
-    rail: p.rail,
+    rail: p.rail === "PAYNOW" ? "PayNow" : p.rail,
     status: statusFromPayout(p.status),
     simulated: p.simulated,
     href: "/activity",
+    ledger: {
+      when: new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
+      by: "You",
+      theyGot: `S$ ${sgd}`,
+      fee: `S$ ${displayMinor(BigInt(p.feeSgdMinor), 2, "", 2)}`,
+    },
   }
 }
 
@@ -44,7 +50,13 @@ export function useLiveActivity(): {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch("/api/sancus/payouts", { cache: "no-store" })
+        let res = await fetch("/api/sancus/payouts", { cache: "no-store" })
+        // Right after demo auto-login the session cookie can lag the first request; retry once.
+        if (res.status === 401) {
+          await new Promise((r) => setTimeout(r, 1200))
+          if (cancelled) return
+          res = await fetch("/api/sancus/payouts", { cache: "no-store" })
+        }
         if (!res.ok) {
           if (!cancelled) setLoading(false)
           return
