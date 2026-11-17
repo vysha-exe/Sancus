@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sancus · TextField</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>body { margin: 0; padding: 24px; background: var(--surface-000); }</style>
+</head>
+<body>
+<div class="sx" style="display:grid;gap:var(--space-6);padding:24px;max-width:420px">
+  <label class="sx-field"><span class="sx-label">Email</span><input class="sx-field__input" id="tf-email" type="email" value="maya@example.com"><span class="sx-field__help">We'll send you a six-digit code.</span></label>
+  <label class="sx-field"><span class="sx-label">Amount in USD</span><input class="sx-field__input sx-field__amount" id="tf-amount" inputmode="decimal" value="100.00"><span class="sx-field__help">Juliana receives about R$ 537,90</span></label>
+  <label class="sx-field sx-field--error"><span class="sx-label">Pix key</span><input class="sx-field__input" id="tf-pix" value="juliana@costa"><span class="sx-field__help">We couldn't find that Pix key. Double-check it, or pay Juliana by bank details instead.</span></label>
+</div>
+</body>
+</html>

@@ -1,0 +1,124 @@
+/* Sancus tokens. Generated from tokens.json; edit tokens.json, then regenerate.
+   Day is the default theme. Night applies with data-theme="night" on <html>,
+   or automatically when the OS is in dark mode unless data-theme="day" is set. */
+@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+:root, [data-theme="day"] {
+  --brand-night: #0E1615;
+  --brand-deep: #123A35;
+  --brand-verdigris: #1F7A6D;
+  --brand-signal: #8CC7B5;
+  --brand-bronze: #C08445;
+  --brand-limestone: #EEF1EC;
+  --surface-000: #EEF1EC;
+  --surface-100: #FFFFFF;
+  --surface-200: #E3E9E4;
+  --surface-inverse: #0E1615;
+  --ink: #12201E;
+  --ink-muted: #5A6966;
+  --ink-inverse: #E4EAE6;
+  --line: #CDD6D1;
+  --line-strong: #7D8B86;
+  --accent: #1F7A6D;
+  --on-accent: #FFFFFF;
+  --accent-subtle: #DDF0EA;
+  --focus: #1F7A6D;
+  --settled: #1F7A6D;
+  --settled-bg: #DDF0EA;
+  --pending: #7A5A0E;
+  --pending-bg: #F7EBC9;
+  --held: #8A5622;
+  --held-bg: #F2E3D2;
+  --failed: #A23A30;
+  --failed-bg: #F6DCD8;
+  --shadow-card: 0 30px 60px -20px rgba(14,22,21,0.55);
+  --shadow-glow: 0 0 36px 0 rgba(140,199,181,0.22);
+  color-scheme: light;
+}
+[data-theme="night"] {
+  --surface-000: #0E1615;
+  --surface-100: #15201E;
+  --surface-200: #1B2826;
+  --surface-inverse: #E4EAE6;
+  --ink: #E4EAE6;
+  --ink-muted: #94A39E;
+  --ink-inverse: #12201E;
+  --line: #26332F;
+  --line-strong: #5F756F;
+  --accent: #8CC7B5;
+  --on-accent: #0E1615;
+  --accent-subtle: #1C3A34;
+  --focus: #8CC7B5;
+  --settled: #8CC7B5;
+  --settled-bg: #1C3A34;
+  --pending: #E7C25E;
+  --pending-bg: #3A3016;
+  --held: #D9A36A;
+  --held-bg: #3A2A1B;
+  --failed: #EE8E83;
+  --failed-bg: #3D1E1A;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="day"]) {
+    --surface-000: #0E1615;
+    --surface-100: #15201E;
+    --surface-200: #1B2826;
+    --surface-inverse: #E4EAE6;
+    --ink: #E4EAE6;
+    --ink-muted: #94A39E;
+    --ink-inverse: #12201E;
+    --line: #26332F;
+    --line-strong: #5F756F;
+    --accent: #8CC7B5;
+    --on-accent: #0E1615;
+    --accent-subtle: #1C3A34;
+    --focus: #8CC7B5;
+    --settled: #8CC7B5;
+    --settled-bg: #1C3A34;
+    --pending: #E7C25E;
+    --pending-bg: #3A3016;
+    --held: #D9A36A;
+    --held-bg: #3A2A1B;
+    --failed: #EE8E83;
+    --failed-bg: #3D1E1A;
+    color-scheme: dark;
+  }
+}
+:root {
+  --font-serif: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-18: 72px;
+  --space-24: 96px;
+  --radius-xs: 3px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 18px;
+  --radius-full: 999px;
+  --content-max: 1120px;
+  --measure: 62ch;
+  --touch-min: 44px;
+}
+
+/* Type styles */
+.wordmark { font-family: var(--font-serif); font-size: 30px; line-height: 1; font-weight: 500; letter-spacing: 0.14em; font-variation-settings: 'opsz' 36; text-transform: uppercase; }
+.display-xl { font-family: var(--font-serif); font-size: 96px; line-height: 1; font-weight: 400; letter-spacing: -0.02em; font-variation-settings: 'opsz' 72; }
+.display-l { font-family: var(--font-serif); font-size: 64px; line-height: 1.02; font-weight: 400; letter-spacing: -0.02em; font-variation-settings: 'opsz' 72; }
+.heading-1 { font-family: var(--font-serif); font-size: 48px; line-height: 1.08; font-weight: 400; letter-spacing: -0.015em; font-variation-settings: 'opsz' 60; }
+.heading-2 { font-family: var(--font-serif); font-size: 32px; line-height: 1.15; font-weight: 400; letter-spacing: -0.01em; font-variation-settings: 'opsz' 36; }
+.heading-3 { font-family: var(--font-serif); font-size: 22px; line-height: 1.25; font-weight: 500; font-variation-settings: 'opsz' 24; }
+.amount-xl { font-family: var(--font-serif); font-size: 56px; line-height: 1; font-weight: 400; letter-spacing: -0.02em; font-variation-settings: 'opsz' 72; font-variant-numeric: tabular-nums; }
+.body-l { font-family: var(--font-sans); font-size: 18px; line-height: 28px; font-weight: 400; }
+.body { font-family: var(--font-sans); font-size: 16px; line-height: 24px; font-weight: 400; }
+.body-strong { font-family: var(--font-sans); font-size: 16px; line-height: 24px; font-weight: 600; }
+.body-s { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 400; }
+.label { font-family: var(--font-mono); font-size: 11px; line-height: 14px; font-weight: 500; letter-spacing: 0.14em; font-variant-numeric: tabular-nums; text-transform: uppercase; }
+.data { font-family: var(--font-mono); font-size: 14px; line-height: 20px; font-weight: 400; font-variant-numeric: tabular-nums; }
