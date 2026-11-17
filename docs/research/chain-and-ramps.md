@@ -10,6 +10,8 @@ Anything marked **unverified** wasn't confirmed in official docs. Check it befor
 
 ---
 
+> **✅ Team decision (Nov 17): Arc testnet + Circle suite, Asia focus (Singapore corridor first).** We're forking Circle's [arc-fintech](https://github.com/circlefin/arc-fintech) treasury sample. Gateway gives one USDC balance across chains; developer-controlled wallets run the treasury, payouts and AP agent; Nanopayments settle x402 earnings into the treasury. Singapore payouts go through a StraitsX-style partner (USDC → SGD via PayNow/FAST). The Solana comparison below is kept for reference. Note: Circle on Solana is limited (no smart accounts, no passkey wallets, no Agent Wallets, no Nanopayments), which tipped the decision.
+
 ## TL;DR
 
 | Decision | Recommendation |
@@ -112,12 +114,72 @@ The adapters in RuoHan's `rails-demo/` (Marqeta cards, PayZu Pix, Omise PromptPa
 
 ---
 
+## 3. Chain capabilities beyond the language
+
+| Capability | Arc | Solana | Base |
+|---|---|---|---|
+| Third-party ramps (Bridge, BlindPay, Coinbase) | ❓ none confirmed | ✅ | ✅ |
+| Circle Onramp Kit (consumer card/Apple Pay → USDC, US/UK/EU) | ✅ | ❌ | ❌ |
+| Gas paid in USDC | ✅ (~$0.01) | ❌ (SOL) | ❌ (ETH) |
+| Built-in memo / payment reference | ✅ Memo contract | ✅ SPL Memo program + Solana Pay reference keys | ❌ |
+| Second currency (EURC) on testnet | ✅ faucet | ✅ | ✅ |
+| Finality | <1s, no reorgs | fast, probabilistic | ~2s L2 |
+| Opt-in privacy for amounts | 🚧 in development | ❌ for USDC | ❌ |
+| x402 / Bazaar | Nanopayments ✅, Bazaar ❓ | ✅ | ✅ (Bazaar's home) |
+| Real-world payments traction | new (mainnet Sept 2026) | Visa USDC settlement with US banks | Coinbase, Shopify |
+
+**Takeaway:** Solana and Base win on third-party ramps. Arc wins on banking features built into the chain (USDC gas, memos, Circle's agent and escrow tooling). In the demo, ramps are simulated by Bridge's sandbox, so Arc's built-in features matter more.
+
+---
+
+## 4. Newer building blocks worth using
+
+Scouted 2026-11-16: lesser-known protocols and SDKs, like the x402 Bazaar, that could make Sancus stand out.
+
+### Top 5 for Sancus
+
+| # | Building block | What it is | Status | Effort | Sancus use |
+|---|---|---|---|---|---|
+| 1 | **AuthCaptureEscrow** (Commerce Payments Protocol) | Card-style authorize / capture / void / refund for stablecoins | ✅ Circle sample on **Arc testnet**: [arc-ecommerce-payments](https://github.com/circlefin/arc-ecommerce-payments) | 1–2 days | Hold funds when a PO is approved; capture on delivery; partial refunds. Could replace our hand-rolled holds in `SancusTreasury`. |
+| 2 | **ERC-8004** (Trustless Agents) | Onchain identity + reputation registries for agents/vendors | ✅ Registries on **Arc testnet** + [official tutorial](https://docs.arc.io/arc/tutorials/register-your-first-ai-agent) | ~1 day | Only pay vendors/agents with a verified identity and minimum reputation; post feedback after each payout. |
+| 3 | **Circle Nanopayments** (x402 v2) + **Bazaar listing** | Gas-free batched USDC payments down to $0.000001 | ✅ Testnet on Arc, Base: [arc-nanopayments](https://github.com/circlefin/arc-nanopayments) | ~1 day | AP agent pays per call for FX/data feeds from a capped sub-balance; list Sancus's payout-quote endpoint in the x402 Bazaar. |
+| 4 | **Arc Memo contract** | Wraps a USDC transfer and attaches a reference ID | ✅ Testnet; [tutorial](https://docs.arc.io/arc/tutorials/send-usdc-with-transaction-memo) | ½ day | Invoice/payroll IDs onchain → automatic reconciliation. ⚠️ Match on the USDC `Transfer` event; tracers may show the Memo contract as the sender. |
+| 5 | **QuickNode Streams on Arc** | Real-time chain event streams | ✅ Arc testnet + mainnet | ½–1 day | Stream treasury and memo events into the ledger, approvals and alerts. **QuickNode $500 bounty.** |
+
+**Suggested core combo:** #1 + #4 + #5 (real holds, reconciliation, live ledger → Arc award + QuickNode bounty). Add #2 if there's spare time.
+
+### Also worth knowing
+- **Arc App Kits:** Send, Bridge, Swap, Unified Balance on testnet; Onramp, Earn (Morpho vaults) and Borrow added Sept 30, 2026. *Idea:* sweep idle treasury USDC into an Earn vault (DeFi track). Testnet swaps often revert due to thin liquidity.
+- **Squads Grid (Solana):** REST API for smart accounts with spending limits and payment intents; sandbox + devnet. The path to the Solana award if we ever add a second chain.
+- **Gemini Prediction Markets API:** public market data, sandbox for trading. *Idea:* treasury hedges FX or rate risk with event contracts (Gemini bounty).
+- **QuickNode x402 on Arc testnet:** alpha, free tier of 1M requests/month.
+- **Stripe Tempo + MPP:** payment lanes, ISO 20022 memos, capped agent "sessions". No prize here; borrow the design ideas.
+- **Wallet policy engines** (Privy, Turnkey, Coinbase Agentic Wallets): spend limits and allowlists. Redundant with our Solidity treasury.
+
+### Skip or mention only in the pitch
+| Item | Why |
+|---|---|
+| Arc opt-in privacy | Still in development: roadmap slide only |
+| Circle Agent Wallet spending policies | Docs say mainnet wallets only |
+| Mastercard Agent Pay for Machines (AP4M) | Built on x402, but early-access sandbox is gated |
+| Stripe/OpenAI ACP | Consumer checkout; weak fit for B2B |
+| Circle Refund Protocol | Older and narrower than AuthCaptureEscrow |
+| Bridge Open Issuance / Stablecoin Financial Accounts | No confirmed sandbox |
+| Circle Compliance Engine | Gated; mention as the future screening layer |
+
+**Notes:** x402 v2 breaks older tutorials, so use current docs. Copy ERC-8004 registry addresses from Arc's tutorial, not from summaries.
+
+---
+
 ## Still unverified
 - Bridge fees, sandbox Pix/SPEI behavior, sandbox access turnaround, Arc support
 - Circle Mint sandbox signup speed; Mint chain support beyond ETH
 - BlindPay: USDC vs USDB in development; self-serve signup
 - Coinbase CDP Payments eligibility
 - Pix support in CPN
+- Whether x402 Bazaar indexes Arc endpoints
+- Circle Onramp Kit details (from secondary coverage)
+- Arc Portal spend limits (third-party reports only)
 
 ## Sources
 **Circle / Arc**
@@ -152,3 +214,28 @@ The adapters in RuoHan's `rails-demo/` (Marqeta cards, PayZu Pix, Omise PromptPa
 - https://www.gemini.com/blog/usd-rails-launching-for-uk-and-eu-institutions
 - https://blindpay.com/docs/getting-started/quick-start
 - https://bitso.com/business/payouts
+
+**Chain capabilities & building blocks**
+- https://docs.arc.network/arc-chain
+- https://arc.network/blog/how-arc-supports-cross-border-payments-arc-blueprints
+- https://x.com/BSCNews/status/2105348622699167901 (Arc App Kits / Onramp Kit)
+- https://docs.cdp.coinbase.com/x402/network-support
+- https://docs.cdp.coinbase.com/x402/buyer/discover-services
+- https://www.theblock.co/amp/post/382721/visa-launches-stablecoin-settlement-us-circle-usdc-solana
+- https://www.circle.com/blog/circle-nanopayments-launches-on-testnet-as-the-core-primitive-for-agentic-economic-activity
+- https://developers.circle.com/agent-stack/agent-nanopayments
+- https://github.com/circlefin/arc-nanopayments
+- https://github.com/circlefin/arc-ecommerce-payments
+- https://shopify.engineering/commerce-payments-protocol
+- https://docs.arc.io/arc/tutorials/register-your-first-ai-agent
+- https://github.com/erc-8004/erc-8004-contracts
+- https://docs.arc.io/arc/tutorials/send-usdc-with-transaction-memo
+- https://docs.arc.io/integrate/exchanges/withdrawals
+- https://thedefiant.io/news/defi/arc-packages-usdc-funding-and-morpho-lending-for-apps
+- https://www.quicknode.com/docs/arc/api-overview
+- https://www.quicknode.com/docs/build-with-ai/x402-payments
+- https://developers.squads.so/grid/v1/accounts/introduction
+- https://developers.circle.com/agent-stack/agent-wallets/wallet-operations/custom-policies
+- https://www.techtimes.com/articles/329316/20261021/mastercard-opens-developer-apis-ai-agent-payments-built-x402-protocol.htm
+- https://tempo.xyz/faq/
+- https://developer.gemini.com/prediction-markets/getting-started

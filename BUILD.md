@@ -11,11 +11,60 @@ Step-by-step instructions to build the Sancus hackathon prototype from an empty 
 
 ---
 
+## ⚡ Decision update (Nov 17): Arc + Circle suite
+
+The team chose **Arc testnet + the Circle developer suite**, with an **Asia focus** (Singapore payout corridor first). This section overrides anything below that conflicts with it. Research is in [docs/research/chain-and-ramps.md](docs/research/chain-and-ramps.md).
+
+### What changes
+| Area | Before | Now |
+|---|---|---|
+| Chain | Base Sepolia | **Arc testnet** (chain ID 5042002, USDC is gas) |
+| Starting point | Empty monorepo | **Fork [circlefin/arc-fintech](https://github.com/circlefin/arc-fintech)** (Apache-2.0): Next.js + Supabase treasury app already using developer-controlled wallets, Gateway, App Kit, EarnKit, Onramp Kit (sandbox) and webhooks. Keep its license notice. |
+| Wallets | Privy embedded wallets | **Circle developer-controlled wallets** for the treasury, payout signer and AP agent; **modular (passkey) wallets** for admin approvals |
+| Balance | One contract on one chain | **Circle Gateway** unified USDC balance; deposits from any supported testnet |
+| Gas | Users hold ETH | **Gas Station** sponsors gas |
+| Database | Prisma + local Postgres | **Supabase** (as in arc-fintech); keep the ledger schema from Phase 3 |
+| Main corridor | Brazil (Pix) | **Singapore (PayNow/FAST)** via a StraitsX-style partner; QRIS/PromptPay collections and Marqeta cards from `rails-demo/` |
+| New feature | – | **Earning treasury:** an x402 endpoint sells Sancus routing quotes; Circle Nanopayments settle revenue into the Gateway balance |
+
+### How the pieces fit
+```
+Deposits (any testnet, Bridge USD→USDC) ──► Gateway balance ──mint on Arc──► SancusTreasury.sol (limits, approvals, holds)
+                                                   ▲                                   │ executed by Circle dev wallet (operator)
+                         x402 earnings (Nanopayments)                                  ▼
+                                                                  Payout adapters: PayNow · ACH · onchain USDC · cards
+```
+Keep it simple for the demo: **all spending happens on Arc**. Gateway is the funding layer (deposits from other chains, x402 revenue). Minting payouts on another chain for a partner is a stretch goal.
+
+### Revised order of work (3 days)
+1. **Day 1:** fork arc-fintech, get it running on Arc testnet with your own Circle API key + entity secret. Deploy `SancusTreasury.sol` (Phase 2) and call it through Circle's contract-execution API from the operator wallet.
+2. **Day 1–2:** ledger + router + policy engine (Phases 3–4) inside the forked app; payout adapters for PayNow (StraitsX sandbox or simulated), ACH (Bridge sandbox or simulated) and onchain USDC; wire in `rails-demo/` adapters (Marqeta, QRIS, PromptPay).
+3. **Day 2:** passkey approval for payments over the threshold; Circle webhooks → ledger reconciliation.
+4. **Day 3:** x402 routing-quote endpoint with Nanopayments → Gateway balance; demo polish; video.
+
+### Circle setup checklist
+- [ ] Circle Developer Console account → testnet API key
+- [ ] Generate + register the entity secret (store it in `.env`, never commit)
+- [ ] Create a wallet set and wallets on `ARC-TESTNET` (treasury, operator, agent)
+- [ ] Configure Gas Station policy for Arc testnet
+- [ ] Fund wallets from faucet.circle.com (USDC + EURC)
+- [ ] Deposit into Gateway; confirm the unified balance via `GET /v1/balances`
+- [ ] Register the webhook endpoint (v2 notifications; dedupe on notification ID; don't treat the API response as final)
+
+### Gotchas
+- Arc native USDC uses **18 decimals**; the ERC-20 interface uses **6**. Always read `decimals()`.
+- Developer-controlled wallets have **no built-in spending limits**. Enforce them in `SancusTreasury.sol` and the policy engine.
+- Gateway attestations expire after **10 minutes**; at most 16 burn intents per request.
+- Gas Station on EVM sponsors **smart-contract accounts (SCA)** only. Create SCA wallets if you want sponsored gas.
+- Agent Wallet spending policies may be mainnet-only; test before relying on them.
+
+---
+
 ## Phase 0: Decisions (5 minutes)
 
 | Decision | Default | Notes |
 |---|---|---|
-| Chain | **Base Sepolia** (chain ID 84532) | The contracts are plain EVM. To compete for a Circle/Arc prize, switch to **Arc testnet** (chain ID 5042002, USDC is the gas token). Only `.env` changes. On Arc, read USDC's `decimals()` instead of assuming 6. |
+| Chain | **Arc testnet** (chain ID 5042002) | Decided Nov 17 (see above). USDC is the gas token; read USDC's `decimals()` instead of assuming 6. |
 | Backend language | **TypeScript** | The PRD allows Go or TS. TS keeps one language across web, core and scripts. |
 | ORM | **Prisma** | Drizzle is fine too; pick one and stay with it. |
 | Package manager | **pnpm** workspaces | |
