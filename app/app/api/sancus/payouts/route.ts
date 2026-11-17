@@ -2,20 +2,19 @@
 //
 // POST flow:
 //   1. Validate recipient + amount, compute a fresh quote server-side (never trust client numbers).
-//   2. Insert the payout (idempotent on the Idempotency-Key header).
-//   3. Treasury leg: if SANCUS_SETTLEMENT_ADDRESS is set, send the USDC from the
-//      chosen Circle wallet on Arc to the partner's settlement address (real testnet tx).
-//      Otherwise the leg is skipped and the payout is marked simulated.
-//   4. Partner leg: hand off to the payout provider (simulated until StraitsX sandbox access).
+//   2. Spending policy: blocked → 403; at/over the approval rule → PENDING_APPROVAL (funds reserved).
+//   3. Insert the payout (idempotent on the Idempotency-Key header) and reserve funds in the ledger.
+//   4. If allowed: executePayout() runs the USDC leg on Arc (when SANCUS_SETTLEMENT_ADDRESS is set)
+//      and hands off to the payout provider (simulated until StraitsX sandbox access).
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { evmAddressSchema, validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
-import { getAppKitSendError, sendUsdcOnSameChainWithAppKit } from "@/lib/circle/app-kit-send"
 import { formatRate } from "@/lib/sancus/fx"
-import { formatMinor, USDC_DECIMALS } from "@/lib/sancus/money"
 import { getPayoutProvider } from "@/lib/sancus/payout-provider"
+import { evaluatePayout, loadPolicy, spentToday } from "@/lib/sancus/policy"
 import {
+  executePayout,
   preparePayout,
   quoteRequestSchema,
   refreshPayoutStatuses,
@@ -86,6 +85,22 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const provider = getPayoutProvider()
   const willSendOnchain = Boolean(settlementAddress && sourceWallet)
 
+  // Spending policy: block, send to approval, or allow.
+  const policy = await loadPolicy(supabase, user.id)
+  const evaluation = evaluatePayout({
+    policy,
+    amountMinor: quote.usdcAmountMinor,
+    recipient: { name: recipient.name, proxyValue: recipient.proxyValue },
+    spentTodayMinor: await spentToday(supabase, user.id),
+  })
+  if (evaluation.decision === "BLOCK") {
+    return NextResponse.json(
+      { error: evaluation.reason, issues: [{ field: "amount", message: evaluation.reason }] },
+      { status: 403 }
+    )
+  }
+  const needsApproval = evaluation.decision === "NEEDS_APPROVAL"
+
   const { data: inserted, error: insertError } = await supabase
     .from("sancus_payouts")
     .insert({
@@ -108,7 +123,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       blockchain: sourceWallet?.blockchain ?? null,
       settlement_address: settlementAddress,
       provider: provider.name,
-      status: "CREATED",
+      status: needsApproval ? "PENDING_APPROVAL" : "CREATED",
+      approval_reason: evaluation.reason,
       // Fully real only when both the treasury leg is onchain and the partner is live.
       simulated: provider.simulated || !willSendOnchain,
     })
@@ -126,58 +142,15 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
 
   let row = inserted as PayoutRow
-  // Ledger: commit the USDC from available to in-transit.
+  // Ledger: reserve the USDC (available → in transit), also while waiting for approval.
   await syncPayoutLedger(supabase, row)
 
-  // Treasury leg: real USDC transfer on Arc testnet.
-  if (willSendOnchain && sourceWallet && settlementAddress) {
-    const usdcDecimal = formatMinor(quote.usdcAmountMinor, USDC_DECIMALS)
-    try {
-      const sent = await sendUsdcOnSameChainWithAppKit({
-        sourceBlockchain: sourceWallet.blockchain,
-        sourceWalletAddress: sourceWallet.address,
-        recipientAddress: settlementAddress,
-        amount: usdcDecimal,
-        token: "USDC",
-      })
-      row = await update(supabase, row, {
-        circle_transaction_id: sent.txId,
-        tx_hash: sent.txHash ?? null,
-      })
-      // Mirror into the upstream activity feed.
-      await supabase.from("transactions").insert({
-        user_id: user.id,
-        amount: Number(usdcDecimal),
-        sender_address: sourceWallet.address,
-        recipient_address: settlementAddress,
-        tx_hash: sent.txHash ?? null,
-        circle_transaction_id: sent.txId,
-        blockchain: sourceWallet.blockchain,
-        type: "OUTBOUND",
-        currency: "USDC",
-        status: "PENDING",
-      })
-    } catch (error) {
-      const mapped = getAppKitSendError(error)
-      row = await update(supabase, row, {
-        status: "FAILED",
-        failure_reason: `USDC transfer failed: ${mapped.userMessage ?? mapped.error}`,
-      })
-      await syncPayoutLedger(supabase, row)
-      return NextResponse.json({ payout: toPayoutDto(row) }, { status: 201 })
-    }
+  // Over the approval rule: stop here. Money moves when someone approves it.
+  if (needsApproval) {
+    return NextResponse.json({ payout: toPayoutDto(row), needsApproval: true }, { status: 201 })
   }
 
-  // Partner leg.
-  const { providerRef } = await provider.submit({
-    id: row.id,
-    rail: row.rail,
-    status: row.status,
-    createdAt: new Date(row.created_at),
-    sgdAmountMinor: BigInt(row.sgd_amount_minor),
-  })
-  row = await update(supabase, row, { provider_ref: providerRef })
-
+  row = await executePayout(supabase, user.id, row)
   return NextResponse.json({ payout: toPayoutDto(row) }, { status: 201 })
 })
 
@@ -193,17 +166,4 @@ async function findByKey(
     .eq("idempotency_key", key)
     .maybeSingle()
   return (data as PayoutRow | null) ?? null
-}
-
-async function update(
-  supabase: Parameters<Parameters<typeof withAuth>[0]>[1]["supabase"],
-  row: PayoutRow,
-  patch: Partial<PayoutRow>
-): Promise<PayoutRow> {
-  const { data, error } = await supabase.from("sancus_payouts").update(patch).eq("id", row.id).select("*").single()
-  if (error || !data) {
-    console.error("Failed to update payout", row.id, error)
-    return { ...row, ...patch }
-  }
-  return data as PayoutRow
 }

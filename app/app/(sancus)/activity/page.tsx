@@ -4,8 +4,16 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import { ActivityTabs } from "@/components/sancus-ui/activity-tabs"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
-import { approvals, approvalsTotalLabel, balance } from "@/lib/sancus/demo-data"
+import { approvalsTotalLabel, balance } from "@/lib/sancus/demo-data"
 import { useLiveActivity } from "@/lib/sancus/use-live-activity"
+import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
+import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
+import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
+
+const usdMinor = (m: string | bigint) => {
+  const v = BigInt(m)
+  return `${v < 0n ? "-" : ""}$${displayMinor(v < 0n ? -v : v, USDC_DECIMALS, "", 2)}`
+}
 
 type Extra = {
   when: string
@@ -54,6 +62,24 @@ export default function ActivityPage() {
   const [rail, setRail] = useState("Rail")
   const [status, setStatus] = useState<string>("Status")
   const live = useLiveActivity()
+  const approvalsLive = useLiveApprovals()
+  const treasury = useLiveTreasury()
+  const t = treasury.summary
+  // Live tiles: approvals waiting are reserved but not yet "on their way out".
+  const waitingMinor = BigInt(Math.round(approvalsLive.waitingTotal * 1_000_000))
+  const tiles = t
+    ? {
+        available: usdMinor(t.availableMinor),
+        held: "$0.00",
+        out: usdMinor(BigInt(t.reservedMinor) + BigInt(t.inFlightMinor) - waitingMinor),
+        waiting: usdMinor(waitingMinor),
+      }
+    : {
+        available: balance.availableLabel,
+        held: balance.heldLabel,
+        out: balance.pendingOutLabel,
+        waiting: approvalsTotalLabel,
+      }
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -91,27 +117,27 @@ export default function ActivityPage() {
         </div>
       </header>
 
-      <ActivityTabs active="all" approvalCount={approvals.length} />
+      <ActivityTabs active="all" approvalCount={approvalsLive.waiting.length} />
 
       <div className="grid">
         <div className="tile s3">
           <span className="sx-label">Available</span>
-          <span className="big">{balance.availableLabel}</span>
+          <span className="big">{tiles.available}</span>
         </div>
         <div className="tile s3">
           <span className="sx-label">Held for cards</span>
           <span className="big" style={{ color: "var(--held)" }}>
-            {balance.heldLabel}
+            {tiles.held}
           </span>
         </div>
         <div className="tile s3">
           <span className="sx-label">On its way out</span>
-          <span className="big">{balance.pendingOutLabel}</span>
+          <span className="big">{tiles.out}</span>
         </div>
         <div className="tile s3">
           <span className="sx-label">Waiting for approval</span>
           <span className="big" style={{ color: "var(--pending)" }}>
-            {approvalsTotalLabel}
+            {tiles.waiting}
           </span>
         </div>
 

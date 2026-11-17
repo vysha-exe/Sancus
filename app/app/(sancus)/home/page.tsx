@@ -1,9 +1,9 @@
 import Link from "next/link"
 import { HomeBalance } from "@/components/sancus-ui/home-balance"
 import { LatestPayments } from "@/components/sancus-ui/latest-payments"
+import { NeedsYou } from "@/components/sancus-ui/needs-you"
 import {
   agents,
-  approvals,
   bills,
   monthStats,
   teamSpending,
@@ -23,30 +23,7 @@ export default function HomePage() {
       <div className="grid">
         <HomeBalance />
 
-        <section className="tile s4" aria-labelledby="needs">
-          <div className="tile-head">
-            <h2 className="tile-title" id="needs">
-              Needs you
-            </h2>
-            <span className="sx-pill sx-pill--pending">{approvals.length} waiting</span>
-          </div>
-          <div className="sx-rows">
-            {approvals.map((a) => (
-              <Link key={a.id} href="/activity/approvals" className="sx-row">
-                <span className="sx-row__who">{a.who}</span>
-                <span className="sx-row__amount">{a.amount}</span>
-                <span className="sx-row__meta">{a.reason}</span>
-                <span />
-              </Link>
-            ))}
-          </div>
-          <div className="tile-foot">
-            <span className="body-s muted">Shows the 3 oldest</span>
-            <Link href="/activity/approvals" className="sx-btn sx-btn--quiet">
-              Review all
-            </Link>
-          </div>
-        </section>
+        <NeedsYou />
 
         <section className="tile s8 r2" aria-labelledby="latest">
           <div className="tile-head">

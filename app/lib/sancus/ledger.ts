@@ -57,7 +57,7 @@ export function feeShareUsdc(p: PayoutForLedger): bigint {
 }
 
 /** Journal for a payout lifecycle event. */
-export function payoutJournal(event: "created" | "completed" | "failed", p: PayoutForLedger): Journal {
+export function payoutJournal(event: "created" | "completed" | "failed" | "rejected", p: PayoutForLedger): Journal {
   const base = { sourceType: "payout", sourceId: p.id, event }
   if (event === "created") {
     return {
@@ -80,7 +80,10 @@ export function payoutJournal(event: "created" | "completed" | "failed", p: Payo
   }
   return {
     ...base,
-    memo: `Payout to ${p.recipientName} failed; funds released`,
+    memo:
+      event === "rejected"
+        ? `Payout to ${p.recipientName} declined by approver; funds released`
+        : `Payout to ${p.recipientName} failed; funds released`,
     entries: [
       { account: ACCOUNTS.available, direction: "DEBIT", amountMinor: p.usdcAmountMinor },
       { account: ACCOUNTS.inTransit, direction: "CREDIT", amountMinor: p.usdcAmountMinor },

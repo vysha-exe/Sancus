@@ -3,8 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
-import { approvals } from "@/lib/sancus/demo-data"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
+import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
 import { workspace } from "@/lib/sancus/demo-data"
 import {
   IconActivity,
@@ -30,7 +30,7 @@ const nav = [
     label: "Activity",
     icon: IconActivity,
     match: (p: string) => p.startsWith("/activity"),
-    count: approvals.length,
+    count: true,
   },
   { href: "/spending", label: "Spending", icon: IconSpending, match: (p: string) => p.startsWith("/spending") },
   { href: "/team", label: "Team", icon: IconTeam, match: (p: string) => p.startsWith("/team") },
@@ -47,6 +47,8 @@ export function AppShell({
 }) {
   const pathname = usePathname()
   const { collapsed, toggleCollapsed, theme } = useSancusPrefs()
+  // Live count of payments waiting for approval (demo count when signed out).
+  const approvalCount = useLiveApprovals().waiting.length
 
   return (
     <div className="frame">
@@ -106,9 +108,9 @@ export function AppShell({
                 >
                   <Icon />
                   <span className="lbl">{item.label}</span>
-                  {"count" in item && item.count ? (
-                    <span className="count" aria-label={`${item.count} waiting for approval`}>
-                      {item.count}
+                  {"count" in item && approvalCount ? (
+                    <span className="count" aria-label={`${approvalCount} waiting for approval`}>
+                      {approvalCount}
                     </span>
                   ) : null}
                 </Link>

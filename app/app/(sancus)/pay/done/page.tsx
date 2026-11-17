@@ -49,21 +49,46 @@ export default function PayDonePage() {
   // Live payment created in this session.
   if (live) {
     const status = live.status
-    const failed = status === "FAILED"
+    const declined = status === "REJECTED"
+    const failed = status === "FAILED" || declined
     const completed = status === "COMPLETED"
+    const awaiting = status === "PENDING_APPROVAL"
     const local = `S$ ${displayMinor(BigInt(live.sgdAmountMinor), SGD_DECIMALS, "", 2)}`
     const total = `$${displayMinor(BigInt(live.usdcAmountMinor), USDC_DECIMALS, "", 2)}`
     const step = (s: PayoutStatus) =>
       failed && s !== "CREATED" && s !== "FUNDS_SENT" ? "Failed" : reached(status, s) ? "Settled" : "Pending"
-    const title = failed
-      ? `Payment to ${live.recipientName} failed`
-      : completed
-        ? `Done. ${live.recipientName} has ${local}.`
-        : `On its way to ${live.recipientName}`
+    const title = declined
+      ? `Payment to ${live.recipientName} was declined`
+      : failed
+        ? `Payment to ${live.recipientName} failed`
+        : completed
+          ? `Done. ${live.recipientName} has ${local}.`
+          : awaiting
+            ? `Waiting for approval: ${total} to ${live.recipientName}`
+            : `On its way to ${live.recipientName}`
+    const headTitle = completed
+      ? "Payment sent"
+      : declined
+        ? "Payment declined"
+        : failed
+          ? "Payment failed"
+          : awaiting
+            ? "Sent for approval"
+            : "Sending payment"
 
     return (
       <div className="page">
-        <PayFlowHead title={completed ? "Payment sent" : failed ? "Payment failed" : "Sending payment"} step={4} />
+        <PayFlowHead title={headTitle} step={4} />
+
+        {awaiting ? (
+          <div className="tile s12" role="status" style={{ marginBottom: 16 }}>
+            <span className="body-s">
+              <b>Needs an approver.</b> {live.approvalReason ? `${live.approvalReason}.` : "This payment is over your approval rule."} The money is
+              reserved and nothing leaves your balance until it&apos;s approved.{" "}
+              <Link href="/activity/approvals">Open Approvals →</Link>
+            </span>
+          </div>
+        ) : null}
 
         <div className="grid">
           <section className="tile s7" aria-label="Confirmation">
