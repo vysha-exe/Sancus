@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · Pay · Done</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/app.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0} a{color:var(--accent)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div class="frame">
+<input type="checkbox" id="rail" class="rail-toggle" aria-label="Collapse sidebar to icons">
+<div class="sx shell" data-theme="day">
+  <header class="hdr">
+    <a href="Main.dc.html" class="sx-lockup sx-wordmark brand" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg><span class="lbl">SANCUS</span></a>
+    <div class="bar">
+      <button type="button" class="ws-chip" aria-label="Switch workspace">Café Paulista Ltda<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-muted);"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <label class="search-pill"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="vh">Search</span><input placeholder="Search payments, people, invoices"></label>
+      <span class="sx-pill sx-pill--simulated push" title="Testnet USDC. Bank, local and card rails are simulated.">Sandbox</span>
+      <button type="button" class="icon-btn" aria-label="Notifications, 3 new"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg><b></b></button>
+      <button type="button" class="me" aria-label="Account: Maya, Owner"><span class="av">M</span><span class="me-txt">Maya<small>Owner</small></span></button>
+    </div>
+  </header>
+  <nav aria-label="Main" class="side">
+    <div class="nav">
+      <a href="Main.dc.html" class="nav-item" title="Home"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path></svg><span class="lbl">Home</span></a>
+      <a href="PayWho.dc.html" class="nav-item nav-item--on" aria-current="page" title="Pay"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4z"></path></svg><span class="lbl">Pay</span></a>
+      <a href="Activity.dc.html" class="nav-item" title="Activity"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"></path></svg><span class="lbl">Activity</span><span class="count" aria-label="3 waiting for approval">3</span></a>
+      <a href="Card.dc.html" class="nav-item" title="Spending"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path></svg><span class="lbl">Spending</span></a>
+      <a href="Team.dc.html" class="nav-item" title="Team"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"></circle><path d="M2 21c0-4 3-6 7-6s7 2 7 6"></path><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-4-5.5"></path></svg><span class="lbl">Team</span></a>
+      <a href="Invoices.dc.html" class="nav-item" title="Invoices"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"></path><path d="M14 3v5h5M9 13h6M9 17h6"></path></svg><span class="lbl">Invoices</span></a>
+      <a href="Agents.dc.html" class="nav-item" title="Agents"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"></path></svg><span class="lbl">Agents</span></a>
+    </div>
+    <div class="side-foot">
+      <a href="Settings.dc.html" class="nav-item" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg><span class="lbl">Settings</span></a>
+      <label for="rail" class="nav-item collapse" title="Collapse sidebar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"></path></svg><span class="lbl">Collapse</span></label>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <div class="page">
+      <header class="page-head flowhead">
+        <div class="title"><h1 class="sx-h heading-2">Payment sent</h1></div>
+        <ol class="steps" aria-label="Payment steps"><li class="done">1 · Who</li><li class="done">2 · How much</li><li class="done">3 · Review</li><li aria-current="step">4 · Done</li></ol>
+      </header>
+
+      <div class="grid">
+        <section class="tile s12" style="flex-direction: row; flex-wrap: wrap; align-items: center; gap: 20px;" aria-live="polite">
+          <svg viewBox="0 0 120 120" width="88" height="88" role="img" aria-label="Payment confirmed" style="color: var(--accent); flex: none;">
+            <circle cx="60" cy="60" r="56" fill="none" stroke="currentColor" stroke-width="1" opacity=".25"></circle>
+            <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"></circle>
+            <circle cx="60" cy="60" r="30" fill="currentColor"></circle>
+            <path d="M48 60 l8 8 l16 -16" fill="none" stroke="var(--on-accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+          <div style="display: grid; gap: 4px; flex: 1 1 320px;">
+            <h2 class="sx-h heading-3" style="font-weight: 400; font-size: 26px;">Done. Juliana has her R$ 541,23.</h2>
+            <span class="body muted">Your receipt is saved in Activity. The ring is the screen's one moving thing: it expands, then the amount flips from USD to BRL.</span>
+          </div>
+          <a href="Main.dc.html" class="sx-btn sx-btn--primary">Back to Home</a>
+        </section>
+
+        <section class="tile s7" aria-labelledby="rcpt">
+          <div class="tile-head">
+            <div style="display: grid; gap: 2px;"><span class="sx-label">Receipt</span><h2 id="rcpt" class="sx-h heading-3">R$ 541,23 to Juliana Costa</h2></div>
+            <span class="sx-pill sx-pill--simulated">Simulated</span>
+          </div>
+          <span class="body-s muted">Monday, November 16 · 9:41 · "October design work"</span>
+          <div>
+            <div class="hop"><i></i><span class="body-s" style="font-weight: 600;">Funded from your balance · $100.80</span><span class="sx-pill sx-pill--settled">Settled</span><span class="data">9:41:02 · Arc testnet tx 0x7c3e…a91f</span></div>
+            <div class="hop"><i></i><span class="body-s" style="font-weight: 600;">Converted $100.00 at 5.4123</span><span class="sx-pill sx-pill--settled">Settled</span><span class="data">9:41:03 · quote q_8F21 · fee $0.80</span></div>
+            <div class="hop"><i></i><span class="body-s" style="font-weight: 600;">Paid out by Pix</span><span class="sx-pill sx-pill--settled">Settled</span><span class="data">9:41:05 · end-to-end ID E0000…5678</span></div>
+            <div class="hop"><i></i><span class="body-s" style="font-weight: 600;">Received by Juliana · R$ 541,23</span><span class="sx-pill sx-pill--settled">Settled</span><span class="data">9:41:06</span></div>
+          </div>
+        </section>
+
+        <aside class="tile s5" aria-labelledby="next">
+          <h2 class="tile-title" id="next">What next</h2>
+          <div class="kv"><span>Payment ID</span><span>pay_01JD…7K2</span></div>
+          <div class="kv"><span>Paid by</span><span>Maya</span></div>
+          <div class="kv"><span>Balance now</span><span>$6,390.34</span></div>
+          <div class="tile-foot" style="justify-content: flex-start;">
+            <button type="button" class="sx-btn sx-btn--secondary sx-btn--sm">Download receipt</button>
+            <button type="button" class="sx-btn sx-btn--secondary sx-btn--sm">Send to Juliana</button>
+            <a href="PayWho.dc.html" class="sx-btn sx-btn--secondary sx-btn--sm">Pay someone else</a>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

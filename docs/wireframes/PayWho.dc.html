@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · Pay · Who</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/app.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0} a{color:var(--accent)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div class="frame">
+<input type="checkbox" id="rail" class="rail-toggle" aria-label="Collapse sidebar to icons">
+<div class="sx shell" data-theme="day">
+  <header class="hdr">
+    <a href="Main.dc.html" class="sx-lockup sx-wordmark brand" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg><span class="lbl">SANCUS</span></a>
+    <div class="bar">
+      <button type="button" class="ws-chip" aria-label="Switch workspace">Café Paulista Ltda<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-muted);"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <label class="search-pill"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="vh">Search</span><input placeholder="Search payments, people, invoices"></label>
+      <span class="sx-pill sx-pill--simulated push" title="Testnet USDC. Bank, local and card rails are simulated.">Sandbox</span>
+      <a href="Main.dc.html" class="sx-btn sx-btn--quiet">Cancel</a>
+      <button type="button" class="icon-btn" aria-label="Notifications, 3 new"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg><b></b></button>
+      <button type="button" class="me" aria-label="Account: Maya, Owner"><span class="av">M</span><span class="me-txt">Maya<small>Owner</small></span></button>
+    </div>
+  </header>
+  <nav aria-label="Main" class="side">
+    <div class="nav">
+      <a href="Main.dc.html" class="nav-item" title="Home"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path></svg><span class="lbl">Home</span></a>
+      <a href="PayWho.dc.html" class="nav-item nav-item--on" aria-current="page" title="Pay"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4z"></path></svg><span class="lbl">Pay</span></a>
+      <a href="Activity.dc.html" class="nav-item" title="Activity"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"></path></svg><span class="lbl">Activity</span><span class="count" aria-label="3 waiting for approval">3</span></a>
+      <a href="Card.dc.html" class="nav-item" title="Spending"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path></svg><span class="lbl">Spending</span></a>
+      <a href="Team.dc.html" class="nav-item" title="Team"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"></circle><path d="M2 21c0-4 3-6 7-6s7 2 7 6"></path><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-4-5.5"></path></svg><span class="lbl">Team</span></a>
+      <a href="Invoices.dc.html" class="nav-item" title="Invoices"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"></path><path d="M14 3v5h5M9 13h6M9 17h6"></path></svg><span class="lbl">Invoices</span></a>
+      <a href="Agents.dc.html" class="nav-item" title="Agents"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"></path></svg><span class="lbl">Agents</span></a>
+    </div>
+    <div class="side-foot">
+      <a href="Settings.dc.html" class="nav-item" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg><span class="lbl">Settings</span></a>
+      <label for="rail" class="nav-item collapse" title="Collapse sidebar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"></path></svg><span class="lbl">Collapse</span></label>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <div class="page">
+      <header class="page-head flowhead">
+        <div class="title"><h1 class="sx-h heading-2">Choose a recipient</h1></div>
+        <ol class="steps" aria-label="Payment steps"><li aria-current="step">1 · Who</li><li>2 · How much</li><li>3 · Review</li><li>4 · Done</li></ol>
+      </header>
+
+      <div class="grid">
+        <section class="tile s7" aria-label="Choose a recipient">
+          <label class="sx-field">
+            <span class="sx-label">Search or add someone new</span>
+            <input class="sx-field__input" placeholder="Name, email, Pix key, IBAN, CLABE or USDC address">          </label>
+          <div class="filters" role="group" aria-label="Filter recipients"><button type="button" class="chip" aria-pressed="true">Recent</button><button type="button" class="chip" aria-pressed="false">Suppliers</button><button type="button" class="chip" aria-pressed="false">Contractors</button><button type="button" class="chip" aria-pressed="false">Team</button></div>
+          <div role="radiogroup" aria-label="Recent recipients" style="display: grid; gap: 8px;">
+            <div class="pick pick--on" role="radio" aria-checked="true" tabindex="0"><span class="av">JC</span><span style="flex: 1; min-width: 0; display: grid;"><span class="body-strong trunc">Juliana Costa</span><span class="body-s trunc">Contractor · Brazil · Pix key ju•••@gmail.com</span></span><span class="sx-rail">Pix</span></div>
+            <div class="pick" role="radio" aria-checked="false" tabindex="-1"><span class="av">NS</span><span style="flex: 1; min-width: 0; display: grid;"><span class="body-strong trunc">Northwind Supply Co.</span><span class="body-s trunc">Supplier · United States · account ••• 8812</span></span><span class="sx-rail">ACH</span></div>
+            <div class="pick" role="radio" aria-checked="false" tabindex="-1"><span class="av">LL</span><span style="flex: 1; min-width: 0; display: grid;"><span class="body-strong trunc">Lumen Labs</span><span class="body-s trunc">Supplier · USDC address 0x91…2be4</span></span><span class="sx-rail">USDC</span></div>
+            <div class="pick" role="radio" aria-checked="false" tabindex="-1"><span class="av">TL</span><span style="flex: 1; min-width: 0; display: grid;"><span class="body-strong trunc">Torrefação Lisboa</span><span class="body-s trunc">Roaster · Portugal · IBAN PT50 ••• 7731</span></span><span class="sx-rail">SEPA</span></div>
+            <div class="pick" role="radio" aria-checked="false" tabindex="-1"><span class="av">CO</span><span style="flex: 1; min-width: 0; display: grid;"><span class="body-strong trunc">Café Oaxaca SA de CV</span><span class="body-s trunc">Grower · Mexico · CLABE ••• 0453</span></span><span class="sx-rail">SPEI</span></div>
+          </div>
+          <div class="tile-foot"><span class="body-s muted">5 of 12 recipients</span><button type="button" class="sx-btn sx-btn--quiet">Show all</button></div>
+        </section>
+
+        <aside class="tile s5" aria-labelledby="sel">
+          <div class="tile-head"><span class="sx-label">Paying</span><button type="button" class="sx-btn sx-btn--quiet">Edit</button></div>
+          <div style="display: flex; gap: 14px; align-items: center;"><span class="av av--lg">JC</span><div style="display: grid; gap: 2px; min-width: 0;"><h2 id="sel" class="sx-h heading-3 trunc">Juliana Costa</h2><span class="body-s muted">Contractor · São Paulo, Brazil</span></div></div>
+          <div style="display: grid; gap: 8px;">
+            <span class="sx-label">How we can pay her</span>
+            <div class="kv"><span><span class="sx-rail">Pix</span> ju•••@gmail.com</span><span>Default</span></div>
+            <div class="kv"><span><span class="sx-rail">Wire</span> bank account ••• 2290</span><span>Backup</span></div>
+          </div>
+          <div style="display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line);">
+            <span class="sx-label">History</span>
+            <div class="kv"><span>Last paid</span><span>R$ 541,23 · Nov 16</span></div>
+            <div class="kv"><span>Paid this year</span><span>$1,209.60</span></div>
+          </div>
+          <div class="tile-foot">
+            <a href="PayAmount.dc.html" class="sx-btn sx-btn--primary">Continue with Juliana</a>
+            <a href="Invoices.dc.html" class="sx-btn sx-btn--quiet">Pay from an invoice</a>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

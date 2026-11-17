@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · Activity</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/app.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0} a{color:var(--accent)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div class="frame">
+<input type="checkbox" id="rail" class="rail-toggle" aria-label="Collapse sidebar to icons">
+<div class="sx shell" data-theme="day">
+  <header class="hdr">
+    <a href="Main.dc.html" class="sx-lockup sx-wordmark brand" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg><span class="lbl">SANCUS</span></a>
+    <div class="bar">
+      <button type="button" class="ws-chip" aria-label="Switch workspace">Café Paulista Ltda<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-muted);"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <label class="search-pill"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="vh">Search</span><input placeholder="Search payments, people, invoices"></label>
+      <span class="sx-pill sx-pill--simulated push" title="Testnet USDC. Bank, local and card rails are simulated.">Sandbox</span>
+      <button type="button" class="icon-btn" aria-label="Notifications, 3 new"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg><b></b></button>
+      <button type="button" class="me" aria-label="Account: Maya, Owner"><span class="av">M</span><span class="me-txt">Maya<small>Owner</small></span></button>
+    </div>
+  </header>
+  <nav aria-label="Main" class="side">
+    <div class="nav">
+      <a href="Main.dc.html" class="nav-item" title="Home"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path></svg><span class="lbl">Home</span></a>
+      <a href="PayWho.dc.html" class="nav-item" title="Pay"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4z"></path></svg><span class="lbl">Pay</span></a>
+      <a href="Activity.dc.html" class="nav-item nav-item--on" aria-current="page" title="Activity"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"></path></svg><span class="lbl">Activity</span><span class="count" aria-label="3 waiting for approval">3</span></a>
+      <a href="Card.dc.html" class="nav-item" title="Spending"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path></svg><span class="lbl">Spending</span></a>
+      <a href="Team.dc.html" class="nav-item" title="Team"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"></circle><path d="M2 21c0-4 3-6 7-6s7 2 7 6"></path><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-4-5.5"></path></svg><span class="lbl">Team</span></a>
+      <a href="Invoices.dc.html" class="nav-item" title="Invoices"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"></path><path d="M14 3v5h5M9 13h6M9 17h6"></path></svg><span class="lbl">Invoices</span></a>
+      <a href="Agents.dc.html" class="nav-item" title="Agents"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"></path></svg><span class="lbl">Agents</span></a>
+    </div>
+    <div class="side-foot">
+      <a href="Settings.dc.html" class="nav-item" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg><span class="lbl">Settings</span></a>
+      <label for="rail" class="nav-item collapse" title="Collapse sidebar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"></path></svg><span class="lbl">Collapse</span></label>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <div class="page">
+      <header class="page-head">
+        <div>
+          <h1 class="sx-h heading-2">Activity</h1>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;"><button type="button" class="sx-btn sx-btn--secondary">Export CSV</button><a href="PayWho.dc.html" class="sx-btn sx-btn--primary">Pay someone</a></div>
+      </header>
+
+      <nav class="tabs" aria-label="Activity sections">
+        <a href="Activity.dc.html" class="tab tab--on" aria-current="page">All activity</a>
+        <a href="Approvals.dc.html" class="tab">Approvals <span class="count">3</span></a>
+        <a href="PayWho.dc.html" class="tab">Recipients</a>
+      </nav>
+
+      <div class="grid">
+        <div class="tile s3"><span class="sx-label">Available</span><span class="big">$6,390.34</span></div>
+        <div class="tile s3"><span class="sx-label">Held for cards</span><span class="big" style="color: var(--held);">$398.86</span></div>
+        <div class="tile s3"><span class="sx-label">On its way out</span><span class="big">$2,000.00</span></div>
+        <div class="tile s3"><span class="sx-label">Waiting for approval</span><span class="big" style="color: var(--pending);">$2,620.05</span></div>
+
+        <section class="tile s12" aria-label="Ledger">
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead><tr><th><label class="th-filter"><span class="vh">Filter by date</span><select><option>This month</option><option>Last 7 days</option><option>Last month</option><option>Custom</option></select><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></label></th><th><label class="th-search"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="vh">Search name, reference or amount</span><input placeholder="Paid to / from"></label></th><th><label class="th-filter"><span class="vh">Filter by person</span><select><option>By</option><option>Maya</option><option>Ana Souza</option><option>Rafael Lima</option><option>Payments agent</option></select><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></label></th><th><label class="th-filter"><span class="vh">Filter by rail</span><select><option>Rail</option><option>USDC</option><option>ACH</option><option>Wire</option><option>Pix</option><option>Pix QR</option><option>SEPA</option><option>SPEI</option><option>Card</option></select><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></label></th><th class="num">Amount</th><th class="num">They got</th><th class="num">Fee</th><th><label class="th-filter"><span class="vh">Filter by status</span><select><option>Status</option><option>Settled</option><option>Pending</option><option>Held</option><option>Failed</option><option>Simulated only</option></select><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></label></th></tr></thead>
+              <tbody>
+                <tr><td class="data">Today 10:02</td><td class="who">Padaria Bela Vista</td><td>Ana</td><td><span class="sx-rail">Pix QR</span></td><td class="num">−$10.00</td><td class="num">R$ 54,12</td><td class="num">$0.00</td><td><span class="pills" style="justify-content: flex-start;"><span class="sx-pill sx-pill--settled">Settled</span><span class="sx-pill sx-pill--simulated">Simulated</span></span></td></tr>
+                <tr><td class="data">Today 9:41</td><td class="who">Juliana Costa</td><td>Maya</td><td><span class="sx-rail">Pix</span></td><td class="num">−$100.80</td><td class="num">R$ 541,23</td><td class="num">$0.80</td><td><span class="pills" style="justify-content: flex-start;"><span class="sx-pill sx-pill--settled">Settled</span><span class="sx-pill sx-pill--simulated">Simulated</span></span></td></tr>
+                <tr><td class="data">Today 9:12</td><td class="who">Papelaria Central</td><td>Ana · 4021</td><td><span class="sx-rail">Card</span></td><td class="num">−$100.00</td><td class="num">R$ 541,23</td><td class="num">$0.00</td><td><span class="pills" style="justify-content: flex-start;"><span class="sx-pill sx-pill--settled">Settled</span><span class="sx-pill sx-pill--simulated">Simulated</span></span></td></tr>
+                <tr><td class="data">Today 8:30</td><td class="who">Northwind Supply Co.</td><td>Maya</td><td><span class="sx-rail">ACH</span></td><td class="num">−$2,000.00</td><td class="num">$2,000.00</td><td class="num">$0.00</td><td><span class="pills" style="justify-content: flex-start;"><span class="sx-pill sx-pill--pending">Pending</span><span class="sx-pill sx-pill--simulated">Simulated</span></span></td></tr>
+                <tr><td class="data">Today 8:05</td><td class="who">Gráfica Aurora</td><td>Ana</td><td><span class="sx-rail">Pix</span></td><td class="num">$592.05</td><td class="num">R$ 3.200,00</td><td class="num">$0.80</td><td><a href="Approvals.dc.html" class="pills" style="justify-content: flex-start; text-decoration: none;"><span class="sx-pill sx-pill--pending">Pending</span><span class="body-s">Needs approval</span></a></td></tr>
+                <tr><td class="data">Sat 14:05</td><td class="who">Pedro Alves</td><td>Maya</td><td><span class="sx-rail">Pix</span></td><td class="num">$0.00</td><td class="num">—</td><td class="num">$0.00</td><td><span class="pills" style="justify-content: flex-start;"><span class="sx-pill sx-pill--failed">Failed</span><span class="sx-pill sx-pill--simulated">Simulated</span></span></td></tr>
+                <tr><td class="data">Sat 10:20</td><td class="who">Ana's card 4021 · limit</td><td>Maya</td><td><span class="sx-rail">Card</span></td><td class="num">$398.86 · R$ 2.158,77 left</td><td class="num">—</td><td class="num">$0.00</td><td><span class="pills" style="justify-content: flex-start;"><span class="sx-pill sx-pill--held">Held</span><span class="sx-pill sx-pill--simulated">Simulated</span></span></td></tr>
+                <tr><td class="data">Fri 16:48</td><td class="who">Lumen Labs</td><td>Maya</td><td><span class="sx-rail">USDC</span></td><td class="num">−$1,000.00</td><td class="num">$1,000.00</td><td class="num">$0.00</td><td><span class="sx-pill sx-pill--settled">Settled</span></td></tr>
+                <tr><td class="data">Fri 11:02</td><td class="who">Mercado Azul (customer)</td><td>—</td><td><span class="sx-rail">USDC</span></td><td class="num" style="color: var(--settled);">+$10,000.00</td><td class="num">—</td><td class="num">$0.00</td><td><span class="sx-pill sx-pill--settled">Settled</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="tile-foot"><span class="body-s muted">9 of 9 · 50 per page, newest first</span><span class="body-s muted">Updated 10:05</span></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

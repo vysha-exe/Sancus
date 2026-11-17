@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · Phone Pay review</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:var(--accent)}a:hover{color:var(--ink)}
+</style>
+</helmet>
+<div class="sx" data-theme="day" style="width: 390px; height: 844px; box-sizing: border-box; background: var(--surface-000); display: flex; flex-direction: column; overflow: hidden;">
+  <header style="flex: none; display: flex; justify-content: space-between; align-items: center; padding: 12px 8px 8px; border-bottom: 1px solid var(--line);">
+    <a href="PayAmount.dc.html" class="sx-btn sx-btn--quiet" style="min-height: 44px; padding: 0 8px;">← Back</a>
+    <span class="sx-label">Step 3 of 4</span>
+    <a href="PhoneHome.dc.html" class="sx-btn sx-btn--quiet" style="min-height: 44px; padding: 0 8px;">Cancel</a>
+  </header>
+  <div style="flex: 1; overflow: hidden; padding: 20px 16px; display: flex; flex-direction: column; gap: 18px;">
+    <h1 class="sx-h heading-2" style="font-size: 28px;">Review payment</h1>
+    <section class="sx-quote" style="display: grid; gap: 14px;" aria-label="Review payment">
+      <dl>
+        <dt>Amount</dt><dd>$100.00</dd>
+        <dt>Our fee</dt><dd>$0.80</dd>
+        <dt>You pay</dt><dd style="font-weight: 500;">$100.80</dd>
+        <dt>Rate</dt><dd>1 USD = 5.4123 BRL</dd>
+        <dt>Rail</dt><dd><span class="sx-rail">Pix</span> · within seconds</dd>
+      </dl>
+      <div class="sx-quote__receive"><span>Juliana receives</span><b>R$ 541,23</b></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span class="sx-quote__lock">Rate locked · 0:42</span><span class="sx-pill sx-pill--simulated">Simulated</span></div>
+    </section>
+    <div style="display: grid; gap: 4px; padding-top: 14px; border-top: 1px solid var(--line);">
+      <span class="body-s" style="color: var(--ink-muted);">To Pix key ju•••@gmail.com</span>
+      <span class="body-s" style="color: var(--ink-muted);">"October design work"</span>
+    </div>
+  </div>
+  <div style="flex: none; padding: 12px 16px 28px; background: var(--surface-100); border-top: 1px solid var(--line);">
+    <a href="PayDone.dc.html" class="sx-btn sx-btn--primary" style="width: 100%; box-sizing: border-box; min-height: 52px;">Pay R$ 541,23</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

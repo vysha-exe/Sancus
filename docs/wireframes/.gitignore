@@ -1,0 +1,4 @@
+# Copies of docs/brand/tokens.css and docs/brand/components.css, only needed to republish the canvas.
+# docs/brand is the source of truth; copy them in before publishing, never edit them here.
+sancus/tokens.css
+sancus/components.css

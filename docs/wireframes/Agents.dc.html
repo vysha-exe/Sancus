@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · Agents</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/app.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0} a{color:var(--accent)} a:hover{color:var(--ink)} .tbl{min-width:420px}</style>
+</helmet>
+<div class="frame">
+<input type="checkbox" id="rail" class="rail-toggle" aria-label="Collapse sidebar to icons">
+<div class="sx shell" data-theme="day">
+  <header class="hdr">
+    <a href="Main.dc.html" class="sx-lockup sx-wordmark brand" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg><span class="lbl">SANCUS</span></a>
+    <div class="bar">
+      <button type="button" class="ws-chip" aria-label="Switch workspace">Café Paulista Ltda<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-muted);"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <label class="search-pill"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="vh">Search</span><input placeholder="Search payments, people, invoices"></label>
+      <span class="sx-pill sx-pill--simulated push" title="Testnet USDC. Bank, local and card rails are simulated.">Sandbox</span>
+      <button type="button" class="icon-btn" aria-label="Notifications, 3 new"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg><b></b></button>
+      <button type="button" class="me" aria-label="Account: Maya, Owner"><span class="av">M</span><span class="me-txt">Maya<small>Owner</small></span></button>
+    </div>
+  </header>
+  <nav aria-label="Main" class="side">
+    <div class="nav">
+      <a href="Main.dc.html" class="nav-item" title="Home"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path></svg><span class="lbl">Home</span></a>
+      <a href="PayWho.dc.html" class="nav-item" title="Pay"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4z"></path></svg><span class="lbl">Pay</span></a>
+      <a href="Activity.dc.html" class="nav-item" title="Activity"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"></path></svg><span class="lbl">Activity</span><span class="count" aria-label="3 waiting for approval">3</span></a>
+      <a href="Card.dc.html" class="nav-item" title="Spending"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path></svg><span class="lbl">Spending</span></a>
+      <a href="Team.dc.html" class="nav-item" title="Team"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"></circle><path d="M2 21c0-4 3-6 7-6s7 2 7 6"></path><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-4-5.5"></path></svg><span class="lbl">Team</span></a>
+      <a href="Invoices.dc.html" class="nav-item" title="Invoices"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"></path><path d="M14 3v5h5M9 13h6M9 17h6"></path></svg><span class="lbl">Invoices</span></a>
+      <a href="Agents.dc.html" class="nav-item nav-item--on" aria-current="page" title="Agents"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"></path></svg><span class="lbl">Agents</span></a>
+    </div>
+    <div class="side-foot">
+      <a href="Settings.dc.html" class="nav-item" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg><span class="lbl">Settings</span></a>
+      <label for="rail" class="nav-item collapse" title="Collapse sidebar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"></path></svg><span class="lbl">Collapse</span></label>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <div class="page">
+      <header class="page-head">
+        <div>
+          <h1 class="sx-h heading-2">Agents</h1>
+          <p class="body-s muted" style="margin: 0;">Ask about your money, let an agent pay for small things inside a budget, and charge other agents for your data. Every agent payment shows up in Activity.</p>
+        </div>
+      </header>
+
+      <div class="grid">
+        <section class="tile s7 r2" aria-labelledby="ask">
+          <div class="tile-head"><h2 class="tile-title" id="ask">Ask Sancus</h2><button type="button" class="sx-btn sx-btn--quiet">New chat</button></div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
+            <span class="bubble bubble--me">Which payments need approval?</span>
+            <div class="bubble bubble--us" style="display: grid; gap: 8px;"><span>Three are waiting, $2,620.05 together. The oldest is Ana's R$ 3.200,00 to Gráfica Aurora. It's over her $500 limit.</span><a href="Approvals.dc.html" class="sx-btn sx-btn--secondary sx-btn--sm" style="justify-self: start;">Open Approvals</a></div>
+            <span class="bubble bubble--me">What did we spend in Brazil this month, and what's due next week?</span>
+            <div class="bubble bubble--us" style="display: grid; gap: 8px;"><span>$210.80 in Brazil: $100.80 to Juliana by Pix, $100.00 on Ana's card and $10.00 on her Pix QR. Next week Torrefação Lisboa (€ 1.840,00) and Café Oaxaca (MX$ 18,500.00) come due, about $3,003.68. You have $6,390.34 available, so you're covered.</span><span style="display: flex; gap: 8px; flex-wrap: wrap;"><a href="Invoices.dc.html" class="sx-btn sx-btn--secondary sx-btn--sm">Get both bills ready</a><button type="button" class="sx-btn sx-btn--quiet">Make this a weekly report</button></span></div>
+          </div>
+          <form class="tile-foot" style="flex-wrap: nowrap;">
+            <label style="flex: 1;"><span class="vh">Message</span><input class="sx-field__input" placeholder="Ask about payments, spending or bills"></label>
+            <button type="button" class="sx-btn sx-btn--primary">Ask</button>
+          </form>
+          <span class="body-s muted">The assistant can get payments ready. A person always confirms them.</span>
+        </section>
+
+        <section class="tile s5" aria-labelledby="pa">
+          <div class="tile-head"><h2 class="tile-title" id="pa">Payments agent</h2><span class="body-s muted">On</span></div>
+          <div class="kv"><span>Spent this week</span><span>$12.40 of $50.00</span></div>
+          <div class="meter meter--held" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100" aria-label="25% of weekly budget used"><i style="width: 25%;"></i></div>
+          <span class="body-s">Your payments agent wants to spend $40.00 on crop imagery. That's over its $50 limit for the week. <a href="Approvals.dc.html">Want to approve this one?</a></span>
+          <div class="tile-foot"><span class="body-s muted">Resets Mondays</span><span style="display: flex; gap: 6px;"><button type="button" class="sx-btn sx-btn--secondary sx-btn--sm">Budget</button><button type="button" class="sx-btn sx-btn--secondary sx-btn--sm">Pause</button></span></div>
+        </section>
+
+        <section class="tile s5" aria-labelledby="x402">
+          <div class="tile-head"><h2 class="tile-title" id="x402">Paid by other agents</h2><button type="button" class="sx-btn sx-btn--quiet">Add an endpoint</button></div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead><tr><th>Endpoint</th><th class="num">Price</th><th class="num">Paid</th><th class="num">Earned</th></tr></thead>
+              <tbody>
+                <tr><td class="data">GET /market-data</td><td class="num">$0.05</td><td class="num">24</td><td class="num" style="color: var(--settled);">+$1.20</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="tile-foot"><span class="body-s muted">$0.10 is on its way to your balance</span><span class="sx-pill sx-pill--pending">Pending</span></div>
+        </section>
+
+        <section class="tile s12" aria-labelledby="ap">
+          <div class="tile-head"><h2 class="tile-title" id="ap">Agent payments</h2><a href="Activity.dc.html" class="sx-btn sx-btn--quiet">See all</a></div>
+          <div class="sx-rows">
+            <a href="Approvals.dc.html" class="sx-row"><span class="sx-row__who">Crop imagery API · waiting for you</span><span class="sx-row__amount">$40.00</span><span class="sx-row__meta"><span class="sx-rail">Agent</span>Today</span><span class="sx-row__status"><span class="sx-pill sx-pill--pending">Pending</span></span></a>
+            <a href="Activity.dc.html" class="sx-row"><span class="sx-row__who">Coffee price feed</span><span class="sx-row__amount">−$4.20</span><span class="sx-row__meta"><span class="sx-rail">Agent</span>420 requests · Today</span><span class="sx-row__status"><span class="sx-pill sx-pill--settled">Settled</span></span></a>
+            <a href="Activity.dc.html" class="sx-row"><span class="sx-row__who">Shipping rates API</span><span class="sx-row__amount">−$8.20</span><span class="sx-row__meta"><span class="sx-rail">Agent</span>82 quotes · Yesterday</span><span class="sx-row__status"><span class="sx-pill sx-pill--settled">Settled</span></span></a>
+            <a href="Activity.dc.html" class="sx-row"><span class="sx-row__who">Market data · 24 agents paid you</span><span class="sx-row__amount sx-row__amount--in">+$1.20</span><span class="sx-row__meta"><span class="sx-rail">Agent</span>This month</span><span class="sx-row__status"><span class="sx-pill sx-pill--settled">Settled</span></span></a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
