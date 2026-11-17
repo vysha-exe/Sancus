@@ -1,5 +1,7 @@
 # Running the Sancus app locally
 
+> **Full list of every account, API key, wallet and faucet:** [docs/SETUP-ACCOUNTS.md](../docs/SETUP-ACCOUNTS.md). Shortcut for the Circle entity secret: `node scripts/circle-entity-secret.mjs`.
+
 The app in this folder is based on Circle's arc-fintech sample (see [UPSTREAM.md](UPSTREAM.md)). These are the short steps for our team; the full upstream guide is in [README.md](README.md).
 
 ## 1. Install tools (once)

@@ -37,4 +37,5 @@ Log notable changes here:
 - **Nov 17:** removed `tests/spend-arc-gateway-usdc.test.ts`; it tests `scripts/spend-arc-gateway-usdc.mjs`, which upstream doesn't ship.
 - After these changes: `npx tsc --noEmit` clean, `npm test` 113/113 passing, `next build` succeeds.
 - **Nov 17 (Singapore payouts):** new Sancus code in `lib/sancus/`, `components/sancus/`, `app/api/sancus/`, `app/dashboard/pay/`, `tests/sancus-*.test.ts` and migration `supabase/migrations/20261117120000_create_sancus_payouts.sql`. Upstream files touched: `lib/constants/sidebar-data.ts` (Pay entry), `tsconfig.json` (target ES2017 → ES2020 for BigInt money math), `.env.example` (Sancus variables).
+- **Nov 17 (treasury + ledger):** new `lib/sancus/ledger.ts`, `lib/sancus/treasury.ts`, `app/api/sancus/treasury`, `app/api/sancus/ledger`, `components/sancus/treasury-summary.tsx`, migration `20261117130000_create_sancus_ledger.sql`. No upstream files changed.
 - **Nov 17 (demo login):** `proxy.ts` sends signed-out visitors to `/api/sancus/demo-login` when `SANCUS_DEMO_LOGIN=true`, skipping the landing, login and sign-up screens.
