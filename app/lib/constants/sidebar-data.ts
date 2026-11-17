@@ -15,6 +15,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+// Modified by the Sancus team, 2026: added the Pay (Singapore payouts) entry.
 
 import {
   IconDashboard,
@@ -23,6 +24,7 @@ import {
   IconShieldCheck,
   IconTrendingUp,
   IconArrowsExchange,
+  IconSend,
 } from "@tabler/icons-react"
 
 export const sidebarData = {
@@ -36,6 +38,11 @@ export const sidebarData = {
       title: "Dashboard",
       url: "/dashboard",
       icon: IconDashboard,
+    },
+    {
+      title: "Pay",
+      url: "/dashboard/pay",
+      icon: IconSend,
     },
     {
       title: "Activity",

@@ -21,9 +21,14 @@
 // `config.matcher` below — do not delete or rename without updating both.
 //
 // See: https://nextjs.org/docs/app/api-reference/file-conventions/proxy
+//
+// Modified by the Sancus team, 2026: when demo login is enabled
+// (SANCUS_DEMO_LOGIN=true), signed-out visitors skip the login screen and are
+// signed in as the demo user instead.
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseReqResClient } from "@/lib/supabase/server-client";
+import { DEMO_LOGIN_PATH, isDemoLoginEnabled } from "@/lib/sancus/demo-login";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/details"];
 
@@ -50,6 +55,18 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
+
+  // Demo bypass: skip landing / login / sign-up and protected-route bounces.
+  if (
+    !user &&
+    isDemoLoginEnabled() &&
+    (isProtected || pathname === "/" || pathname === "/auth/login" || pathname === "/auth/sign-up")
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = DEMO_LOGIN_PATH;
+    url.search = isProtected ? `?next=${encodeURIComponent(pathname)}` : "";
+    return NextResponse.redirect(url);
+  }
 
   // Unauthenticated users hitting a protected route get bounced to login.
   if (!user && isProtected) {
