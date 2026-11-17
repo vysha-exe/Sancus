@@ -19,6 +19,7 @@ import {
   preparePayout,
   quoteRequestSchema,
   refreshPayoutStatuses,
+  syncPayoutLedger,
   toPayoutDto,
   type PayoutRow,
 } from "@/lib/sancus/payouts"
@@ -125,6 +126,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
 
   let row = inserted as PayoutRow
+  // Ledger: commit the USDC from available to in-transit.
+  await syncPayoutLedger(supabase, row)
 
   // Treasury leg: real USDC transfer on Arc testnet.
   if (willSendOnchain && sourceWallet && settlementAddress) {
@@ -160,6 +163,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
         status: "FAILED",
         failure_reason: `USDC transfer failed: ${mapped.userMessage ?? mapped.error}`,
       })
+      await syncPayoutLedger(supabase, row)
       return NextResponse.json({ payout: toPayoutDto(row) }, { status: 201 })
     }
   }

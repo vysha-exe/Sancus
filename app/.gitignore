@@ -42,3 +42,6 @@ yarn-error.log*
 next-env.d.ts
 CLAUDE.md
 AGENTS.md
+
+# Sancus: Circle entity secret recovery files (keep these safe, never commit)
+circle-recovery/

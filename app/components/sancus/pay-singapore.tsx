@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { WalletSelect } from "@/components/wallet-select"
+import { TreasurySummary } from "@/components/sancus/treasury-summary"
 import { displayMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
 import { maskProxy, type ProxyType } from "@/lib/sancus/paynow"
 import { isTerminal, STATUS_STEPS, type PayoutStatus } from "@/lib/sancus/payout-provider"
@@ -39,9 +40,12 @@ function newKey() {
 export function PaySingapore() {
   const [refreshKey, setRefreshKey] = React.useState(0)
   return (
-    <div className="flex flex-wrap items-start gap-6">
-      <PayoutForm onCreated={() => setRefreshKey((k) => k + 1)} />
-      <PayoutsList refreshKey={refreshKey} />
+    <div className="flex flex-col gap-6">
+      <TreasurySummary refreshKey={refreshKey} />
+      <div className="flex flex-wrap items-start gap-6">
+        <PayoutForm onCreated={() => setRefreshKey((k) => k + 1)} />
+        <PayoutsList refreshKey={refreshKey} />
+      </div>
     </div>
   )
 }

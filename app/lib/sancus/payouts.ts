@@ -6,6 +6,7 @@ import { parseToMinor, SGD_DECIMALS } from "./money"
 import { chooseRail, FAST_LIMIT_SGD_MINOR, normaliseRecipient, validateRecipient, type SgRecipient } from "./paynow"
 import { fxConfigFromEnv, quoteSgdPayout, type PayoutQuote } from "./fx"
 import { getPayoutProvider, isTerminal, type PayoutStatus } from "./payout-provider"
+import { payoutJournal, postJournal, type PayoutForLedger } from "./ledger"
 
 export const recipientSchema = z.object({
   name: z.string().max(140),
@@ -105,13 +106,34 @@ export async function refreshPayoutStatuses(supabase: SupabaseClient, rows: Payo
         .eq("id", row.id)
         .select("*")
         .single()
-      if (error || !data) {
-        console.error("Failed to update payout status", row.id, error)
-        return { ...row, status: next, failure_reason }
-      }
-      return data as PayoutRow
+      const updated = error || !data ? { ...row, status: next, failure_reason } : (data as PayoutRow)
+      if (error || !data) console.error("Failed to update payout status", row.id, error)
+      await syncPayoutLedger(supabase, updated)
+      return updated
     })
   )
+}
+
+function ledgerView(row: PayoutRow): PayoutForLedger {
+  return {
+    id: row.id,
+    rail: row.rail,
+    usdcAmountMinor: BigInt(row.usdc_amount_minor),
+    sgdAmountMinor: BigInt(row.sgd_amount_minor),
+    feeSgdMinor: BigInt(row.fee_sgd_minor),
+    recipientName: row.recipient_name,
+  }
+}
+
+/**
+ * Makes sure the ledger reflects a payout's current state. Safe to call
+ * repeatedly: each event is posted at most once (the database enforces it).
+ */
+export async function syncPayoutLedger(supabase: SupabaseClient, row: PayoutRow): Promise<void> {
+  const view = ledgerView(row)
+  await postJournal(supabase, payoutJournal("created", view))
+  if (row.status === "COMPLETED") await postJournal(supabase, payoutJournal("completed", view))
+  if (row.status === "FAILED") await postJournal(supabase, payoutJournal("failed", view))
 }
 
 /** Shape returned to the browser. Minor-unit amounts stay strings to avoid float loss. */

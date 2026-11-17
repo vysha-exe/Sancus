@@ -11,6 +11,8 @@ Step-by-step instructions to build the Sancus hackathon prototype from an empty 
 
 ---
 
+> **📋 Backend checklist:** every feature, endpoint, status and owner is tracked in [docs/BACKEND-CHECKLIST.md](docs/BACKEND-CHECKLIST.md).
+
 ## ⚡ Decision update (Nov 17): Arc + Circle suite
 
 The team chose **Arc testnet + the Circle developer suite**, with an **Asia focus** (Singapore payout corridor first). This section overrides anything below that conflicts with it. Research is in [docs/research/chain-and-ramps.md](docs/research/chain-and-ramps.md).
