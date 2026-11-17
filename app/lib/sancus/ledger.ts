@@ -30,8 +30,23 @@ export const ACCOUNTS = {
   inTransit: "payouts:in_transit",
   fees: "fees:partner",
   funding: "funding:external",
+  revenueX402: "revenue:x402",
   external: (rail: string) => `external:${rail.toLowerCase()}`,
 } as const
+
+/** Journal for an x402 payment received from an outside agent (USDC into the treasury). */
+export function x402Journal(earningId: string, amountMinor: bigint, endpoint: string): Journal {
+  return {
+    sourceType: "x402",
+    sourceId: earningId,
+    event: "settled",
+    memo: `Agent paid for ${endpoint}`,
+    entries: [
+      { account: ACCOUNTS.available, direction: "DEBIT", amountMinor },
+      { account: ACCOUNTS.revenueX402, direction: "CREDIT", amountMinor },
+    ],
+  }
+}
 
 export function isBalanced(entries: LedgerEntry[]): boolean {
   const debit = entries.filter((e) => e.direction === "DEBIT").reduce((s, e) => s + e.amountMinor, 0n)
