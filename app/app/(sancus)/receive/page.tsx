@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useState } from "react"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { ledger } from "@/lib/sancus/demo-data"
+import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 
 type Source = "ach" | "pix" | "usdc"
 type ShareTab = "bank" | "pix" | "usdc"
@@ -95,7 +96,17 @@ export default function ReceivePage() {
   const current = sources.find((s) => s.id === source) ?? sources[0]
   const value = parseAmount(amount)
   const label = money.format(value)
-  const share = shareDetails[shareTab]
+  // Live: show the real Arc treasury wallet address for USDC deposits.
+  const treasury = useLiveTreasury()
+  const arcWallet = treasury.summary?.wallets.find((w) => w.blockchain === "ARC-TESTNET")
+  const share =
+    shareTab === "usdc" && arcWallet
+      ? {
+          ...shareDetails.usdc,
+          value: arcWallet.address,
+          note: "Your Arc testnet treasury wallet. Send testnet USDC only (free from faucet.circle.com).",
+        }
+      : shareDetails[shareTab]
 
   const mercado = ledger.find((p) => p.id === "mercado")
 

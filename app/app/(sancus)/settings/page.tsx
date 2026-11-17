@@ -4,6 +4,8 @@ import { useState } from "react"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { rails, workspace } from "@/lib/sancus/demo-data"
 import { useSancusPrefs, type SancusTheme } from "@/lib/sancus/prefs"
+import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
+import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
 
 type RuleId = "threshold" | "twoSignoffs" | "newRecipients" | "afterHours"
 
@@ -54,6 +56,8 @@ const themes: { id: SancusTheme; label: string }[] = [
 
 export default function SettingsPage() {
   const { theme, setTheme } = useSancusPrefs()
+  const treasury = useLiveTreasury()
+  const live = treasury.summary
 
   const [rules, setRules] = useState<Record<RuleId, boolean>>({
     threshold: true,
@@ -249,10 +253,45 @@ export default function SettingsPage() {
             Limits, holds and approvals are enforced by that contract. This is the only page that
             names the chain.
           </span>
-          <div className="kv">
-            <span>Treasury address</span>
-            <span>0x4F2a…c81E</span>
-          </div>
+          {live && live.wallets.length > 0 ? (
+            live.wallets.map((w) => (
+              <div className="kv" key={w.walletId}>
+                <span>
+                  {w.name || "Wallet"} · {w.blockchain}
+                </span>
+                <span>
+                  <a href={`https://explorer.testnet.arc.io/address/${w.address}`} target="_blank" rel="noreferrer">
+                    {w.address.slice(0, 6)}…{w.address.slice(-4)}
+                  </a>
+                  {" · "}
+                  {w.usdcMinor === null ? "balance unavailable" : `$${displayMinor(BigInt(w.usdcMinor), USDC_DECIMALS, "", 2)}`}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="kv">
+              <span>Treasury address</span>
+              <span>{live ? "No wallets yet: create one in setup" : "0x4F2a…c81E"}</span>
+            </div>
+          )}
+          {live ? (
+            <>
+              <div className="kv">
+                <span>Gateway (unified balance)</span>
+                <span>
+                  {live.gatewayMinor === null ? "unavailable" : `$${displayMinor(BigInt(live.gatewayMinor), USDC_DECIMALS, "", 2)}`}
+                </span>
+              </div>
+              <div className="kv">
+                <span>Ledger</span>
+                <span>
+                  {live.ledger.inSync ? <StatusPill status="Settled" /> : <StatusPill status="Failed" />}{" "}
+                  {live.ledger.inSync ? "In sync with payouts" : "Out of sync"} ·{" "}
+                  <a href="/api/sancus/ledger?format=csv">Download CSV</a>
+                </span>
+              </div>
+            </>
+          ) : null}
         </section>
       </div>
     </div>

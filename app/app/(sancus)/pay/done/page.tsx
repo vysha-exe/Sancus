@@ -1,14 +1,170 @@
 "use client"
 
 import Link from "next/link"
+import { useEffect, useState } from "react"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { balance } from "@/lib/sancus/demo-data"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
+import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
+import { isTerminal, type PayoutStatus } from "@/lib/sancus/payout-provider"
+import { displayMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
+import type { PayoutDto } from "@/lib/sancus/payouts"
+
+const ORDER: PayoutStatus[] = ["CREATED", "FUNDS_SENT", "CONVERTING", "PAYING_OUT", "COMPLETED"]
+const reached = (s: PayoutStatus, step: PayoutStatus) => ORDER.indexOf(s) >= ORDER.indexOf(step)
+
+/** Polls one payout until it finishes. */
+function usePayoutStatus(initial: PayoutDto | null) {
+  const [latest, setLatest] = useState<PayoutDto | null>(initial)
+  const current = latest ?? initial
+  const done = !current || isTerminal(current.status)
+  const id = initial?.id
+
+  useEffect(() => {
+    if (!id || done) return
+    const t = window.setInterval(async () => {
+      try {
+        const res = await fetch("/api/sancus/payouts", { cache: "no-store" })
+        if (!res.ok) return
+        const body = (await res.json()) as { payouts?: PayoutDto[] }
+        const found = body.payouts?.find((p) => p.id === id)
+        if (found) setLatest(found)
+      } catch {
+        /* keep polling */
+      }
+    }, 2000)
+    return () => window.clearInterval(t)
+  }, [id, done])
+
+  return current
+}
 
 export default function PayDonePage() {
-  const { recipient, quote, state } = usePayFlow()
+  const { recipient, quote, state, view, payout } = usePayFlow()
+  const live = usePayoutStatus(payout)
+  // Re-read the balance whenever the payout moves (reserved → released / delivered).
+  const treasury = useLiveTreasury(live?.status)
 
+  // Live payment created in this session.
+  if (live) {
+    const status = live.status
+    const failed = status === "FAILED"
+    const completed = status === "COMPLETED"
+    const local = `S$ ${displayMinor(BigInt(live.sgdAmountMinor), SGD_DECIMALS, "", 2)}`
+    const total = `$${displayMinor(BigInt(live.usdcAmountMinor), USDC_DECIMALS, "", 2)}`
+    const step = (s: PayoutStatus) =>
+      failed && s !== "CREATED" && s !== "FUNDS_SENT" ? "Failed" : reached(status, s) ? "Settled" : "Pending"
+    const title = failed
+      ? `Payment to ${live.recipientName} failed`
+      : completed
+        ? `Done. ${live.recipientName} has ${local}.`
+        : `On its way to ${live.recipientName}`
+
+    return (
+      <div className="page">
+        <PayFlowHead title={completed ? "Payment sent" : failed ? "Payment failed" : "Sending payment"} step={4} />
+
+        <div className="grid">
+          <section className="tile s7" aria-label="Confirmation">
+            <div style={{ display: "grid", gap: 12, justifyItems: "start" }}>
+              <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+                <circle cx="32" cy="32" r="28" fill="none" stroke={failed ? "var(--danger, #c0392b)" : "var(--accent)"} strokeWidth="3" />
+                {failed ? (
+                  <path d="M22 22l20 20M42 22L22 42" fill="none" stroke="var(--danger, #c0392b)" strokeWidth="3" strokeLinecap="round" />
+                ) : (
+                  <path
+                    d="M20 33l8 8 16-18"
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={completed ? 1 : 0.35}
+                  />
+                )}
+              </svg>
+              <h2 className="sx-h heading-2" style={{ margin: 0 }}>
+                {title}
+              </h2>
+              <p className="body muted" style={{ margin: 0, maxWidth: "62ch" }}>
+                {total} from your balance · {live.rail === "PAYNOW" ? "PayNow" : "FAST"} · ref {live.providerRef ?? live.id.slice(0, 8)}
+              </p>
+              {failed && live.failureReason ? (
+                <p className="body-s" style={{ margin: 0, color: "var(--danger, #c0392b)" }}>
+                  {live.failureReason}
+                </p>
+              ) : null}
+            </div>
+
+            <div style={{ display: "grid", gap: 0, marginTop: 8 }}>
+              <div className="hop">
+                <i className={reached(status, "FUNDS_SENT") ? "" : "todo"} />
+                <span className="body-strong">Funded from balance</span>
+                <StatusPill status={step("FUNDS_SENT")} />
+                <span className="data">
+                  {total}
+                  {live.txHash ? (
+                    <>
+                      {" · "}
+                      <a href={`https://explorer.testnet.arc.io/tx/${live.txHash}`} target="_blank" rel="noreferrer">
+                        Arc tx {live.txHash.slice(0, 10)}…
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </div>
+              <div className="hop">
+                <i className={reached(status, "PAYING_OUT") ? "" : "todo"} />
+                <span className="body-strong">Converted</span>
+                <StatusPill status={step("PAYING_OUT")} />
+                <span className="data">1 USD = {live.clientRate} SGD</span>
+              </div>
+              <div className="hop">
+                <i className={completed ? "" : "todo"} />
+                <span className="body-strong">Paid out via {live.rail === "PAYNOW" ? "PayNow" : "FAST"}</span>
+                <StatusPill status={failed ? "Failed" : completed ? "Settled" : "Pending"} />
+                <span className="data">
+                  {local} {live.simulated ? <StatusPill status="Simulated" /> : null}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <aside className="tile s5" aria-labelledby="next">
+            <h2 className="tile-title" id="next">
+              What next
+            </h2>
+            <div className="kv">
+              <span>Payment ID</span>
+              <span>{live.id.slice(0, 8)}…</span>
+            </div>
+            <div className="kv">
+              <span>Status</span>
+              <span>{status.replace("_", " ").toLowerCase()}</span>
+            </div>
+            <div className="kv">
+              <span>Available now</span>
+              <span>{treasury.availableLabel}</span>
+            </div>
+            <div className="tile-foot" style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <a href="/api/sancus/ledger?format=csv" className="sx-btn sx-btn--secondary">
+                Download ledger (CSV)
+              </a>
+              <Link href="/pay" className="sx-btn sx-btn--primary">
+                Pay someone else
+              </Link>
+              <Link href="/activity" className="sx-btn sx-btn--quiet">
+                See it in Activity
+              </Link>
+            </div>
+          </aside>
+        </div>
+      </div>
+    )
+  }
+
+  // Demo recipients (wireframe flow).
   return (
     <div className="page">
       <PayFlowHead title="Payment sent" step={4} />
@@ -17,14 +173,7 @@ export default function PayDonePage() {
         <section className="tile s7" aria-label="Confirmation">
           <div style={{ display: "grid", gap: 12, justifyItems: "start" }}>
             <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-              <circle
-                cx="32"
-                cy="32"
-                r="28"
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth="3"
-              />
+              <circle cx="32" cy="32" r="28" fill="none" stroke="var(--accent)" strokeWidth="3" />
               <path
                 d="M20 33l8 8 16-18"
                 fill="none"
@@ -35,7 +184,7 @@ export default function PayDonePage() {
               />
             </svg>
             <h2 className="sx-h heading-2" style={{ margin: 0 }}>
-              Done. {recipient.name.split(" ")[0]} has her {quote.brlLabel}.
+              Done. {recipient.name.split(" ")[0]} has her {view.live ? view.localLabel : quote.brlLabel}.
             </h2>
             <p className="body muted" style={{ margin: 0, maxWidth: "62ch" }}>
               {quote.totalLabel} left your balance · {state.rail} · ref pay_7f2a…c91
@@ -76,7 +225,7 @@ export default function PayDonePage() {
           </div>
           <div className="kv">
             <span>Available now</span>
-            <span>{balance.availableLabel}</span>
+            <span>{treasury.source === "live" ? treasury.availableLabel : balance.availableLabel}</span>
           </div>
           <div className="tile-foot" style={{ flexDirection: "column", alignItems: "stretch" }}>
             <button type="button" className="sx-btn sx-btn--secondary">

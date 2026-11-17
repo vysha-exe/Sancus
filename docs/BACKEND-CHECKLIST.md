@@ -25,6 +25,22 @@
 
 ---
 
+## Frontend ↔ backend wiring (Sancus screens in `app/(sancus)/`)
+
+| Screen | Backend | Status |
+|---|---|---|
+| Auto sign-in for app screens | `proxy.ts` → `/api/sancus/demo-login` (when Supabase is configured; mock UI otherwise) | ✅ |
+| Home › balance | `GET /api/sancus/treasury` (`useLiveTreasury`) | ✅ |
+| Home › latest payments | `GET /api/sancus/payouts` (`useLiveActivity`) | ✅ |
+| Pay › who | Singapore recipients marked **Live** (demo-data `payout` field) | ✅ |
+| Pay › amount / review | `POST /api/sancus/payouts/quote` (live quote, 60 s lock, refresh) | ✅ |
+| Pay › confirm / done | `POST /api/sancus/payouts` + status polling + treasury refresh | ✅ |
+| Activity | `GET /api/sancus/payouts` incl. when / they got / fee | ✅ |
+| Receive › USDC address | Arc wallet from treasury summary | ✅ (shows once a wallet exists) |
+| Settings › how money is kept | wallets, Gateway, ledger sync + CSV | ✅ |
+| Approvals, Team, Spending/Cards, Invoices, Agents | no backend yet (§3–4, §8, §10–11, §13–14) | ⬜ demo data |
+| Demo-only recipients (Brazil, US, EU, Mexico) | simulated in the UI only | ⬜ |
+
 ## 1. Cross-cutting foundations
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
