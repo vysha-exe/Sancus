@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { SupabaseClient, User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
+import { hasEnvVars } from "@/lib/utils"
 
 export type AuthContext = {
   user: User
@@ -35,6 +36,11 @@ export type AuthedHandler = (
  */
 export function withAuth(handler: AuthedHandler) {
   return async (request: NextRequest) => {
+    // Mock / local UI mode: no Supabase env configured.
+    if (!hasEnvVars) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const supabase = await createClient()
     const {
       data: { user },

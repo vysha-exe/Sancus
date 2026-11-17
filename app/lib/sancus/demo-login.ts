@@ -23,7 +23,7 @@ export function demoCredentials(env: Env = process.env): { email: string; passwo
 }
 
 /** Only allow redirects to in-app paths (no open redirects). */
-export function safeNextPath(next: string | null | undefined, fallback = "/dashboard/pay"): string {
+export function safeNextPath(next: string | null | undefined, fallback = "/home"): string {
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/api/")) return fallback
   return next
 }

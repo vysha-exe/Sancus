@@ -29,8 +29,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseReqResClient } from "@/lib/supabase/server-client";
 import { DEMO_LOGIN_PATH, isDemoLoginEnabled } from "@/lib/sancus/demo-login";
+import { hasEnvVars } from "@/lib/utils";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/details"];
+// Circle dashboard chrome was removed; Sancus app routes are public in the mock phase.
+const PROTECTED_PREFIXES: string[] = [];
 
 function startsWithAny(pathname: string, prefixes: string[]): boolean {
   return prefixes.some((prefix) => pathname.startsWith(prefix));
@@ -48,6 +50,11 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
+  // No Supabase env → serve the mock UI without auth (local wireframe mode).
+  if (!hasEnvVars) {
+    return response;
+  }
+
   const supabase = createSupabaseReqResClient(request, response);
   const {
     data: { user },
@@ -56,11 +63,12 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
 
-  // Demo bypass: skip landing / login / sign-up and protected-route bounces.
+  // Demo bypass: skip login / sign-up and protected-route bounces.
+  // Leave "/" as the public placeholder landing (CTA into /home).
   if (
     !user &&
     isDemoLoginEnabled() &&
-    (isProtected || pathname === "/" || pathname === "/auth/login" || pathname === "/auth/sign-up")
+    (isProtected || pathname === "/auth/login" || pathname === "/auth/sign-up")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = DEMO_LOGIN_PATH;
@@ -75,18 +83,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Authenticated users hitting login/signup/landing get bounced to the
-  // dashboard, but auth flows like confirm/update-password/forgot-password/
-  // error must remain reachable so password resets and email confirmations
-  // still work for already-logged-in users.
-  if (
-    user &&
-    (pathname === "/auth/login" ||
-      pathname === "/auth/sign-up" ||
-      pathname === "/")
-  ) {
+  // Authenticated users hitting login/signup get bounced to the Sancus app.
+  // "/" stays the public marketing placeholder.
+  if (user && (pathname === "/auth/login" || pathname === "/auth/sign-up")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = "/home";
     return NextResponse.redirect(url);
   }
 

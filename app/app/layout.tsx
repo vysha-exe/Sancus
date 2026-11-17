@@ -18,7 +18,6 @@
 
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
-import { BridgeMonitor } from "@/components/bridge-monitor";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -27,8 +26,8 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "arc-fintech",
-  description: "Modern multi-chain treasury management system",
+  title: "Sancus",
+  description: "A dollar account that pays anyone, anywhere",
 };
 
 export default function RootLayout({
@@ -46,7 +45,6 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
-          <BridgeMonitor />
         </ThemeProvider>
       </body>
     </html>

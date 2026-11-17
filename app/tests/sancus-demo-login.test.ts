@@ -25,9 +25,9 @@ describe("demo login", () => {
 
   it("only redirects to in-app pages", () => {
     expect(safeNextPath("/dashboard/wallets")).toBe("/dashboard/wallets")
-    expect(safeNextPath("https://evil.example")).toBe("/dashboard/pay")
-    expect(safeNextPath("//evil.example")).toBe("/dashboard/pay")
-    expect(safeNextPath("/api/sancus/payouts")).toBe("/dashboard/pay")
-    expect(safeNextPath(null)).toBe("/dashboard/pay")
+    expect(safeNextPath("https://evil.example")).toBe("/home")
+    expect(safeNextPath("//evil.example")).toBe("/home")
+    expect(safeNextPath("/api/sancus/payouts")).toBe("/home")
+    expect(safeNextPath(null)).toBe("/home")
   })
 })
