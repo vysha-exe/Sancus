@@ -1,54 +1,68 @@
-/**
- * Copyright 2026 Circle Internet Group, Inc.  All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+import Link from "next/link"
+import { RisingColumn } from "@/components/sancus-ui/logo"
+import "@/styles/sancus/sancus.css"
 
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { AuthButton } from "@/components/auth-button";
-import { Hero } from "@/components/hero";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { hasEnvVars } from "@/lib/utils";
-import Link from "next/link";
-import { Suspense } from "react";
-
-export default function Home() {
+/** Temporary placeholder landing — real marketing page comes later. */
+export default function LandingPage() {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
-        <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-          <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
-            <div className="flex gap-5 items-center font-semibold">
-              <ThemeSwitcher />
-              <Link href={"/"} className="flex items-center gap-2">
-                <span className="bg-gradient-to-r from-blue-600 to-amber-600 bg-clip-text text-transparent font-bold text-xl">
-                  Circle Fintech Starter
-                </span>
-              </Link>
-            </div>
-            {!hasEnvVars ? (
-              <EnvVarWarning />
-            ) : (
-              <Suspense>
-                <AuthButton />
-              </Suspense>
-            )}
-          </div>
-        </nav>
-        <Hero />
+    <main className="sancus-landing">
+      <nav
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "20px 32px",
+          gap: 16,
+        }}
+      >
+        <Link
+          href="/"
+          className="sx-lockup sx-wordmark"
+          style={{ color: "#E4EAE6", textDecoration: "none", fontSize: 20 }}
+          aria-label="Sancus"
+        >
+          <RisingColumn />
+          <span>SANCUS</span>
+        </Link>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <Link href="/onboarding" className="sx-btn sx-btn--secondary" style={{ color: "#E4EAE6", borderColor: "#5C706B" }}>
+            Open an account
+          </Link>
+          <Link href="/home" className="sx-btn sx-btn--primary" style={{ background: "var(--brand-signal)", color: "var(--brand-night)" }}>
+            Open demo
+          </Link>
+        </div>
+      </nav>
+
+      <div
+        style={{
+          flex: 1,
+          display: "grid",
+          alignContent: "center",
+          justifyItems: "start",
+          gap: 20,
+          padding: "48px 32px 96px",
+          maxWidth: 720,
+        }}
+      >
+        <span className="label" style={{ color: "var(--brand-signal)" }}>
+          Placeholder
+        </span>
+        <h1 className="sx-h display-l" style={{ margin: 0, color: "#E4EAE6" }}>
+          A dollar account that pays <em style={{ color: "var(--brand-signal)", fontStyle: "italic" }}>anyone</em>
+        </h1>
+        <p className="body-l" style={{ margin: 0, color: "#94A39E", maxWidth: "42ch" }}>
+          Marketing page coming soon. For now, jump into the Café Paulista demo.
+        </p>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+          <Link href="/home" className="sx-btn sx-btn--primary" style={{ background: "var(--brand-signal)", color: "var(--brand-night)" }}>
+            Enter the app
+          </Link>
+          <Link href="/onboarding" className="sx-btn sx-btn--secondary" style={{ color: "#E4EAE6", borderColor: "#5C706B" }}>
+            Start onboarding
+          </Link>
+        </div>
       </div>
     </main>
-  );
+  )
 }

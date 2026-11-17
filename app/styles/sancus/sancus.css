@@ -1,0 +1,23 @@
+/* Sancus app styles. Import from the (sancus) layout only. */
+@import "./tokens.css";
+@import "./components.css";
+@import "./app.css";
+
+/* Landing / onboarding helpers */
+.sancus-landing {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--brand-night);
+  color: #e4eae6;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.sancus-landing a {
+  color: var(--brand-signal);
+}
+
+.sancus-landing a:hover {
+  color: #e4eae6;
+}

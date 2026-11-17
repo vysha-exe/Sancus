@@ -64,7 +64,7 @@ export function SignUpForm({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          emailRedirectTo: `${window.location.origin}/home`,
         },
       });
       
@@ -116,7 +116,7 @@ export function SignUpForm({
         }
       }
       
-      router.push("/dashboard");
+      router.push("/home");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
       toast.error("Signup failed. Please try again.");
