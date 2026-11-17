@@ -8,14 +8,16 @@
 import type { SgRail } from "./paynow"
 
 export type PayoutStatus =
+  | "PENDING_APPROVAL" // over the approval rule: funds reserved, waiting for an approver
   | "CREATED" // payout recorded, quote locked
   | "FUNDS_SENT" // USDC sent from the treasury to the partner (onchain leg)
   | "CONVERTING" // partner converting USDC -> SGD
   | "PAYING_OUT" // SGD sent over PayNow / FAST
   | "COMPLETED"
   | "FAILED"
+  | "REJECTED" // declined by an approver; funds released
 
-export const TERMINAL_STATUSES: PayoutStatus[] = ["COMPLETED", "FAILED"]
+export const TERMINAL_STATUSES: PayoutStatus[] = ["COMPLETED", "FAILED", "REJECTED"]
 
 export const STATUS_STEPS: { status: PayoutStatus; label: string }[] = [
   { status: "CREATED", label: "Quote locked" },
@@ -47,7 +49,7 @@ export interface PayoutProvider {
 }
 
 /** Seconds after creation at which each simulated step is reached. */
-export const SIM_TIMELINE_SECONDS: Record<Exclude<PayoutStatus, "FAILED">, number> = {
+export const SIM_TIMELINE_SECONDS: Record<Exclude<PayoutStatus, "FAILED" | "REJECTED" | "PENDING_APPROVAL">, number> = {
   CREATED: 0,
   FUNDS_SENT: 2,
   CONVERTING: 5,
@@ -62,7 +64,8 @@ export const SIM_TIMELINE_SECONDS: Record<Exclude<PayoutStatus, "FAILED">, numbe
 export const SIM_FAIL_AMOUNT_SGD_MINOR = 13_13n
 
 export function simulatedStatusAt(payout: ProviderPayout, now: Date): PayoutStatus {
-  if (isTerminal(payout.status)) return payout.status
+  // Waiting for an approver: nothing has been handed to the partner yet.
+  if (isTerminal(payout.status) || payout.status === "PENDING_APPROVAL") return payout.status
   const elapsed = (now.getTime() - payout.createdAt.getTime()) / 1000
   const failAtPayout = payout.sgdAmountMinor === SIM_FAIL_AMOUNT_SGD_MINOR
   let current: PayoutStatus = "CREATED"

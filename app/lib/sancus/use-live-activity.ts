@@ -11,6 +11,7 @@ function statusFromPayout(status: string): Status {
       return "Settled"
     case "FAILED":
     case "CANCELLED":
+    case "REJECTED": // declined by an approver
       return "Failed"
     default:
       return "Pending"

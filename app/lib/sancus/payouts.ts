@@ -7,6 +7,8 @@ import { chooseRail, FAST_LIMIT_SGD_MINOR, normaliseRecipient, validateRecipient
 import { fxConfigFromEnv, quoteSgdPayout, type PayoutQuote } from "./fx"
 import { getPayoutProvider, isTerminal, type PayoutStatus } from "./payout-provider"
 import { payoutJournal, postJournal, type PayoutForLedger } from "./ledger"
+import { formatMinor, USDC_DECIMALS } from "./money"
+import { getAppKitSendError, sendUsdcOnSameChainWithAppKit } from "@/lib/circle/app-kit-send"
 
 export const recipientSchema = z.object({
   name: z.string().max(140),
@@ -73,6 +75,10 @@ export type PayoutRow = {
   status: PayoutStatus
   simulated: boolean
   failure_reason: string | null
+  approval_reason: string | null
+  approved_at: string | null
+  decided_at: string | null
+  decided_note: string | null
   created_at: string
   updated_at: string
 }
@@ -87,13 +93,15 @@ export async function refreshPayoutStatuses(supabase: SupabaseClient, rows: Payo
   const now = new Date()
   return Promise.all(
     rows.map(async (row) => {
-      if (isTerminal(row.status)) return row
+      // Terminal or still waiting for an approver: nothing for the partner to report.
+      if (isTerminal(row.status) || row.status === "PENDING_APPROVAL") return row
       const next = await provider.status(
         {
           id: row.id,
           rail: row.rail,
           status: row.status,
-          createdAt: new Date(row.created_at),
+          // Approved payouts start their partner timeline at approval time.
+          createdAt: new Date(row.approved_at ?? row.created_at),
           sgdAmountMinor: BigInt(row.sgd_amount_minor),
         },
         now
@@ -134,6 +142,78 @@ export async function syncPayoutLedger(supabase: SupabaseClient, row: PayoutRow)
   await postJournal(supabase, payoutJournal("created", view))
   if (row.status === "COMPLETED") await postJournal(supabase, payoutJournal("completed", view))
   if (row.status === "FAILED") await postJournal(supabase, payoutJournal("failed", view))
+  if (row.status === "REJECTED") await postJournal(supabase, payoutJournal("rejected", view))
+}
+
+/** Updates a payout row and returns the fresh copy (falls back to a local merge on error). */
+export async function updatePayout(
+  supabase: SupabaseClient,
+  row: PayoutRow,
+  patch: Partial<PayoutRow>
+): Promise<PayoutRow> {
+  const { data, error } = await supabase.from("sancus_payouts").update(patch).eq("id", row.id).select("*").single()
+  if (error || !data) {
+    console.error("Failed to update payout", row.id, error)
+    return { ...row, ...patch }
+  }
+  return data as PayoutRow
+}
+
+/**
+ * Moves the money for a payout that's cleared policy (straight away, or after approval):
+ *   1. Treasury leg: real USDC transfer on Arc to the partner's settlement address, when configured.
+ *   2. Partner leg: hand the payout to the SGD payout provider.
+ * Returns the updated row; a failed USDC transfer marks the payout FAILED and releases the funds.
+ */
+export async function executePayout(supabase: SupabaseClient, userId: string, row: PayoutRow): Promise<PayoutRow> {
+  let current = row
+
+  if (current.settlement_address && current.source_address && current.blockchain) {
+    const usdcDecimal = formatMinor(BigInt(current.usdc_amount_minor), USDC_DECIMALS)
+    try {
+      const sent = await sendUsdcOnSameChainWithAppKit({
+        sourceBlockchain: current.blockchain,
+        sourceWalletAddress: current.source_address,
+        recipientAddress: current.settlement_address,
+        amount: usdcDecimal,
+        token: "USDC",
+      })
+      current = await updatePayout(supabase, current, {
+        circle_transaction_id: sent.txId,
+        tx_hash: sent.txHash ?? null,
+      })
+      // Mirror into the upstream activity feed.
+      await supabase.from("transactions").insert({
+        user_id: userId,
+        amount: Number(usdcDecimal),
+        sender_address: current.source_address,
+        recipient_address: current.settlement_address,
+        tx_hash: sent.txHash ?? null,
+        circle_transaction_id: sent.txId,
+        blockchain: current.blockchain,
+        type: "OUTBOUND",
+        currency: "USDC",
+        status: "PENDING",
+      })
+    } catch (error) {
+      const mapped = getAppKitSendError(error)
+      current = await updatePayout(supabase, current, {
+        status: "FAILED",
+        failure_reason: `USDC transfer failed: ${mapped.userMessage ?? mapped.error}`,
+      })
+      await syncPayoutLedger(supabase, current)
+      return current
+    }
+  }
+
+  const { providerRef } = await getPayoutProvider().submit({
+    id: current.id,
+    rail: current.rail,
+    status: current.status,
+    createdAt: new Date(current.approved_at ?? current.created_at),
+    sgdAmountMinor: BigInt(current.sgd_amount_minor),
+  })
+  return updatePayout(supabase, current, { provider_ref: providerRef })
 }
 
 /** Shape returned to the browser. Minor-unit amounts stay strings to avoid float loss. */
@@ -158,6 +238,10 @@ export function toPayoutDto(row: PayoutRow) {
     status: row.status,
     simulated: row.simulated,
     failureReason: row.failure_reason,
+    approvalReason: row.approval_reason ?? null,
+    approvedAt: row.approved_at ?? null,
+    decidedAt: row.decided_at ?? null,
+    decidedNote: row.decided_note ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

@@ -26,6 +26,7 @@ import {
 import { displayMinor, parseToMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { SerializedQuote } from "@/lib/sancus/fx"
 import type { PayoutDto } from "@/lib/sancus/payouts"
+import { notifyApprovalsChanged } from "@/lib/sancus/use-live-approvals"
 
 type PayState = {
   recipientId: string
@@ -241,6 +242,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return { ok: false, error: body.issues?.[0]?.message ?? body.error ?? "Payment failed" }
       const created = body.payout as PayoutDto
       setPayout(created)
+      if (created.status === "PENDING_APPROVAL") notifyApprovalsChanged()
       idempotencyKey.current = null
       return { ok: true, payout: created }
     } catch {
