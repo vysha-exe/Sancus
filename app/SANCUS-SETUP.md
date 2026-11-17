@@ -40,13 +40,30 @@ npx supabase migration up
 ```
 Or cloud: `npx supabase link --project-ref <ref>` then `npx supabase db push`.
 
-## 5. Run it
+## 5. Skip the login screen (optional, for demos)
+Add to `.env.local`:
+```bash
+SANCUS_DEMO_LOGIN=true
+SANCUS_DEMO_EMAIL=demo@sancus.localhost
+SANCUS_DEMO_PASSWORD=<any password, 8+ characters>
+```
+Opening the app then signs you in as the demo user (created on first visit) and lands on **Pay**. Restart `npm run dev` after changing env vars. It's disabled in production builds unless `SANCUS_DEMO_LOGIN_ALLOW_PRODUCTION=true` is also set, because anyone who opens the app gets the demo account.
+
+## 6. Run it
 ```bash
 npm run dev
 ```
-Open http://localhost:3000, sign up, create wallets on Arc Testnet, fund them from the faucet, and try a Gateway deposit.
+Open http://localhost:3000 (add `-- -p 3010` if port 3000 is busy). Create wallets on Arc Testnet, fund them from the faucet, and try a Gateway deposit.
 
-## 6. Checks
+## 7. Try the Singapore payout (works without Circle keys)
+1. Open **Pay** in the sidebar.
+2. Recipient `Lim Trading Pte Ltd`, UEN `201912345K`, amount `2000`.
+3. Check the live quote (rate, fee, USDC debited), then **Send**. The payout moves Quote locked → USDC sent → Converting → Paying out → Delivered in about 15 seconds.
+4. Send exactly **S$13.13** to see the failure path.
+
+The rate and the SGD payout partner are **simulated** until StraitsX sandbox access arrives (`lib/sancus/payout-provider.ts`). To make the USDC leg a real Arc testnet transfer, set `SANCUS_SETTLEMENT_ADDRESS` and pick a funded Arc wallet in **Pay from**.
+
+## 8. Checks
 ```bash
 npm test          # Vitest unit tests
 npx tsc --noEmit  # typecheck
