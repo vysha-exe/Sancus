@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useState, type FormEvent } from "react"
 import { agents } from "@/lib/sancus/demo-data"
+import { X402Earnings } from "@/components/sancus-ui/x402-earnings"
 
 type Message = {
   id: number
@@ -213,42 +214,7 @@ export default function AgentsPage() {
           </div>
         </section>
 
-        <section className="tile s5" aria-labelledby="x402">
-          <div className="tile-head">
-            <h2 className="tile-title" id="x402">
-              Paid by other agents
-            </h2>
-            <button type="button" className="sx-btn sx-btn--quiet">
-              Add an endpoint
-            </button>
-          </div>
-          <div className="tbl-wrap">
-            <table className="tbl" style={{ minWidth: 0 }}>
-              <thead>
-                <tr>
-                  <th>Endpoint</th>
-                  <th className="num">Price</th>
-                  <th className="num">Paid</th>
-                  <th className="num">Earned</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="data">GET /market-data</td>
-                  <td className="num">$0.05</td>
-                  <td className="num">24</td>
-                  <td className="num" style={{ color: "var(--settled)" }}>
-                    {agents.earned}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div className="tile-foot">
-            <span className="body-s muted">$0.10 is on its way to your balance</span>
-            <span className="sx-pill sx-pill--pending">Pending</span>
-          </div>
-        </section>
+        <X402Earnings />
 
         <section className="tile s12" aria-labelledby="ap">
           <div className="tile-head">
