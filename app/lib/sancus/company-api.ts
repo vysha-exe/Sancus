@@ -8,8 +8,6 @@ export const nodeSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
   country: z.string().trim().length(2, "Pick a country"),
   currency: z.string().trim().length(3).optional(),
-  /** Name for the first wallet created with the node. */
-  walletName: z.string().trim().max(80).optional(),
 })
 
 export type NodeInput = z.infer<typeof nodeSchema>

@@ -25,7 +25,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const company = await getCompany(supabase, id as string)
   if (!company) return NextResponse.json({ error: "Created, but couldn't read it back" }, { status: 500 })
 
-  const wallet = await createCompanyWallet(supabase, user.id, company, parsed.data.walletName || "Global treasury")
+  // Every node gets exactly one wallet, created automatically and named after it.
+  const wallet = await createCompanyWallet(supabase, user.id, company, `${company.name} wallet`)
   return NextResponse.json(
     { company, wallet: wallet.ok ? wallet.wallet : null, walletError: wallet.ok ? null : wallet.error },
     { status: 201 }

@@ -32,7 +32,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const company = await getCompany(supabase, id as string)
   if (!company) return NextResponse.json({ error: "Created, but couldn't read it back" }, { status: 500 })
 
-  const wallet = await createCompanyWallet(supabase, user.id, company, parsed.data.walletName || `${company.name} treasury`)
+  // The branch's wallet is created automatically with it, named after the branch.
+  const wallet = await createCompanyWallet(supabase, user.id, company, `${company.name} wallet`)
   return NextResponse.json(
     { company, wallet: wallet.ok ? wallet.wallet : null, walletError: wallet.ok ? null : wallet.error },
     { status: 201 }

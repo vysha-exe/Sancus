@@ -90,17 +90,19 @@ function withResolvedAddress(
 }
 
 /**
- * Kit Key for permissioned mode, read from the same `KIT_KEY` env var as
- * `earnConfig()` in `lib/circle/earn-kit.ts`.
+ * Credentials for the Stablecoin (swap) Service.
  *
- * Unlike EarnKit, Swap has no permissionless fallback: the Stablecoin Service
- * rejects an empty `kitKey` with a fatal INPUT_VALIDATION_FAILED, so leaving
- * `KIT_KEY` unset disables the Swap page entirely. Still returns `undefined`
- * rather than an empty string so the SDK's own error names the missing field.
+ * Modified by the Sancus team, 2026: Circle retired Kit Keys (new ones can't be
+ * created) and App Kit now takes a regular Circle API key via `apiKey`
+ * (`kitKey` is deprecated). We use CIRCLE_API_KEY, or a legacy KIT_KEY if set.
+ * Swap has no permissionless mode, so with neither set this returns undefined
+ * and the SDK's own error names the missing field.
  */
-function swapConfig(): { kitKey: string } | undefined {
-  const kitKey = process.env.KIT_KEY
-  return kitKey ? { kitKey } : undefined
+function swapConfig(): { apiKey: string } | { kitKey: string } | undefined {
+  const kitKey = process.env.KIT_KEY?.trim()
+  if (kitKey) return { kitKey }
+  const apiKey = process.env.CIRCLE_API_KEY?.trim()
+  return apiKey ? { apiKey } : undefined
 }
 
 function fromContext(walletAddress: string) {
