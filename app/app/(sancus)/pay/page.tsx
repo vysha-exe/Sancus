@@ -109,6 +109,9 @@ export default function PayWhoPage() {
             <Link href="/invoices" className="sx-btn sx-btn--quiet">
               Pay from invoice
             </Link>
+            <Link href="/pay/us-bank" className="sx-btn sx-btn--secondary">
+              US bank (ACH)
+            </Link>
             <Link href="/pay/amount" className="sx-btn sx-btn--primary">
               Continue
             </Link>
