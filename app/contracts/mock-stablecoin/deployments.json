@@ -1,0 +1,40 @@
+{
+  "chainId": 5042002,
+  "network": "arc-testnet",
+  "minter": "0xf801d2EB8B55FfDF3b664A058Bbd6B0cB6C7ee0B",
+  "tokens": {
+    "BRL": {
+      "currency": "BRL",
+      "name": "Sancus Mock Brazilian Real",
+      "symbol": "mBRL",
+      "decimals": 2,
+      "country": "BR",
+      "rail": "PIX",
+      "address": "0xa4998745ede2f259f392ee4b71156badb5da8755",
+      "deployTx": "0xac12b872876e442a9a3f45a6c4320fe46385eb84b65e74cdaa207384821e70ee",
+      "explorer": "https://explorer.testnet.arc.io/address/0xa4998745ede2f259f392ee4b71156badb5da8755"
+    },
+    "IDR": {
+      "currency": "IDR",
+      "name": "Sancus Mock Indonesian Rupiah",
+      "symbol": "mIDR",
+      "decimals": 2,
+      "country": "ID",
+      "rail": "QRIS",
+      "address": "0xdca139d380fbd00c61b4ed696d8f81e659957ae6",
+      "deployTx": "0xb39eb6b533be9dae63a6bbcab58c7f11237fec3a0308500647cf0030a80a76a2",
+      "explorer": "https://explorer.testnet.arc.io/address/0xdca139d380fbd00c61b4ed696d8f81e659957ae6"
+    },
+    "THB": {
+      "currency": "THB",
+      "name": "Sancus Mock Thai Baht",
+      "symbol": "mTHB",
+      "decimals": 2,
+      "country": "TH",
+      "rail": "PROMPTPAY",
+      "address": "0x00bf05794364ef67815094d7158a0270e555f944",
+      "deployTx": "0x958ec60d518a7677525394519910649bc0245d8dcf1a84bd20618dc111e3af97",
+      "explorer": "https://explorer.testnet.arc.io/address/0x00bf05794364ef67815094d7158a0270e555f944"
+    }
+  }
+}

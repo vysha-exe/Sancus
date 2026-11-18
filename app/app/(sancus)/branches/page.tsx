@@ -306,6 +306,11 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
               <span className="sx-row__amount">{w.usdcMinor === null ? "–" : usd(w.usdcMinor)}</span>
               <span className="sx-row__meta">
                 <span className="sx-rail">USDC</span>{" "}
+                {Object.entries(w.local ?? {}).map(([cur, minor]) => (
+                  <span key={cur} className="sx-pill sx-pill--simulated" title="Test token minted by the local-rail sandbox">
+                    {(Number(minor) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} m{cur}
+                  </span>
+                ))}{" "}
                 {live ? (
                   <a href={`https://explorer.testnet.arc.io/address/${w.address}`} target="_blank" rel="noreferrer" className="data">
                     {short(w.address)}

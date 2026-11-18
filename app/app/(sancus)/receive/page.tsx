@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
+import { LocalCollectCard } from "@/components/sancus-ui/local-collect-card"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { ledger } from "@/lib/sancus/demo-data"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
@@ -264,6 +265,8 @@ export default function ReceivePage() {
             </button>
           </div>
         </aside>
+
+        <LocalCollectCard />
 
         <section className="tile s12" aria-labelledby="recent">
           <div className="tile-head">
