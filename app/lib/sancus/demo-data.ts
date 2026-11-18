@@ -5,7 +5,7 @@ export const workspace = {
   country: "Brazil",
   homeCurrency: "BRL",
   balanceCurrency: "USD",
-  actor: { firstName: "Maya", role: "Owner", initial: "M" },
+  actor: { firstName: "Admin", role: "Owner", initial: "A" },
   sandbox: true,
 } as const
 
@@ -194,8 +194,8 @@ export type Person = {
 export const people: Person[] = [
   {
     id: "maya",
-    name: "Maya Patel",
-    initials: "M",
+    name: "Business admin",
+    initials: "A",
     role: "Owner",
     country: "Brazil",
     method: "—",

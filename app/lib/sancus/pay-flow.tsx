@@ -28,6 +28,7 @@ import type { SerializedQuote } from "@/lib/sancus/fx"
 import type { PayoutDto } from "@/lib/sancus/payouts"
 import { notifyApprovalsChanged } from "@/lib/sancus/use-live-approvals"
 import type { PixPaymentDto } from "@/lib/sancus/local-rails"
+import { defaultCurrency, isPayRail, type PayCurrency, type QuoteSide, type SerializedPayQuote } from "@/lib/sancus/pay-quote"
 
 type PayState = {
   recipientId: string
@@ -35,6 +36,8 @@ type PayState = {
   localAmount: string
   rail: string
   memo: string
+  /** Which box the user typed in last; the other one is computed from the quote. */
+  side: QuoteSide
 }
 
 export type LiveQuote = {
@@ -89,10 +92,18 @@ const PayContext = createContext<PayContextValue | null>(null)
 
 const defaultState: PayState = {
   recipientId: julianaQuote.recipientId,
-  usdAmount: String(julianaQuote.usd),
+  usdAmount: julianaQuote.totalLabel.replace("$", ""),
   localAmount: String(julianaQuote.brl),
   rail: julianaQuote.rail,
   memo: "November design hours",
+  side: "send",
+}
+
+/** Payout currency for a non-Singapore recipient on a rail (a wire follows their usual currency). */
+function payoutCurrency(primaryRail: string, rail: string): PayCurrency | null {
+  if (!isPayRail(rail)) return null
+  if (rail === "Wire") return isPayRail(primaryRail) && primaryRail !== "Wire" ? defaultCurrency(primaryRail) : "USD"
+  return defaultCurrency(rail)
 }
 
 const LIVE_DEFAULT_SGD = "2000.00"
@@ -138,8 +149,9 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       ...s,
       recipientId: r.id,
       rail: r.payout ? (r.payout.proxyType === "BANK" ? "FAST" : "PayNow") : r.rail,
-      localAmount: r.payout ? LIVE_DEFAULT_SGD : r.id === "juliana" ? String(julianaQuote.brl) : s.localAmount,
-      usdAmount: r.payout ? "" : r.id === "juliana" ? String(julianaQuote.usd) : s.usdAmount,
+      localAmount: r.payout ? LIVE_DEFAULT_SGD : "",
+      usdAmount: r.payout ? "" : r.id === "juliana" ? julianaQuote.totalLabel.replace("$", "") : "100.00",
+      side: r.payout ? "receive" : "send",
     }))
   }, [])
 
@@ -156,11 +168,8 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
           const local = Math.max(0, n * rate - fee)
           return { ...s, usdAmount: v, localAmount: local.toFixed(2) }
         }
-        const local =
-          Number.isFinite(n) && s.recipientId === "juliana"
-            ? (n * julianaQuote.rate).toFixed(2).replace(".", ",")
-            : s.localAmount
-        return { ...s, usdAmount: v, localAmount: local }
+        // Other rails: the quote API fills in "They get".
+        return { ...s, usdAmount: v, side: "send" }
       })
     },
     [liveQuote]
@@ -171,10 +180,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     setState((s) => {
       const r = getRecipient(s.recipientId)
       if (r?.payout) return { ...s, localAmount: v, usdAmount: "" }
-      const n = Number.parseFloat(v.replace(/\./g, "").replace(",", "."))
-      const usdAmt =
-        Number.isFinite(n) && s.recipientId === "juliana" ? (n / julianaQuote.rate).toFixed(2) : s.usdAmount
-      return { ...s, localAmount: v, usdAmount: usdAmt }
+      return { ...s, localAmount: v, side: "receive" }
     })
   }, [])
 
@@ -223,6 +229,48 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       clearTimeout(timer)
     }
   }, [quotable, recipient, state.localAmount, quoteNonce])
+
+  // Every other rail: USDC-based quote from POST /api/sancus/pay/quote, in either direction.
+  const [railQuote, setRailQuote] = useState<SerializedPayQuote | null>(null)
+  const [railQuoteError, setRailQuoteError] = useState<string | null>(null)
+  const [railQuoteLoading, setRailQuoteLoading] = useState(false)
+  const currency = isLive ? null : payoutCurrency(recipient.rail, state.rail)
+  const typed = state.side === "send" ? state.usdAmount : state.localAmount
+  useEffect(() => {
+    if (isLive || !currency || !isPayRail(state.rail) || !typed.trim()) return
+    const controller = new AbortController()
+    const side = state.side
+    const timer = setTimeout(async () => {
+      setRailQuoteLoading(true)
+      try {
+        const res = await fetch("/api/sancus/pay/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rail: state.rail, currency, side, amount: typed }),
+          signal: controller.signal,
+        })
+        const body = await res.json()
+        if (!res.ok) {
+          setRailQuote(null)
+          setRailQuoteError(body.error ?? "Could not get a quote")
+          return
+        }
+        const q = body.quote as SerializedPayQuote
+        setRailQuote(q)
+        setRailQuoteError(null)
+        // Fill in the box the user didn't type in.
+        setState((s) => (s.side !== side ? s : side === "send" ? { ...s, localAmount: q.receiveInput } : { ...s, usdAmount: q.sendInput }))
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") setRailQuoteError("Could not reach the quote service")
+      } finally {
+        setRailQuoteLoading(false)
+      }
+    }, 300)
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
+  }, [isLive, currency, state.rail, state.side, typed, quoteNonce])
 
   const submit = useCallback(async (): Promise<SubmitResult> => {
     if (!recipient.payout && !isPix) return { ok: false, error: "This recipient is demo-only" }
@@ -295,27 +343,28 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
         feeLabel: fee !== null ? usd(fee) : "–",
         totalLabel: total !== null ? usd(total) : "–",
         localLabel: local !== null ? sgd(local) : "–",
-        rateLabel: q ? `1 USD = ${q.clientRate} SGD` : "Getting a live rate…",
+        rateLabel: q ? `1 USDC = ${q.clientRate} SGD` : "Getting a live rate…",
         arrival: liveQuote?.etaLabel ?? "Seconds",
         railReason: liveQuote?.railReason ?? null,
         expiresAt: q?.expiresAt ?? null,
         simulated: true,
       }
     }
+    const rq = railQuote && railQuote.rail === state.rail && railQuote.currency === currency ? railQuote : null
     return {
       live: false,
-      currency: "BRL",
-      usdLabel: julianaQuote.usdLabel,
-      feeLabel: julianaQuote.feeLabel,
-      totalLabel: julianaQuote.totalLabel,
-      localLabel: julianaQuote.brlLabel,
-      rateLabel: julianaQuote.rateLabel,
-      arrival: julianaQuote.arrival,
+      currency: currency ?? "USD",
+      usdLabel: rq?.amountLabel ?? "–",
+      feeLabel: rq?.feeLabel ?? "–",
+      totalLabel: rq?.sendLabel ?? "–",
+      localLabel: rq?.receiveLabel ?? "–",
+      rateLabel: rq?.rateLabel ?? (currency === "USDC" ? "USDC to USDC · no conversion" : "Getting a rate…"),
+      arrival: rq?.eta ?? "–",
       railReason: null,
       expiresAt: null,
       simulated: true,
     }
-  }, [isLive, liveQuote, state.localAmount])
+  }, [isLive, liveQuote, state.localAmount, state.rail, railQuote, currency])
 
   const value = useMemo(
     () => ({
@@ -329,8 +378,8 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       quote: julianaQuote,
       view,
       liveQuote: isLive ? liveQuote : null,
-      quoteLoading: isLive && quoteLoading,
-      quoteError: isLive ? quoteError : null,
+      quoteLoading: isLive ? quoteLoading : railQuoteLoading,
+      quoteError: isLive ? quoteError : railQuoteError,
       refreshQuote,
       submit,
       submitting,
@@ -351,6 +400,8 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       liveQuote,
       quoteLoading,
       quoteError,
+      railQuoteLoading,
+      railQuoteError,
       refreshQuote,
       submit,
       submitting,

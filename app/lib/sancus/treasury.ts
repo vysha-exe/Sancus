@@ -37,6 +37,50 @@ export type TreasuryInputs = {
   gatewayMinor: bigint | null
   payouts: PayoutLite[]
   ledgerRows: EntryRow[]
+  /** Money that left on simulated legs (no USDC moved onchain), see simulatedSpend(). */
+  simulated?: { spentMinor: bigint; heldMinor: bigint }
+}
+
+/**
+ * Payments whose money "left" only on a simulated leg don't change the onchain balance, so the
+ * balance must take them off itself. Counted from BALANCE_SINCE on, so earlier test payments
+ * don't sink a freshly funded demo balance.
+ *   spent  = settled simulated payments (SG payouts with no USDC transfer, ACH in mock mode, Pix)
+ *   held   = simulated ACH still in progress (reserved until it settles, fails or is returned)
+ */
+export const BALANCE_SINCE = process.env.SANCUS_BALANCE_SINCE?.trim() || "2026-11-18T08:30:00Z"
+const PIX_FEE_USDC_MINOR = 800_000n
+
+export type SimSpendInputs = {
+  payouts: (PayoutLite & { created_at?: string })[]
+  ach: { status: string; usdc_amount_minor: number | string; funded_onchain: boolean; created_at: string }[]
+  pix: { status: string; amount_brl_minor: number | string; created_at: string }[]
+  /** BRL per USDC × 1e6, to turn Pix amounts back into USDC. */
+  brlRateMicro: bigint
+  since?: string
+}
+
+export function simulatedSpend(input: SimSpendInputs): { spentMinor: bigint; heldMinor: bigint } {
+  const since = Date.parse(input.since ?? BALANCE_SINCE)
+  const recent = (at?: string) => !at || Date.parse(at) >= since
+  let spentMinor = 0n
+  let heldMinor = 0n
+  for (const p of input.payouts) {
+    if (recent(p.created_at) && p.status === "COMPLETED" && !p.tx_hash) spentMinor += BigInt(p.usdc_amount_minor)
+  }
+  for (const a of input.ach) {
+    if (!recent(a.created_at) || a.funded_onchain) continue // real USDC already left onchain
+    const amt = BigInt(a.usdc_amount_minor)
+    if (a.status === "PAYMENT_PROCESSED") spentMinor += amt
+    else if (["PENDING_APPROVAL", "CREATED", "FUNDS_RECEIVED", "PAYMENT_SUBMITTED"].includes(a.status)) heldMinor += amt
+    // FAILED / RETURNED / REJECTED: the money came back
+  }
+  for (const x of input.pix) {
+    if (!recent(x.created_at) || !["SETTLED", "PENDING"].includes(x.status)) continue
+    // BRL cents → USDC (6 dp) at the rate, plus the Pix fee
+    spentMinor += (BigInt(x.amount_brl_minor) * 10_000n * 1_000_000n) / input.brlRateMicro + PIX_FEE_USDC_MINOR
+  }
+  return { spentMinor, heldMinor }
 }
 
 export function summarizeTreasury(input: TreasuryInputs) {
@@ -70,8 +114,11 @@ export function summarizeTreasury(input: TreasuryInputs) {
     }
   }
 
-  const availableMinor = totalMinor - reservedMinor
-  if (availableMinor < 0n) warnings.push("Payouts in progress exceed the treasury balance.")
+  // Simulated legs: settled ones are spent, in-progress ones are held like any reserved payout.
+  const simulatedSpentMinor = input.simulated?.spentMinor ?? 0n
+  reservedMinor += input.simulated?.heldMinor ?? 0n
+  const availableMinor = totalMinor - reservedMinor - simulatedSpentMinor
+  if (availableMinor < 0n) warnings.push("Payments exceed the treasury balance.")
 
   const balances = accountBalances(input.ledgerRows)
   const ledgerInTransit = balances[ACCOUNTS.inTransit] ?? 0n
@@ -84,6 +131,7 @@ export function summarizeTreasury(input: TreasuryInputs) {
     totalMinor: str(totalMinor),
     availableMinor: str(availableMinor),
     reservedMinor: str(reservedMinor),
+    simulatedSpentMinor: str(simulatedSpentMinor),
     inFlightMinor: str(inFlightMinor),
     walletsMinor: str(walletsMinor),
     gatewayMinor: input.gatewayMinor === null ? null : str(input.gatewayMinor),

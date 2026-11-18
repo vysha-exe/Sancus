@@ -21,17 +21,22 @@ function usdLabel(minor: string): string {
   return `${neg ? "-" : ""}$${displayMinor(abs, USDC_DECIMALS, "", 2)}`
 }
 
-/** Pass `refreshKey` (e.g. a payout status) to re-read the treasury when it changes. */
-export function useLiveTreasury(refreshKey?: string | number): LiveBalance {
+/**
+ * Pass `refreshKey` (e.g. a payout status) to re-read the treasury when it changes.
+ * `scope`: a company node id → that company plus its branches; null → personal; undefined → wait.
+ */
+export function useLiveTreasury(refreshKey?: string | number, scope: string | null | undefined = null): LiveBalance {
   const [summary, setSummary] = useState<TreasurySummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (scope === undefined) return // workspace not known yet
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch("/api/sancus/treasury", { cache: "no-store" })
+        const url = scope ? `/api/sancus/treasury?companyId=${encodeURIComponent(scope)}` : "/api/sancus/treasury"
+        const res = await fetch(url, { cache: "no-store" })
         if (res.status === 401 || res.status === 403) {
           if (!cancelled) {
             setSummary(null)
@@ -63,7 +68,7 @@ export function useLiveTreasury(refreshKey?: string | number): LiveBalance {
     return () => {
       cancelled = true
     }
-  }, [refreshKey])
+  }, [refreshKey, scope])
 
   if (!summary) {
     return {

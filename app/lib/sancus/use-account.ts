@@ -64,3 +64,17 @@ export function canOpenPath(account: AccountDto | null, pathname: string): boole
   }
   return account.nav.includes(key) || extra[account.type].includes(key)
 }
+
+/**
+ * What to call the signed-in account: a business admin is their company, a branch admin is their
+ * branch, and people (employees, individuals) are their first name.
+ */
+export function accountDisplayName(account: AccountDto | null, fallback: string): string {
+  if (!account) return fallback
+  const person = account.firstName || (account.email ? account.email.split(/[@+]/)[0].replace(/^\w/, (c) => c.toUpperCase()) : null)
+  if (account.type === "ADMIN") return account.scopes.find((s) => s.isRoot)?.companyName ?? person ?? fallback
+  if (account.type === "BRANCH") {
+    return account.scopes.find((s) => !s.isRoot && (s.role === "ADMIN" || s.role === "OWNER"))?.companyName ?? person ?? fallback
+  }
+  return person ?? fallback
+}

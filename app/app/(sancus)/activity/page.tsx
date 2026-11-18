@@ -26,12 +26,12 @@ type Extra = {
 /** Ledger columns the shared demo data does not carry. */
 const extras: Record<string, Extra> = {
   padaria: { when: "Today 10:02", by: "Ana", rail: "Pix QR", theyGot: "R$ 54,12", fee: "$0.00" },
-  juliana: { when: "Today 9:41", by: "Maya", theyGot: "R$ 541,23", fee: "$0.80" },
+  juliana: { when: "Today 9:41", by: "Admin", theyGot: "R$ 541,23", fee: "$0.80" },
   papelaria: { when: "Today 9:12", by: "Ana · 4021", theyGot: "R$ 541,23", fee: "$0.00" },
-  northwind: { when: "Today 8:30", by: "Maya", theyGot: "$2,000.00", fee: "$0.00" },
-  lumen: { when: "Fri 16:48", by: "Maya", theyGot: "$1,000.00", fee: "$0.00" },
+  northwind: { when: "Today 8:30", by: "Admin", theyGot: "$2,000.00", fee: "$0.00" },
+  lumen: { when: "Fri 16:48", by: "Admin", theyGot: "$1,000.00", fee: "$0.00" },
   mercado: { when: "Fri 11:02", by: "—", theyGot: "—", fee: "$0.00" },
-  pedro: { when: "Sat 14:05", by: "Maya", theyGot: "—", fee: "$0.00" },
+  pedro: { when: "Sat 14:05", by: "Admin", theyGot: "—", fee: "$0.00" },
 }
 
 const fallback: Extra = { when: "—", by: "—", theyGot: "—", fee: "$0.00" }
@@ -107,7 +107,7 @@ export default function ActivityPage() {
             Export CSV
           </button>
           <Link href="/pay" className="sx-btn sx-btn--primary">
-            Pay someone
+            Make a payment
           </Link>
         </div>
       </header>
@@ -171,7 +171,7 @@ export default function ActivityPage() {
                       <span className="vh">Filter by person</span>
                       <select value={by} onChange={(e) => setBy(e.target.value)}>
                         <option>By</option>
-                        <option>Maya</option>
+                        <option>Admin</option>
                         <option>Ana</option>
                         <option>Rafael</option>
                         <option>Payments agent</option>

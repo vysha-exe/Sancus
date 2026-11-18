@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { workspace } from "@/lib/sancus/demo-data"
 
 const steps = [
   {
@@ -25,7 +24,7 @@ export default function HomeEmptyPage() {
       <header className="page-head">
         <div>
           <h1 className="sx-h heading-2">
-            Welcome, {workspace.actor.firstName}. Let&apos;s add some money.
+            Welcome to Sancus. Let&apos;s add some money.
           </h1>
         </div>
         <span className="body-s muted">Day one</span>
@@ -55,7 +54,7 @@ export default function HomeEmptyPage() {
                 Add money
               </Link>
               <button type="button" className="sx-btn sx-btn--secondary" disabled>
-                Pay someone
+                Make a payment
               </button>
             </div>
             <span className="body-s muted">Add money to start paying people.</span>

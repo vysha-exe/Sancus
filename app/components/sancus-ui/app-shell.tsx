@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, type ReactNode } from "react"
 import type { NavKey } from "@/lib/sancus/accounts"
-import { can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
+import { accountDisplayName, can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
 import { useEnsureTreasury } from "@/lib/sancus/use-ensure-treasury"
@@ -75,18 +75,15 @@ export function AppShell({
     (k) => k !== "settings" && (account?.type === "BRANCH" || showBusinessNav || (k !== "team" && k !== "branches"))
   )
   const navItems = keys.map((k) => nav.find((n) => n.key === k)).filter((n): n is (typeof nav)[number] => Boolean(n))
-  const actorRole = account ? account.label : ws.isPersonal ? "Personal" : workspace.actor.role
-  const actorName = account?.firstName ? account.firstName : account?.email ? account.email.split(/[@+]/)[0].replace(/^\w/, (c) => c.toUpperCase()) : workspace.actor.firstName
+  // A business admin's button just says "Admin" (company underneath); never a person or "Personal".
+  // The signed-out guest demo is the admin demo, so it reads the same.
+  const isAdmin = !account || account.type === "ADMIN"
+  const actorName = isAdmin ? "Admin" : accountDisplayName(account, workspace.name)
+  const actorRole = isAdmin ? accountDisplayName(account, workspace.name) : account.label
 
-  // A business admin opens in their global account (once per session; they can still switch to Personal).
+  // A business admin always works in the company (there's no personal account on the admin dashboard).
   useEffect(() => {
     if (account?.type !== "ADMIN" || !ws.ready || !ws.isPersonal || !ws.hasBusiness) return
-    try {
-      if (sessionStorage.getItem("sancus:admin-ws") === "1") return
-      sessionStorage.setItem("sancus:admin-ws", "1")
-    } catch {
-      /* storage blocked: still default once */
-    }
     const root = account.scopes.find((s) => s.isRoot)
     if (root) ws.selectCompany(root.companyId)
   }, [account, ws])
@@ -107,7 +104,7 @@ export function AppShell({
         <header className="hdr">
           <SancusLockup />
           <div className="bar">
-            {!account || account.type === "ADMIN" ? <WorkspaceSwitcher /> : null}
+            {!account || account.type === "ADMIN" ? <WorkspaceSwitcher allowPersonal={account?.type !== "ADMIN"} /> : null}
             <label className="search-pill">
               <IconSearch />
               <span className="vh">Search</span>

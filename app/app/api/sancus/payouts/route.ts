@@ -15,6 +15,7 @@ import { formatRate } from "@/lib/sancus/fx"
 import { getPayoutProvider } from "@/lib/sancus/payout-provider"
 import { evaluatePayout, loadCompanyPolicy, loadPolicy, spentToday } from "@/lib/sancus/policy"
 import { companyIdFromRequest } from "@/lib/sancus/workspace"
+import { liveSgdFxConfig } from "@/lib/sancus/live-fx"
 import {
   executePayout,
   preparePayout,
@@ -76,7 +77,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (!parsed.ok) return parsed.response
   const { sourceWalletId, reference } = parsed.data
 
-  const prepared = preparePayout(parsed.data)
+  const prepared = preparePayout(parsed.data, await liveSgdFxConfig())
   if (!prepared.ok) {
     return NextResponse.json({ error: prepared.error, issues: prepared.issues }, { status: prepared.status })
   }

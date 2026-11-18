@@ -4,7 +4,7 @@ import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { parseToMinor, SGD_DECIMALS } from "./money"
 import { chooseRail, FAST_LIMIT_SGD_MINOR, normaliseRecipient, validateRecipient, type SgRecipient } from "./paynow"
-import { fxConfigFromEnv, quoteSgdPayout, type PayoutQuote } from "./fx"
+import { fxConfigFromEnv, quoteSgdPayout, type FxConfig, type PayoutQuote } from "./fx"
 import { getPayoutProvider, isTerminal, type PayoutStatus } from "./payout-provider"
 import { payoutJournal, postJournal, type PayoutForLedger } from "./ledger"
 import { formatMinor, USDC_DECIMALS } from "./money"
@@ -30,7 +30,7 @@ export type PreparedPayout =
   | { ok: false; status: number; error: string; issues?: { field: string; message: string }[] }
 
 /** Validates the recipient + amount and computes a fresh quote. Shared by quote and create. */
-export function preparePayout(input: QuoteInput): PreparedPayout {
+export function preparePayout(input: QuoteInput, fx: FxConfig = fxConfigFromEnv()): PreparedPayout {
   const recipientErrors = validateRecipient(input.recipient)
   if (recipientErrors.length) {
     return { ok: false, status: 400, error: "Invalid recipient", issues: recipientErrors }
@@ -44,7 +44,7 @@ export function preparePayout(input: QuoteInput): PreparedPayout {
   }
   const recipient = normaliseRecipient(input.recipient)
   const choice = chooseRail(recipient)
-  const quote = quoteSgdPayout(sgdMinor, choice.rail, fxConfigFromEnv())
+  const quote = quoteSgdPayout(sgdMinor, choice.rail, fx)
   return { ok: true, recipient, quote, railReason: choice.reason, etaLabel: choice.etaLabel }
 }
 

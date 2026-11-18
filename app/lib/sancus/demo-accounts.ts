@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export type DemoAs = "admin" | "branch" | "employee" | "individual"
 export const DEMO_AS: DemoAs[] = ["admin", "branch", "employee", "individual"]
 export const DEMO_HOME: Record<DemoAs, string> = { admin: "/home", branch: "/branch", employee: "/me", individual: "/home" }
-const DEMO_NAMES: Record<DemoAs, string> = { admin: "Maya", branch: "Ploy", employee: "Niran", individual: "Alex" }
+const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", branch: "Ploy", employee: "Niran", individual: "Jayden" }
 
 export function parseDemoAs(v: string | null | undefined): DemoAs {
   return DEMO_AS.includes(v as DemoAs) ? (v as DemoAs) : "admin"
@@ -71,7 +71,7 @@ async function ensureDemoCompany(admin: SupabaseClient, adminId: string): Promis
   if (!branchId) {
     const { data: b, error } = await admin
       .from("sancus_companies")
-      .insert({ parent_id: rootId, root_id: rootId, name: "Thailand", country: "TH", base_currency: "THB", created_by: adminId })
+      .insert({ parent_id: rootId, root_id: rootId, name: "Lion City Bangkok", country: "TH", base_currency: "THB", created_by: adminId })
       .select("id")
       .single()
     if (error || !b) throw new Error(`couldn't create demo branch: ${error?.message}`)

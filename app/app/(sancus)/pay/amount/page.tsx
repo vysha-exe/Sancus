@@ -3,13 +3,7 @@
 import Link from "next/link"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
-
-// Demo-only routes for the wireframe recipients.
-const demoRailOptions = [
-  { id: "Pix", label: "Pix", meta: "Seconds · $0.80 fee", on: true },
-  { id: "Wire", label: "Wire", meta: "1–2 days · $3.50 fee", on: true },
-  { id: "USDC", label: "USDC", meta: "Not available for this recipient", on: false },
-] as const
+import { formatUsdc, isPayRail, RAILS } from "@/lib/sancus/pay-quote"
 
 export default function PayAmountPage() {
   const {
@@ -42,9 +36,16 @@ export default function PayAmountPage() {
         },
         { id: "USDC", label: "USDC", meta: "Not available for this recipient", on: false },
       ]
-    : demoRailOptions
+    : // Other recipients: the rails they actually have, with each rail's speed and fee.
+      recipient.methods.map((m) => ({
+        id: m.rail,
+        label: m.rail,
+        meta: isPayRail(m.rail) ? `${RAILS[m.rail].eta} · ${formatUsdc(RAILS[m.rail].feeUsdcMinor)} fee` : m.detail,
+        on: isPayRail(m.rail),
+      }))
 
-  const canReview = !view.live || (Boolean(liveQuote) && !quoteError)
+  // Review needs a current quote, live or not.
+  const canReview = view.live ? Boolean(liveQuote) && !quoteError : view.localLabel !== "–" && !quoteError && !quoteLoading
 
   return (
     <div className="page">
@@ -54,14 +55,14 @@ export default function PayAmountPage() {
         <section className="tile s7" aria-label="Amount and route">
           <div className="grid" style={{ gap: 16 }}>
             <label className="sx-field s6" style={{ gridColumn: "span 6" }}>
-              <span className="sx-label">You send (USD)</span>
+              <span className="sx-label">You send (USDC)</span>
               <input
                 className="sx-field__input sx-field__amount"
                 value={view.live && !state.usdAmount ? view.totalLabel.replace("$", "") : state.usdAmount}
                 onChange={(e) => setUsdAmount(e.target.value)}
                 inputMode="decimal"
               />
-              {view.live ? <span className="sx-field__help">Includes the {view.feeLabel} fee</span> : null}
+              <span className="sx-field__help">From your USDC balance · includes the {view.feeLabel} fee</span>
             </label>
             <label className="sx-field s6" style={{ gridColumn: "span 6" }}>
               <span className="sx-label">They get ({view.currency})</span>
