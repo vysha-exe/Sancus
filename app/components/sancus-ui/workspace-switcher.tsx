@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react"
 import type { CompanyNode } from "@/lib/sancus/companies"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { IconChevron } from "./icons"
+import { workspace } from "@/lib/sancus/demo-data"
+import { useAccount } from "@/lib/sancus/use-account"
 
 function TreeNodes({
   nodes,
@@ -52,9 +54,10 @@ function TreeNodes({
 }
 
 /** Header chip + menu matching WorkspaceSwitcher.dc.html. */
-/** `allowPersonal={false}` for business admins: their dashboard is the company, never a personal account. */
-export function WorkspaceSwitcher({ allowPersonal = true }: { allowPersonal?: boolean }) {
+export function WorkspaceSwitcher() {
   const ws = useWorkspace()
+  const { account } = useAccount()
+  const isAdmin = account?.type === "ADMIN"
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -75,13 +78,12 @@ export function WorkspaceSwitcher({ allowPersonal = true }: { allowPersonal?: bo
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        {/* Admins never see "Personal", even for the moment before the company is selected. */}
-        {!allowPersonal && ws.isPersonal ? (ws.tree[0]?.name ?? "Company") : ws.chipLabel}
+        {isAdmin && ws.isPersonal ? (ws.tree[0]?.name ?? "Company") : ws.chipLabel}
         <IconChevron />
       </button>
       {open ? (
         <div className="menu" role="menu" aria-label="Workspaces">
-          {allowPersonal ? (
+          {!isAdmin ? (
             <>
               <span className="sx-label">Personal</span>
               <button
@@ -95,14 +97,14 @@ export function WorkspaceSwitcher({ allowPersonal = true }: { allowPersonal?: bo
                 }}
                 style={{ width: "100%", textAlign: "left", font: "inherit", border: 0, background: "transparent", cursor: "pointer" }}
               >
-                <span className="trunc">Your personal account</span>
+                <span className="trunc">{account?.firstName || workspace.actor.firstName}</span>
                 <span className="amt">Personal</span>
               </button>
             </>
           ) : null}
           {ws.hasBusiness ? (
             <>
-              {allowPersonal ? <hr /> : null}
+              {!isAdmin ? <hr /> : null}
               <span className="sx-label">
                 Companies · {ws.tree.length} {ws.tree.length === 1 ? "tree" : "trees"}
               </span>

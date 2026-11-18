@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ActivityTabs } from "@/components/sancus-ui/activity-tabs"
 import { useLiveApprovals, type ApprovalItem } from "@/lib/sancus/use-live-approvals"
+import { fixedUsdRateLabel } from "@/lib/sancus/fixed-rates"
 
 type Decision = "approved" | "declined"
 type Filter = "waiting" | "approved" | "declined" | "expired"
@@ -25,7 +26,7 @@ const demoDetails: Record<string, Detail> = {
     headline: "Ana wants to pay Gráfica Aurora",
     when: 'Today, 8:05 · "Menu printing" · invoice attached',
     localAmount: "R$ 3.200,00",
-    rate: "1 USD = 5.4123 BRL",
+    rate: fixedUsdRateLabel("BRL"),
     fee: "$0.80",
     arrival: "within seconds",
     why: "Ana's per-payment limit is $500.00. You or Rafael can approve.",
@@ -35,7 +36,7 @@ const demoDetails: Record<string, Detail> = {
     headline: "Rafael wants to pay Torrefação Lisboa",
     when: 'Today, 7:40 · "Green coffee, TL-118" · invoice attached',
     localAmount: "€ 1.840,00",
-    rate: "1 EUR = 1.0800 USD",
+    rate: fixedUsdRateLabel("EUR"),
     fee: "$0.80",
     arrival: "same day",
     why: "Torrefação Lisboa is a new recipient. First payments to someone new always need an approver.",
@@ -155,7 +156,7 @@ export default function ApprovalsPage() {
         {isLive ? <span className="sx-pill sx-pill--settled">Live</span> : null}
       </header>
 
-      <ActivityTabs active="approvals" approvalCount={waiting.length} />
+      <ActivityTabs active="approvals" approvalCount={live.loading ? 0 : waiting.length} />
 
       <div className="grid">
         <section className="tile s7" aria-label="Approval requests">
@@ -182,7 +183,9 @@ export default function ApprovalsPage() {
             })}
           </div>
 
-          {visible.length === 0 ? (
+          {live.loading ? (
+            <div className="empty" aria-busy="true">***</div>
+          ) : visible.length === 0 ? (
             <div className="empty">
               {filter === "waiting"
                 ? "Nothing needs you. Payments at or over your approval rule will show up here."
@@ -228,20 +231,22 @@ export default function ApprovalsPage() {
           )}
 
           <div className="tile-foot">
-            <span className="body-s muted">Oldest first. Requests expire after 7 days.</span>
+            <span className="body-s muted">{live.loading ? "***" : "Oldest first. Requests expire after 7 days."}</span>
             <button
               type="button"
               className="sx-btn sx-btn--secondary sx-btn--sm"
               onClick={approveAll}
               disabled={waiting.length === 0 || busy}
             >
-              Approve all I can · {money.format(waitingTotal)}
+              {live.loading ? "***" : `Approve all I can · ${money.format(waitingTotal)}`}
             </button>
           </div>
         </section>
 
         <aside className="tile s5" aria-labelledby="req">
-          {selected && detail ? (
+          {live.loading ? (
+            <div className="empty" aria-busy="true">***</div>
+          ) : selected && detail ? (
             <>
               <div className="tile-head">
                 <span className="sx-label">Request</span>

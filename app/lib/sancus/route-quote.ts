@@ -2,8 +2,9 @@
 // Singapore uses the same quoting as real Sancus payouts. Indonesia and Thailand
 // are indicative (configured rates, simulated rails) until partners are live.
 
-import { DEFAULT_FX_CONFIG, formatRate, fxConfigFromEnv, quoteSgdPayout, RATE_SCALE, type FxConfig } from "./fx"
+import { formatRate, quoteSgdPayout, RATE_SCALE, type FxConfig } from "./fx"
 import { displayMinor, parseToMinor, USDC_DECIMALS } from "./money"
+import { FIXED_USD_RATES } from "./fixed-rates"
 
 export type Country = "SG" | "ID" | "TH"
 export type RecipientType = "UEN" | "MOBILE" | "BANK"
@@ -15,7 +16,6 @@ type Corridor = {
   currency: string
   symbol: string
   live: boolean
-  rateEnv: string
   defaultRate: string
   rails: RailOption[]
 }
@@ -26,8 +26,7 @@ const CORRIDORS: Record<Country, Corridor> = {
     currency: "SGD",
     symbol: "S$",
     live: true,
-    rateEnv: "SANCUS_USD_SGD_RATE",
-    defaultRate: "1.3400",
+    defaultRate: String(FIXED_USD_RATES.SGD),
     rails: [
       { rail: "PayNow", feeMinor: 50n, eta: "seconds", needs: ["UEN", "MOBILE"] },
       { rail: "FAST", feeMinor: 50n, eta: "seconds", needs: ["BANK"] },
@@ -38,8 +37,7 @@ const CORRIDORS: Record<Country, Corridor> = {
     currency: "IDR",
     symbol: "Rp",
     live: false,
-    rateEnv: "SANCUS_USD_IDR_RATE",
-    defaultRate: "16000",
+    defaultRate: String(FIXED_USD_RATES.IDR),
     rails: [{ rail: "BI-FAST", feeMinor: 250_000n, eta: "seconds", needs: ["BANK", "MOBILE"] }],
   },
   TH: {
@@ -47,21 +45,14 @@ const CORRIDORS: Record<Country, Corridor> = {
     currency: "THB",
     symbol: "฿",
     live: false,
-    rateEnv: "SANCUS_USD_THB_RATE",
-    defaultRate: "35.00",
+    defaultRate: String(FIXED_USD_RATES.THB),
     rails: [{ rail: "PromptPay", feeMinor: 1_000n, eta: "seconds", needs: ["MOBILE", "BANK"] }],
   },
 }
 
-function rateConfig(c: Corridor, env: Record<string, string | undefined>, feeMinor: bigint): FxConfig {
-  const base = c.country === "SG" ? fxConfigFromEnv(env) : DEFAULT_FX_CONFIG
-  const raw = env[c.rateEnv]?.trim() || c.defaultRate
-  let midRateMicro = base.midRateMicro
-  if (c.country !== "SG" || env[c.rateEnv]) {
-    const m = parseToMinor(raw, 6)
-    if (m !== null && m > 0n) midRateMicro = m
-  }
-  return { ...base, midRateMicro, feeSgdMinor: { PAYNOW: feeMinor, FAST: feeMinor } }
+function rateConfig(c: Corridor, feeMinor: bigint): FxConfig {
+  const midRateMicro = parseToMinor(c.defaultRate, 6) ?? RATE_SCALE
+  return { midRateMicro, spreadBps: 0n, feeSgdMinor: { PAYNOW: feeMinor, FAST: feeMinor } }
 }
 
 export type RouteQuoteResult =
@@ -77,7 +68,7 @@ export type RouteQuoteResult =
         alternatives: RouteOption[]
         live: boolean
         quotedAt: string
-        validForSeconds: number
+        validForSeconds: null
         note: string
       }
     }
@@ -95,9 +86,10 @@ type RouteOption = {
 
 export function routeQuote(
   params: { country?: string | null; amount?: string | null; recipientType?: string | null },
-  env: Record<string, string | undefined> = process.env,
+  _env: Record<string, string | undefined> = process.env,
   now: Date = new Date()
 ): RouteQuoteResult {
+  void _env // Kept in the signature for API compatibility; demo rates are fixed.
   const country = (params.country || "SG").toUpperCase() as Country
   const corridor = CORRIDORS[country]
   if (!corridor) return { ok: false, error: `Unsupported country "${params.country}". Use SG, ID or TH.` }
@@ -113,7 +105,7 @@ export function routeQuote(
   }
 
   const options: RouteOption[] = corridor.rails.map((r) => {
-    const cfg = rateConfig(corridor, env, r.feeMinor)
+    const cfg = rateConfig(corridor, r.feeMinor)
     const q = quoteSgdPayout(amountMinor, "PAYNOW", cfg, now)
     const available = r.needs.includes(recipientType)
     return {
@@ -144,10 +136,8 @@ export function routeQuote(
       alternatives: options.filter((o) => o !== best),
       live: corridor.live,
       quotedAt: now.toISOString(),
-      validForSeconds: 60,
-      note: corridor.live
-        ? "Same pricing Sancus uses for real payouts (rate and payout partner simulated on testnet)."
-        : "Indicative: configured rate and simulated rail until a local partner is live.",
+      validForSeconds: null,
+      note: "Fixed hackathon demo rate; the payout rail remains simulated or testnet-backed.",
     },
   }
 }

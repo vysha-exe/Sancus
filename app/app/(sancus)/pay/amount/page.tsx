@@ -19,20 +19,14 @@ export default function PayAmountPage() {
     quoteError,
   } = usePayFlow()
 
-  // Live recipients: the backend picks PayNow (proxy) or FAST (bank account).
+  // Live Singapore recipients use PayNow; USDC is shown only when available.
   const railOptions = view.live
     ? [
         {
           id: "PayNow",
           label: "PayNow",
           meta: liveQuote ? `${view.arrival} · ${view.feeLabel} fee` : "Seconds",
-          on: recipient.payout?.proxyType !== "BANK",
-        },
-        {
-          id: "FAST",
-          label: "FAST",
-          meta: recipient.payout?.proxyType === "BANK" ? "Seconds" : "Needs a bank account",
-          on: recipient.payout?.proxyType === "BANK",
+          on: true,
         },
         { id: "USDC", label: "USDC", meta: "Not available for this recipient", on: false },
       ]
@@ -72,9 +66,7 @@ export default function PayAmountPage() {
                 onChange={(e) => setLocalAmount(e.target.value)}
                 inputMode="decimal"
               />
-              <span className="sx-field__help">
-                {quoteLoading ? "Updating rate…" : view.rateLabel}
-              </span>
+              <span className="sx-field__help">{view.rateLabel}</span>
             </label>
           </div>
 
@@ -158,7 +150,7 @@ export default function PayAmountPage() {
           </div>
           <div className="tile-foot">
             <span className="body-s muted">
-              {view.live ? "Live quote from the Sancus backend · locks on the next step" : "Rate locks on the next step"}
+              {view.live ? "Fixed hackathon demo rate" : "Fixed demo rate"}
             </span>
           </div>
         </aside>

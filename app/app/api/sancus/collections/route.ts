@@ -3,10 +3,11 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
+import { useDemoFallback } from "@/lib/sancus/demo-fallback"
 import { toCollectionDto, type CollectionRail } from "@/lib/sancus/local-rails"
 import { createQrisCharge, mapQrisStatus } from "@/lib/sancus/rails/midtrans"
 import { createPromptPayCharge, mapOmiseStatus } from "@/lib/sancus/rails/omise"
-import { createPixCollection, mapPayZuStatus } from "@/lib/sancus/rails/payzu"
+import { createPixCollection, mapPayZuStatus, simulatedPixCollection } from "@/lib/sancus/rails/payzu"
 
 const schema = z.object({
   rail: z.enum(["QRIS", "PROMPTPAY", "PIX"]),
@@ -44,7 +45,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   try {
     let providerId: string, providerStatus: string, status, qrImageUrl: string | null = null, qrPayload: string | null = null
-    let simulatorUrl: string | null = null, payload: Record<string, unknown>
+    let simulatorUrl: string | null = null, payload: Record<string, unknown>, simulated = false
     if (rail === "QRIS") {
       const result = await createQrisCharge({ orderId: reference, amountIdr: Math.round(parsed.data.amount), merchantName: parsed.data.customerName || "Sancus collection", employeeName: "Customer" })
       providerId = result.transaction.transaction_id!
@@ -62,7 +63,10 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       simulatorUrl = "https://dashboard.omise.co/test/charges"
       payload = result.charge
     } else {
-      const result = await createPixCollection({ amountBrl: parsed.data.amount, reference })
+      simulated = useDemoFallback("PAYZU_SANDBOX_TOKEN")
+      const result = simulated
+        ? simulatedPixCollection({ amountBrl: parsed.data.amount, reference })
+        : await createPixCollection({ amountBrl: parsed.data.amount, reference })
       providerId = result.id!
       providerStatus = result.status || "PENDING"
       status = mapPayZuStatus(providerStatus)
@@ -75,7 +79,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       customer_name: parsed.data.customerName?.trim() || null, reference,
       currency: c.currency, amount_local_minor: amountMinor, provider_transaction_id: providerId,
       provider_status: providerStatus, status, qr_image_url: qrImageUrl, qr_payload: qrPayload,
-      simulator_url: simulatorUrl, provider_payload: payload, simulated: true,
+      simulator_url: simulatorUrl, provider_payload: payload, simulated,
     }).select("*").single()
     if (error || !data) return NextResponse.json({ error: "Provider charge was created, but Sancus could not save it" }, { status: 500 })
     return NextResponse.json({ collection: toCollectionDto(data) }, { status: 201 })

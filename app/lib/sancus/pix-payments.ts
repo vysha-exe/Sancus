@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { LocalRailStatus, PixPaymentDbRow } from "./local-rails"
-import { getPixPayment, mapPayZuStatus } from "./rails/payzu"
+import { getPixPayment, mapPayZuStatus, simulatedPixStatus } from "./rails/payzu"
 
 export type PixPaymentRow = PixPaymentDbRow & {
   id: string
@@ -11,7 +11,9 @@ export type PixPaymentRow = PixPaymentDbRow & {
 }
 
 export async function refreshPixPayment(supabase: SupabaseClient, row: PixPaymentRow) {
-  const transaction = await getPixPayment(row.provider_transaction_id)
+  const transaction = row.simulated
+    ? simulatedPixStatus(row.provider_transaction_id)
+    : await getPixPayment(row.provider_transaction_id)
   const providerStatus = transaction.status || row.provider_status
   const status = mapPayZuStatus(providerStatus)
   if (["SETTLED", "FAILED", "EXPIRED", "CANCELLED"].includes(row.status) && status === "PENDING") return row

@@ -73,8 +73,8 @@ export function useLiveTreasury(refreshKey?: string | number, scope: string | nu
   if (!summary) {
     return {
       source: "demo",
-      availableLabel: demoBalance.availableLabel,
-      meta: demoBalance.meta,
+      availableLabel: loading ? "***" : demoBalance.availableLabel,
+      meta: loading ? "***" : demoBalance.meta,
       loading,
       error,
       summary: null,
@@ -86,7 +86,6 @@ export function useLiveTreasury(refreshKey?: string | number, scope: string | nu
   const metaParts = [
     Number(summary.reservedMinor) > 0 ? `${reserved} reserved for payouts` : null,
     Number(summary.inFlightMinor) > 0 ? `${inFlight} on its way` : null,
-    "backed 1:1 by USDC",
   ].filter(Boolean)
 
   return {

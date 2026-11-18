@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { withAuth } from "@/lib/api/with-auth"
-import { getXenditPayout, mapXenditStatus, sanitizeXenditPayout } from "@/lib/sancus/rails/xendit"
+import { getXenditPayout, isSimulatedXenditPayout, mapXenditStatus, sanitizeXenditPayout } from "@/lib/sancus/rails/xendit"
 import { toXenditPayoutDto, type XenditPayoutRow } from "@/lib/sancus/xendit-payouts"
 
 export const POST = withAuth(async (req, { user, supabase }) => {
@@ -13,6 +13,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     .eq("id", id)
     .maybeSingle()
   if (!row) return NextResponse.json({ error: "Payout not found" }, { status: 404 })
+  if (isSimulatedXenditPayout(row.provider_transaction_id)) {
+    return NextResponse.json({ payout: toXenditPayoutDto(row as XenditPayoutRow) })
+  }
   try {
     const payout = await getXenditPayout(row.provider_transaction_id)
     const providerStatus = payout.status || row.provider_status

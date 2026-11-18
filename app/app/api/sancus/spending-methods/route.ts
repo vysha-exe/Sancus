@@ -3,6 +3,7 @@ import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { toSpendingMethodDto } from "@/lib/sancus/local-rails"
+import { requirePermission } from "@/lib/sancus/accounts-server"
 
 const schema = z.object({
   employeeId: z.string().min(1).max(80),
@@ -57,6 +58,8 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
 })
 
 export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "spending.manage")
+  if (denied) return denied
   const parsed = await validateJsonBody(req, schema)
   if (!parsed.ok) return parsed.response
   const methodType = parsed.data.methodType

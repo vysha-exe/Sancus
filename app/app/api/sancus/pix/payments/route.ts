@@ -4,8 +4,10 @@ import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { requirePermission } from "@/lib/sancus/accounts-server"
+import { useDemoFallback } from "@/lib/sancus/demo-fallback"
 import { maskPixKey, toPixPaymentDto } from "@/lib/sancus/local-rails"
-import { mapPayZuStatus, payPix } from "@/lib/sancus/rails/payzu"
+import { mapPayZuStatus, payPix, simulatedPixPayment } from "@/lib/sancus/rails/payzu"
+import { getRegionalBalance } from "@/lib/sancus/regional-balance"
 import { workspaceCompany } from "@/lib/sancus/workspace-server"
 
 const schema = z.object({
@@ -52,10 +54,18 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
   try {
     const reference = `sancus-pay-${randomUUID()}`
-    const transaction = await payPix({ ...parsed.data, reference })
+    const requestedMinor = BigInt(Math.round(parsed.data.amountBrl * 100))
+    const regionalBalance = await getRegionalBalance(supabase, user.id)
+    if (requestedMinor > BigInt(regionalBalance.availableMinor)) {
+      return NextResponse.json({ error: "Declined: insufficient Brazil balance" }, { status: 409 })
+    }
+    const simulated = useDemoFallback("PAYZU_SANDBOX_TOKEN")
+    const transaction = simulated
+      ? simulatedPixPayment({ amountBrl: parsed.data.amountBrl, reference })
+      : await payPix({ ...parsed.data, reference })
     const providerStatus = transaction.status || "PENDING"
     const status = mapPayZuStatus(providerStatus)
-    const companyId = await workspaceCompany(req, supabase, user.id) // the company paying, if any
+    const companyId = await workspaceCompany(req, supabase, user.id)
     const { data, error } = await supabase.from("sancus_pix_payments").insert({
       user_id: user.id, company_id: companyId, idempotency_key: key, purpose: parsed.data.purpose,
       spending_method_id: spendingMethod?.id || null,
@@ -65,7 +75,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       pix_key_masked: maskPixKey(parsed.data.pixKey), amount_brl_minor: Math.round(parsed.data.amountBrl * 100),
       provider_transaction_id: transaction.id, provider_status: providerStatus, status,
       end_to_end_id: transaction.endToEndId || null,
-      provider_payload: transaction, simulated: true,
+      provider_payload: transaction, simulated,
       settled_at: status === "SETTLED" ? transaction.paidAt || new Date().toISOString() : null,
     }).select("*").single()
     if (error || !data) return NextResponse.json({ error: "Pix payment was created, but Sancus could not save it" }, { status: 500 })
@@ -74,4 +84,3 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     return NextResponse.json({ error: error instanceof Error ? error.message : "PayZu payment failed" }, { status: 502 })
   }
 })
-

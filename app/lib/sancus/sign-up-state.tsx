@@ -24,14 +24,14 @@ export type SignUpData = {
 }
 
 export const SIGN_UP_DEFAULTS: SignUpData = {
-  firstName: "Jayden",
-  email: "jayden@lioncitytrading.com",
+  firstName: "Admin",
+  email: "admin@gmail.com",
   agreed: true,
   accountType: "business",
-  fullName: "Jayden Lim",
-  company: "Lion City Trading",
-  country: "Thailand",
-  currency: "USD",
+  fullName: "Admin User",
+  company: "Café Paulista Ltda",
+  country: "Brazil",
+  currency: "BRL",
   invites: [
     { email: "rafael@cafepaulista.com.br", role: "Finance" },
     { email: "ana@cafepaulista.com.br", role: "Employee" },

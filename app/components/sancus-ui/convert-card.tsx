@@ -1,8 +1,9 @@
 "use client"
 
 // Home › Convert: swap USDC ⇄ EURC in the Treasury (Circle App Kit swap on Arc testnet).
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useTreasuryWallet } from "@/lib/sancus/use-treasury-wallet"
+import { FIXED_USDC_EURC_RATE } from "@/lib/sancus/fixed-rates"
 
 type Dir = "USDC_EURC" | "EURC_USDC"
 type Quote = { amountOut: string; effectiveRate: string }
@@ -13,8 +14,6 @@ export function ConvertCard() {
   const { wallet, balances, state, refresh } = useTreasuryWallet()
   const [dir, setDir] = useState<Dir>("USDC_EURC")
   const [amount, setAmount] = useState("1")
-  const [quote, setQuote] = useState<Quote | null>(null)
-  const [quoting, setQuoting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<{ out: string; tx: string | null } | null>(null)
@@ -25,38 +24,10 @@ export function ConvertCard() {
   const valid = /^\d*\.?\d+$/.test(amount) && Number(amount) > 0
   const tooMuch = valid && have !== null && Number(amount) > have
 
-  // Live quote, debounced.
-  useEffect(() => {
-    if (!wallet || !valid) return
-    const controller = new AbortController()
-    const t = setTimeout(async () => {
-      setQuoting(true)
-      try {
-        const res = await fetch("/api/swap/quote", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ walletId: wallet.walletId, tokenIn, tokenOut, amountIn: amount }),
-          signal: controller.signal,
-        })
-        const body = await res.json()
-        if (res.ok) {
-          setQuote({ amountOut: body.amountOut, effectiveRate: body.effectiveRate })
-          setError(null)
-        } else {
-          setQuote(null)
-          setError(body.userMessage ?? body.error ?? "Couldn't get a quote")
-        }
-      } catch (e) {
-        if ((e as Error).name !== "AbortError") setError("Couldn't reach the quote service")
-      } finally {
-        setQuoting(false)
-      }
-    }, 400)
-    return () => {
-      controller.abort()
-      clearTimeout(t)
-    }
-  }, [wallet, amount, tokenIn, tokenOut, valid])
+  const fixedRate = dir === "USDC_EURC" ? FIXED_USDC_EURC_RATE : 1 / FIXED_USDC_EURC_RATE
+  const quote: Quote | null = valid
+    ? { amountOut: String(Number(amount) * fixedRate), effectiveRate: String(fixedRate) }
+    : null
 
   async function convert() {
     if (!wallet || !valid) return
@@ -124,20 +95,18 @@ export function ConvertCard() {
             <span className="sx-field__help">
               {tooMuch
                 ? `You have ${fmt(have, tokenIn === "USDC" ? "$" : "€")} ${tokenIn}`
-                : quoting
-                  ? "Getting a rate…"
-                  : shownQuote
+                : shownQuote
                     ? `You get about ${Number(shownQuote.amountOut).toFixed(4)} ${tokenOut} · 1 ${tokenIn} = ${Number(shownQuote.effectiveRate).toFixed(4)} ${tokenOut}`
-                    : "Enter an amount to see the live rate"}
+                    : "Enter an amount to use the fixed demo rate"}
             </span>
           </label>
           <div className="tile-foot">
-            <span className="body-s muted">Circle stablecoin swap on Arc</span>
+            <span className="body-s muted">Fixed demo rate · Circle stablecoin swap on Arc</span>
             <button
               type="button"
               className="sx-btn sx-btn--primary"
               onClick={convert}
-              disabled={!wallet || !valid || tooMuch || busy || quoting || !shownQuote}
+              disabled={!wallet || !valid || tooMuch || busy || !shownQuote}
             >
               {busy ? "Converting…" : `Convert to ${tokenOut}`}
             </button>

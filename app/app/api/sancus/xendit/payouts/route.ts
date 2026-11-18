@@ -7,8 +7,12 @@ import { requirePermission } from "@/lib/sancus/accounts-server"
 import {
   createXenditPayout,
   isXenditConfigured,
+  isXenditMoneyOutForbidden,
   mapXenditStatus,
   sanitizeXenditPayout,
+  simulatedXenditPayout,
+  type XenditCreateInput,
+  type XenditPayout,
 } from "@/lib/sancus/rails/xendit"
 import { maskAccountNumber, toXenditPayoutDto, type XenditPayoutRow } from "@/lib/sancus/xendit-payouts"
 
@@ -62,9 +66,6 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   const parsed = await validateJsonBody(req, schema)
   if (!parsed.ok) return parsed.response
-  if (!isXenditConfigured()) {
-    return NextResponse.json({ error: "Add a Xendit development key to enable sandbox payouts" }, { status: 503 })
-  }
 
   const c = railConfig[parsed.data.rail]
   if (parsed.data.amount < c.min || parsed.data.amount > c.max) {
@@ -72,21 +73,32 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
   const amountMinor = Math.round(parsed.data.amount * 10 ** c.decimals)
   const reference = `sancus-xendit-${randomUUID()}`
+  const request: XenditCreateInput = {
+    idempotencyKey,
+    referenceId: reference,
+    country: c.country,
+    currency: c.currency,
+    recipientName: parsed.data.recipientName,
+    accountNumber: parsed.data.accountNumber,
+    routingType: parsed.data.routingType,
+    routingValue: parsed.data.routingValue,
+    amountMinor,
+    relationship: parsed.data.purpose === "EMPLOYEE_SPEND" ? "EMPLOYEE" : "SUPPLIER",
+    description: parsed.data.description,
+  }
 
   try {
-    const payout = await createXenditPayout({
-      idempotencyKey,
-      referenceId: reference,
-      country: c.country,
-      currency: c.currency,
-      recipientName: parsed.data.recipientName,
-      accountNumber: parsed.data.accountNumber,
-      routingType: parsed.data.routingType,
-      routingValue: parsed.data.routingValue,
-      amountMinor,
-      relationship: parsed.data.purpose === "EMPLOYEE_SPEND" ? "EMPLOYEE" : "SUPPLIER",
-      description: parsed.data.description,
-    })
+    let payout: XenditPayout
+    if (!isXenditConfigured()) {
+      payout = simulatedXenditPayout(request)
+    } else {
+      try {
+        payout = await createXenditPayout(request)
+      } catch (error) {
+        if (!isXenditMoneyOutForbidden(error)) throw error
+        payout = simulatedXenditPayout(request)
+      }
+    }
     const providerStatus = payout.status || "ACCEPTED"
     const status = mapXenditStatus(providerStatus)
     const { data, error } = await supabase.from("sancus_xendit_payouts").insert({
@@ -112,7 +124,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       settled_at: status === "SETTLED" ? payout.updated || new Date().toISOString() : null,
     }).select("*").single()
     if (error || !data) {
-      return NextResponse.json({ error: "Xendit created the payout, but Sancus could not save it" }, { status: 500 })
+      return NextResponse.json({ error: "The payout was created, but it could not be saved" }, { status: 500 })
     }
     return NextResponse.json({ payout: toXenditPayoutDto(data as XenditPayoutRow) }, { status: 201 })
   } catch (error) {
