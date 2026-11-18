@@ -5,6 +5,8 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
+import { toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
+import { decideAch } from "@/lib/sancus/ach-server"
 import { executePayout, syncPayoutLedger, toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
 
 const bodySchema = z.object({
@@ -27,7 +29,14 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   const { data } = await supabase.from("sancus_payouts").select("*").eq("user_id", user.id).eq("id", id).maybeSingle()
   const row = data as PayoutRow | null
-  if (!row) return NextResponse.json({ error: "Payout not found" }, { status: 404 })
+  if (!row) {
+    // Not a Singapore payout: maybe a US ACH payment waiting for approval.
+    const { data: ach } = await supabase.from("sancus_ach_payments").select("*").eq("user_id", user.id).eq("id", id).maybeSingle()
+    if (!ach) return NextResponse.json({ error: "Payout not found" }, { status: 404 })
+    const decided = await decideAch(supabase, user.id, ach as AchPaymentRow, action, note)
+    if (!decided.ok) return NextResponse.json({ error: decided.error, payment: toAchPaymentDto(ach as AchPaymentRow) }, { status: decided.status })
+    return NextResponse.json({ payment: toAchPaymentDto(decided.row) })
+  }
   if (row.status !== "PENDING_APPROVAL") {
     return NextResponse.json(
       { error: `This payment was already ${row.status === "REJECTED" ? "declined" : "approved"}`, payout: toPayoutDto(row) },
