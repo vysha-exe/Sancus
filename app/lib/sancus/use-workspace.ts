@@ -100,6 +100,7 @@ export function useWorkspace() {
 
   return {
     ready: companies.ready && hydrated,
+    balancesReady: companies.balancesReady,
     mode,
     isPersonal: mode === "personal",
     hasBusiness: companies.hasBusiness,

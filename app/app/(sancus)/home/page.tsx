@@ -79,7 +79,7 @@ export default function HomePage() {
         ) : null}
 
         {account?.type === "ADMIN" ? (
-          <ParentBranchBalances tree={ws.tree} ready={ws.ready} formatBalance={ws.formatBalance} />
+          <ParentBranchBalances tree={ws.tree} ready={ws.ready && ws.balancesReady} formatBalance={ws.formatBalance} />
         ) : null}
 
         <section className="tile s4" aria-labelledby="month">

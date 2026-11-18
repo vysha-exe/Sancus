@@ -49,9 +49,9 @@ export type NavKey =
   | "devqa" // REMOVE BEFORE SUBMISSION — temporary rail test dashboard
   | "settings"
 
-/** Client/server: Dev QA tab + /dev-qa. Turn off / delete before submission. */
+/** Client/server: sandbox debugging tab. */
 export function isDevQaEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_SANCUS_DEV_QA === "true"
+  return process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_SANCUS_DEV_QA === "true"
 }
 
 /** Inserts Dev QA before Settings when the flag is on. */
@@ -125,6 +125,7 @@ export function navKeyForPath(pathname: string): NavKey | null {
     invoices: "invoices",
     agents: "agents",
     "dev-qa": "devqa",
+    dev: "devqa",
     settings: "settings",
   }
   return map[seg] ?? null

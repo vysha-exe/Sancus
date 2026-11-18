@@ -9,6 +9,7 @@ import type { BetaRunnableTool } from "@anthropic-ai/sdk/lib/tools/BetaRunnableT
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod/v4"
 import type { SancusAccount } from "@/lib/sancus/accounts"
+import { applyCompanyBalances, type CompanyBalanceSnapshot, type CompanyNode } from "@/lib/sancus/companies"
 import { recipients as demoRecipients } from "@/lib/sancus/demo-data"
 import { signProposal, type Proposal, type ProposalKind } from "./proposals"
 import { payX402 } from "./x402-wallet"
@@ -115,16 +116,18 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
       inputSchema: z.object({}),
       run: step(ctx, "get_balances", () => "Checked balances", async () => {
         const scope = ctx.companyId ? `?companyId=${ctx.companyId}` : ""
-        const [{ body: t }, { body: c }] = await Promise.all([
+        const [{ body: t }, { body: c }, { body: balances }] = await Promise.all([
           api<Record<string, string>>(ctx, `/api/sancus/treasury${scope}`),
-          api<{ tree?: { name: string; ownMinor: string; totalMinor: string; children: unknown[] }[] }>(ctx, "/api/sancus/companies/me"),
+          api<{ tree?: CompanyNode[] }>(ctx, "/api/sancus/companies/me"),
+          api<CompanyBalanceSnapshot>(ctx, "/api/sancus/companies/balances"),
         ])
+        const tree = applyCompanyBalances(c.tree ?? [], balances)
         const nodes: string[] = []
-        const walk = (n: { name: string; ownMinor: string; totalMinor: string; children: unknown[] }, depth: number) => {
+        const walk = (n: CompanyNode, depth: number) => {
           nodes.push(`${"  ".repeat(depth)}${n.name}: own ${usd6(n.ownMinor)}, with branches ${usd6(n.totalMinor)}`)
-          for (const k of n.children as (typeof n)[]) walk(k, depth + 1)
+          for (const k of n.children) walk(k, depth + 1)
         }
-        for (const root of c.tree ?? []) walk(root, 0)
+        for (const root of tree) walk(root, 0)
         return [
           `Available: ${usd6(t.availableMinor ?? "0")} (onchain ${usd6(t.totalMinor ?? "0")}, held for payments in progress ${usd6(t.reservedMinor ?? "0")})`,
           nodes.length ? `Branches:\n${nodes.join("\n")}` : "No company branches.",

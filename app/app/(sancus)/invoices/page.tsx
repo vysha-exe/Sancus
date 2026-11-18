@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { CollectionDemo } from "@/components/sancus/collection-demo"
+import { PublicReceiveQr } from "@/components/sancus-ui/public-receive-qr"
 
 export default function InvoicesPage() {
   const router = useRouter()
@@ -29,8 +29,8 @@ export default function InvoicesPage() {
       </div>
 
       <section style={{ display: "grid", gap: 12 }} aria-labelledby="get-paid-locally">
-        <div><h2 id="get-paid-locally" className="sx-h heading-3">Get paid locally</h2><p className="body-s muted" style={{ margin: 0 }}>Create an exact-amount QR for a customer to pay one of your branches through Pix, QRIS, or PromptPay.</p></div>
-        <CollectionDemo />
+        <div><h2 id="get-paid-locally" className="sx-h heading-3">Get paid locally</h2><p className="body-s muted" style={{ margin: 0 }}>Share a reusable branch QR for Pix, QRIS, or PromptPay. The customer chooses the amount when they pay.</p></div>
+        <PublicReceiveQr />
       </section>
 
       <section style={{ display: "grid", gap: 12 }} aria-labelledby="due">

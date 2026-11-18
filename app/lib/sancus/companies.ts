@@ -27,6 +27,11 @@ export type CompanyWallet = {
   local?: Partial<Record<"BRL" | "IDR" | "THB", string>>
 }
 
+export type CompanyBalanceSnapshot = {
+  wallets: CompanyWallet[]
+  deductions: Record<string, string>
+}
+
 export type CompanyNode = {
   id: string
   parentId: string | null
@@ -143,6 +148,43 @@ export function buildCompanyTree(
   }
 
   return (childrenOf.get(null) ?? []).map((c) => build(c, 0))
+}
+
+/**
+ * Applies the separately loaded wallet projection to an already-authorized
+ * company tree. Structure and permissions can render before any RPC reads
+ * finish; this function only replaces the volatile financial fields.
+ */
+export function applyCompanyBalances(
+  nodes: CompanyNode[],
+  snapshot: CompanyBalanceSnapshot
+): CompanyNode[] {
+  const walletsByCompany = new Map<string, CompanyWallet[]>()
+  for (const wallet of snapshot.wallets) {
+    const current = walletsByCompany.get(wallet.companyId) ?? []
+    current.push(wallet)
+    walletsByCompany.set(wallet.companyId, current)
+  }
+
+  const apply = (node: CompanyNode): CompanyNode => {
+    const wallets = walletsByCompany.get(node.id) ?? []
+    const deduction = BigInt(snapshot.deductions[node.id] ?? "0")
+    const ownMinor = wallets.reduce(
+      (sum, wallet) => sum + (wallet.usdcMinor ? BigInt(wallet.usdcMinor) : 0n),
+      0n
+    ) - deduction
+    const children = node.children.map(apply)
+    const totalMinor = children.reduce((sum, child) => sum + BigInt(child.totalMinor), ownMinor)
+    return {
+      ...node,
+      wallets,
+      ownMinor: ownMinor.toString(),
+      totalMinor: totalMinor.toString(),
+      children,
+    }
+  }
+
+  return nodes.map(apply)
 }
 
 export function countNodes(nodes: CompanyNode[]): number {
