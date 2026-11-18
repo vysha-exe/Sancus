@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { withAuth } from "@/lib/api/with-auth"
 import { buildCompanyTree, countNodes, type CompanyRow, type MembershipRow } from "@/lib/sancus/companies"
 import { listCompanyWallets, withBalances } from "@/lib/sancus/company-wallets"
+import { loadNodeDeductions } from "@/lib/sancus/node-spend"
 import { circleConfigured } from "@/lib/sancus/provision"
 
 export const GET = withAuth(async (_req, { user, supabase }) => {
@@ -21,8 +22,12 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
   const { data: memberships } = ids.length
     ? await supabase.from("sancus_memberships").select("company_id, user_id, role, status").in("company_id", ids)
     : { data: [] }
-  const wallets = await withBalances(await listCompanyWallets(supabase, ids))
-  const tree = buildCompanyTree(rows, (memberships ?? []) as MembershipRow[], wallets, user.id)
+  const [wallets, deductions] = await Promise.all([
+    listCompanyWallets(supabase, ids).then(withBalances),
+    // Payments each node made on simulated legs (same rule as the dashboard balance).
+    loadNodeDeductions(supabase, ids),
+  ])
+  const tree = buildCompanyTree(rows, (memberships ?? []) as MembershipRow[], wallets, user.id, deductions)
 
   return NextResponse.json({
     circleConfigured: circleConfigured(),
