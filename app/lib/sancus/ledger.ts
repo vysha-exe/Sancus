@@ -146,3 +146,32 @@ export function accountBalances(rows: EntryRow[]): Record<string, bigint> {
   }
   return out
 }
+
+/**
+ * Posts a journal on behalf of `userId` from a server context with no user session (webhooks).
+ * Requires a service-role client; same balance + idempotency guarantees as postJournal.
+ */
+export async function postJournalFor(admin: SupabaseClient, userId: string, journal: Journal): Promise<string | null> {
+  if (!isBalanced(journal.entries)) {
+    console.error("Refusing to post unbalanced journal", journal)
+    return null
+  }
+  const { data, error } = await admin.rpc("sancus_post_journal_for", {
+    p_user: userId,
+    p_source_type: journal.sourceType,
+    p_source_id: journal.sourceId,
+    p_event: journal.event,
+    p_memo: journal.memo ?? null,
+    p_entries: journal.entries.map((e) => ({
+      account: e.account,
+      direction: e.direction,
+      amount_minor: e.amountMinor.toString(),
+      currency: e.currency ?? "USDC",
+    })),
+  })
+  if (error) {
+    console.error("Failed to post journal (service)", journal.sourceType, journal.sourceId, journal.event, error)
+    return null
+  }
+  return data as string
+}

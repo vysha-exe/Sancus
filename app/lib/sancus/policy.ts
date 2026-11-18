@@ -105,7 +105,13 @@ export async function spentToday(supabase: SupabaseClient, userId: string, now =
     .select("usdc_amount_minor, status")
     .eq("user_id", userId)
     .gte("created_at", start)
-  return (data ?? [])
+  // ACH off-ramp payouts count toward the same daily limit.
+  const { data: ach } = await supabase
+    .from("sancus_ach_payments")
+    .select("usdc_amount_minor, status")
+    .eq("user_id", userId)
+    .gte("created_at", start)
+  return [...(data ?? []), ...(ach ?? [])]
     .filter((r) => r.status !== "REJECTED" && r.status !== "FAILED")
     .reduce((s, r) => s + BigInt(r.usdc_amount_minor), 0n)
 }

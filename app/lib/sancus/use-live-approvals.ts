@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { approvals as demoApprovals } from "@/lib/sancus/demo-data"
 import { displayMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
+import type { AchPaymentDto } from "@/lib/sancus/ach"
 import type { PayoutDto } from "@/lib/sancus/payouts"
 
 const CHANGED = "sancus:approvals-changed"
@@ -61,6 +62,29 @@ export function fromPayout(p: PayoutDto): ApprovalItem {
   }
 }
 
+export function fromAch(p: AchPaymentDto): ApprovalItem {
+  const usdc = BigInt(p.usdcAmountMinor)
+  const name = p.recipient.name
+  return {
+    id: p.id,
+    who: `You → ${name}`,
+    asker: "You",
+    initials: initials(name),
+    to: name,
+    rail: p.speed === "SAME_DAY" ? "Same-day ACH" : "ACH",
+    amountLabel: `$${displayMinor(usdc, USDC_DECIMALS, "", 2)}`,
+    amountUsd: Number(usdc) / 1_000_000,
+    reason: p.approvalReason ?? "Needs an approver",
+    localAmount: `US$ ${displayMinor(BigInt(p.usdAmountMinor), 2, "", 2)} to ${p.recipient.bankName} ${p.recipient.accountMasked}`,
+    rate: "1 USDC = 1 USD",
+    fee: `US$ ${displayMinor(BigInt(p.feeUsdMinor), 2, "", 2)}`,
+    arrival: p.timeline.eta,
+    when: `${new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}${p.reference ? ` · "${p.reference}"` : ""}`,
+    decision: p.status === "PENDING_APPROVAL" ? undefined : p.status === "REJECTED" ? "declined" : "approved",
+    live: true,
+  }
+}
+
 const demoItems: ApprovalItem[] = demoApprovals.map((a) => ({
   id: a.id,
   who: a.who,
@@ -96,8 +120,8 @@ async function fetchApprovals(): Promise<Result> {
     if (!res.ok) return { ok: false, unauthorized: false, error: body.error }
     return {
       ok: true,
-      waiting: (body.waiting as PayoutDto[]).map(fromPayout),
-      decided: (body.decided as PayoutDto[]).map(fromPayout),
+      waiting: [...(body.waiting as PayoutDto[]).map(fromPayout), ...((body.achWaiting ?? []) as AchPaymentDto[]).map(fromAch)],
+      decided: [...(body.decided as PayoutDto[]).map(fromPayout), ...((body.achDecided ?? []) as AchPaymentDto[]).map(fromAch)],
     }
   } catch {
     return { ok: false, unauthorized: false, error: "Could not reach the server" }
