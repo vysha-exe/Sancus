@@ -29,23 +29,6 @@ export default function SiteLandingPage() {
               </Link>
               <DemoLink className="sx-btn sx-btn--secondary">Try the demo</DemoLink>
             </div>
-            <nav aria-label="Sign in" style={{ display: "grid", gap: 8, marginTop: 8 }}>
-              <span className="sx-label">Sign in as</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <Link className="chip" href="/sign-in?as=admin">
-                  Business admin
-                </Link>
-                <Link className="chip" href="/sign-in?as=branch">
-                  Branch
-                </Link>
-                <Link className="chip" href="/sign-in?as=employee">
-                  Employee
-                </Link>
-                <Link className="chip" href="/sign-in?as=individual">
-                  Individual
-                </Link>
-              </div>
-            </nav>
           </div>
           <div className="hero-art">
             <Temple />

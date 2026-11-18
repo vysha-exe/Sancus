@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, type ReactNode } from "react"
-import type { NavKey } from "@/lib/sancus/accounts"
+import { ACCOUNT_TYPE_LABEL, type NavKey } from "@/lib/sancus/accounts"
 import { accountDisplayName, can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
@@ -75,11 +75,10 @@ export function AppShell({
     (k) => k !== "settings" && (account?.type === "BRANCH" || showBusinessNav || (k !== "team" && k !== "branches"))
   )
   const navItems = keys.map((k) => nav.find((n) => n.key === k)).filter((n): n is (typeof nav)[number] => Boolean(n))
-  // A business admin's button just says "Admin" (company underneath); never a person or "Personal".
-  // The signed-out guest demo is the admin demo, so it reads the same.
-  const isAdmin = !account || account.type === "ADMIN"
-  const actorName = isAdmin ? "Admin" : accountDisplayName(account, workspace.name)
-  const actorRole = isAdmin ? accountDisplayName(account, workspace.name) : account.label
+  // Primary line is the account type (Business admin, Branch admin, …). Secondary is company or person.
+  // Guest demo (no account) is the business-admin demo.
+  const actorName = account ? ACCOUNT_TYPE_LABEL[account.type] : ACCOUNT_TYPE_LABEL.ADMIN
+  const actorRole = accountDisplayName(account, workspace.name)
 
   // A business admin always works in the company (there's no personal account on the admin dashboard).
   useEffect(() => {
@@ -111,8 +110,10 @@ export function AppShell({
               <input placeholder="Search payments, people, invoices" />
             </label>
             {headerExtra}
-            <NotificationBell />
-            <AccountMenu name={actorName} role={actorRole} email={account?.email ?? null} signedIn={Boolean(account)} />
+            <div className="hdr-end push">
+              <NotificationBell />
+              <AccountMenu name={actorName} role={actorRole} email={account?.email ?? null} signedIn={Boolean(account)} />
+            </div>
           </div>
         </header>
 
