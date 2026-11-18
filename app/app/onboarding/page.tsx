@@ -1,21 +1,22 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useState, type FormEvent } from "react"
 import { RisingColumn } from "@/components/sancus-ui/logo"
+import { DEMO_LOGIN_PATH } from "@/lib/sancus/demo-login"
 import "@/styles/sancus/sancus.css"
 
 const muted = "#94A39E"
+const AFTER_ONBOARDING = `${DEMO_LOGIN_PATH}?next=${encodeURIComponent("/home")}`
 
 export default function OnboardingPage() {
-  const router = useRouter()
   const [company, setCompany] = useState("Café Paulista Ltda")
   const [country, setCountry] = useState("Brazil")
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    router.push("/home")
+    // Full navigation through demo login so the session cookie is set before /home.
+    window.location.assign(AFTER_ONBOARDING)
   }
 
   return (

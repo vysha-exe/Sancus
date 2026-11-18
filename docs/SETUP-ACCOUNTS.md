@@ -131,7 +131,7 @@ Restart `npm run dev`. On **Pay**, choose the funded Treasury wallet under **Pay
 Add to `.env.local`, then restart `npm run dev`:
 ```
 SANCUS_DEMO_LOGIN=true
-SANCUS_DEMO_EMAIL=demo@sancus.localhost
+SANCUS_DEMO_EMAIL=demo@sancus.app
 SANCUS_DEMO_PASSWORD=<any password, 8+ characters>
 ```
 Opening the app now signs you in automatically and lands on **Pay**.
@@ -264,7 +264,7 @@ SANCUS_SETTLEMENT_ADDRESS=
 
 # --- Demo login (A8) ---
 SANCUS_DEMO_LOGIN=true
-SANCUS_DEMO_EMAIL=demo@sancus.localhost
+SANCUS_DEMO_EMAIL=demo@sancus.app
 SANCUS_DEMO_PASSWORD=
 
 # --- Partners (B5–B10), add as access arrives ---

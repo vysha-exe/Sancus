@@ -31,8 +31,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+import { DEMO_LOGIN_PATH } from "@/lib/sancus/demo-login";
+
+const DEMO_ERRORS: Record<string, string> = {
+  "demo-disabled": "Demo login is turned off. Use Enter the demo on the landing page, or set SANCUS_DEMO_LOGIN=true.",
+  "demo-misconfigured": "Demo login needs SANCUS_DEMO_EMAIL and an 8+ character SANCUS_DEMO_PASSWORD.",
+  "demo-missing-secret": "Demo user does not exist yet and SUPABASE_SECRET_KEY is missing, so it cannot be created.",
+  "demo-create-failed": "Could not create the demo user. Paste SUPABASE_SECRET_KEY in .env.local, or use Enter the demo for guest UI.",
+  "demo-login-failed": "Demo login failed. Check SANCUS_DEMO_PASSWORD, or use Enter the demo for guest UI.",
+};
 
 export function LoginForm({
   className,
@@ -43,6 +52,12 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const demoError = useMemo(() => {
+    const code = searchParams.get("error");
+    return code ? DEMO_ERRORS[code] ?? null : null;
+  }, [searchParams]);
+  const displayError = error ?? demoError;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +121,7 @@ export function LoginForm({
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {displayError && <p className="text-sm text-red-500">{displayError}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
@@ -119,6 +134,13 @@ export function LoginForm({
               >
                 Sign up
               </Link>
+              {" · "}
+              <a
+                href={`${DEMO_LOGIN_PATH}?next=${encodeURIComponent("/home")}`}
+                className="underline underline-offset-4"
+              >
+                Enter the demo
+              </a>
             </div>
           </form>
         </CardContent>

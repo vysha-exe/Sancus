@@ -7,6 +7,9 @@
 
 export const DEMO_LOGIN_PATH = "/api/sancus/demo-login"
 
+/** Set when demo auth cannot create a session; proxy lets the app UI through with demo data. */
+export const DEMO_GUEST_COOKIE = "sancus-demo-guest"
+
 type Env = Record<string, string | undefined>
 
 export function isDemoLoginEnabled(env: Env = process.env): boolean {
