@@ -3,6 +3,8 @@ export type CollectionRail = "QRIS" | "PROMPTPAY" | "PIX"
 
 export type CollectionDto = {
   id: string
+  companyId: string | null
+  companyName: string | null
   rail: CollectionRail
   provider: "MIDTRANS" | "OMISE" | "PAYZU"
   customerName: string | null
@@ -58,7 +60,7 @@ export type SpendingMethodDto = {
 }
 
 export type CollectionDbRow = {
-  id: string; rail: CollectionRail; provider: CollectionDto["provider"]; customer_name: string | null;
+  id: string; company_id: string | null; rail: CollectionRail; provider: CollectionDto["provider"]; customer_name: string | null;
   reference: string | null; currency: CollectionDto["currency"]; amount_local_minor: number | string;
   provider_transaction_id: string; provider_status: string; status: LocalRailStatus;
   qr_image_url: string | null; qr_payload: string | null; simulator_url: string | null;
@@ -72,9 +74,9 @@ export type PixPaymentDbRow = {
   failure_reason: string | null; settled_at: string | null; created_at: string; simulated: boolean;
 }
 
-export function toCollectionDto(row: CollectionDbRow): CollectionDto {
+export function toCollectionDto(row: CollectionDbRow, companyName: string | null = null): CollectionDto {
   return {
-    id: row.id, rail: row.rail, provider: row.provider, customerName: row.customer_name,
+    id: row.id, companyId: row.company_id, companyName, rail: row.rail, provider: row.provider, customerName: row.customer_name,
     reference: row.reference, currency: row.currency, amountLocalMinor: String(row.amount_local_minor),
     providerTransactionId: row.provider_transaction_id, providerStatus: row.provider_status,
     status: row.status, qrImageUrl: row.qr_image_url, qrPayload: row.qr_payload,
@@ -112,4 +114,3 @@ export function maskPixKey(value?: string) {
   if (value.length <= 6) return `${value.slice(0, 2)}•••`
   return `${value.slice(0, 3)}•••${value.slice(-3)}`
 }
-
