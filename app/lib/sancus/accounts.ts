@@ -57,7 +57,7 @@ export function isDevQaEnabled(): boolean {
 /** Inserts Dev QA before Settings when the flag is on. */
 export function navWithDevQa(nav: NavKey[]): NavKey[] {
   if (!isDevQaEnabled()) return [...nav]
-  const out = nav.filter((k) => k !== "devqa")
+  const out: NavKey[] = nav.filter((k) => k !== "devqa")
   const i = out.indexOf("settings")
   if (i >= 0) out.splice(i, 0, "devqa")
   else out.push("devqa")
