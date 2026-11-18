@@ -9,6 +9,7 @@
 // browser voice) and listens again. A waiting card can be confirmed or cancelled by voice.
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
+import { PROGRESS, VOICE_GREETINGS } from "@/lib/sancus/agent/progress"
 
 type Step = { tool: string; label: string; ok: boolean; costLabel?: string }
 type Proposal = {
@@ -150,6 +151,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
   const recRef = useRef<Recognition | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const speakChain = useRef<Promise<void>>(Promise.resolve())
+  const speakGen = useRef(0)
   const listenRef = useRef<() => void>(() => {})
 
   const setPhaseBoth = (p: Phase) => {
@@ -180,6 +182,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
   // ---------- speaking ----------
 
   const stopSpeaking = useCallback(() => {
+    speakGen.current++ // anything still queued is skipped
     audioRef.current?.pause()
     audioRef.current = null
     if (typeof window !== "undefined") window.speechSynthesis?.cancel()
@@ -197,31 +200,81 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
       synth.speak(u)
     })
 
+  /** Pre-recorded fixed phrases (progress lines, greetings) → object URLs, so they play instantly. */
+  const phraseCache = useRef<Map<string, string>>(new Map())
+  const prefetchPhrases = useCallback(async () => {
+    if (!eleven) return
+    const phrases = [...VOICE_GREETINGS, ...Object.values(PROGRESS).map((p) => `${p}.`)]
+    await Promise.all(
+      phrases
+        .filter((p) => !phraseCache.current.has(p))
+        .map(async (p) => {
+          try {
+            const res = await fetch("/api/sancus/agent/speak", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: p }),
+            })
+            if (res.ok) phraseCache.current.set(p, URL.createObjectURL(await res.blob()))
+          } catch {
+            /* that phrase streams live instead */
+          }
+        })
+    )
+  }, [eleven])
+
+  /** Plays an audio URL until it ends or is stopped. Resolves false if it never played. */
+  const playUrl = (url: string) =>
+    new Promise<boolean>((resolve) => {
+      const a = new Audio(url)
+      audioRef.current = a
+      let started = false
+      a.onplaying = () => {
+        started = true
+      }
+      a.onended = () => resolve(true)
+      a.onpause = () => resolve(true) // stopped by stopSpeaking()
+      a.onerror = () => resolve(started)
+      void a.play().catch(() => resolve(false))
+    })
+
   const speakOnce = useCallback(
     async (text: string) => {
       if (phaseRef.current === "off" || !text.trim()) return
       if (eleven) {
-        try {
-          const res = await fetch("/api/sancus/agent/speak", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: text.slice(0, 1400) }),
+        // Fixed phrases play from the cache.
+        const cached = phraseCache.current.get(text)
+        if (cached) {
+          if (await playUrl(cached)) return
+        } else {
+          // Anything else: split into sentences so the short first one starts sooner, and start
+          // downloading every sentence at once so they play back to back without gaps.
+          const gen = speakGen.current
+          const parts = (text.slice(0, 1400).match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [text]).map((s) => s.trim()).filter(Boolean)
+          const audios = parts.map((p) => {
+            const a = new Audio(`/api/sancus/agent/speak?text=${encodeURIComponent(p)}`)
+            a.preload = "auto"
+            return a
           })
-          if (!res.ok) throw new Error("voice")
-          const url = URL.createObjectURL(await res.blob())
-          if ((phaseRef.current as Phase) === "off") return // voice mode may have been exited meanwhile
-          await new Promise<void>((resolve) => {
-            const a = new Audio(url)
-            audioRef.current = a
-            a.onended = () => resolve()
-            a.onerror = () => resolve()
-            a.onpause = () => resolve()
-            void a.play().catch(() => resolve())
-          })
-          URL.revokeObjectURL(url)
-          return
-        } catch {
-          /* fall back to the browser voice */
+          let playedAny = false
+          for (const a of audios) {
+            if (gen !== speakGen.current) break // interrupted or voice mode exited
+            const ok = await new Promise<boolean>((resolve) => {
+              audioRef.current = a
+              let started = false
+              a.onplaying = () => {
+                started = true
+              }
+              a.onended = () => resolve(true)
+              a.onpause = () => resolve(true)
+              a.onerror = () => resolve(started)
+              void a.play().catch(() => resolve(false))
+            })
+            playedAny ||= ok
+            if (!ok && !playedAny) break
+          }
+          audios.forEach((a) => a.removeAttribute("src"))
+          if (playedAny) return
         }
       }
       await speakBrowser(text)
@@ -229,14 +282,19 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
     [eleven]
   )
 
-  /** Queue speech so lines never talk over each other. */
+  /**
+   * Queue speech so lines never talk over each other. `interrupt` (used for the actual answer)
+   * cuts off whatever is playing or queued, so a progress line never delays the reply.
+   */
   const say = useCallback(
-    (text: string) => {
-      const next = speakChain.current.then(() => speakOnce(forSpeech(text)))
+    (text: string, opts: { interrupt?: boolean } = {}) => {
+      if (opts.interrupt) stopSpeaking()
+      const gen = speakGen.current
+      const next = speakChain.current.then(() => (gen === speakGen.current ? speakOnce(forSpeech(text)) : undefined))
       speakChain.current = next.catch(() => {})
       return next
     },
-    [speakOnce]
+    [speakOnce, stopSpeaking]
   )
 
   // ---------- the agent ----------
@@ -277,7 +335,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
         if ((done.steps ?? []).some((s) => s.costLabel)) window.dispatchEvent(new Event(CHANGED))
         if (voice) {
           setPhaseBoth("speaking")
-          await say(done.reply)
+          await say(done.reply, { interrupt: true }) // the answer cuts off any progress line
           if (phaseRef.current === "speaking") listenRef.current()
         }
       } catch (e) {
@@ -291,7 +349,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
         if (!spoken) setDraft(content)
         if (voice) {
           setPhaseBoth("speaking")
-          await say(`Sorry, ${msg}`)
+          await say(`Sorry, ${msg}`, { interrupt: true })
           if (phaseRef.current === "speaking") listenRef.current()
         }
       } finally {
@@ -358,7 +416,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
         setPhaseBoth("thinking")
         const outcome = await confirm(waiting)
         setPhaseBoth("speaking")
-        await say(outcome)
+        await say(outcome, { interrupt: true })
         if (phaseRef.current === "speaking") listenRef.current()
         return
       }
@@ -366,7 +424,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
         setTurns((prev) => [...prev, { role: "user", content: text, spoken: true }])
         setOutcomes((o) => ({ ...o, [waiting.id]: { state: "dismissed", text: "Cancelled." } }))
         setPhaseBoth("speaking")
-        await say("Okay, I won't do that.")
+        await say("Okay, I won't do that.", { interrupt: true })
         if (phaseRef.current === "speaking") listenRef.current()
         return
       }
@@ -430,7 +488,8 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
     if (paused) return
     setVoiceNote(recognitionCtor() ? null : "This browser can't listen (use Chrome or Edge). You can still type, and replies will be spoken.")
     setPhaseBoth("speaking")
-    await say(turnsRef.current.length ? "I'm listening." : "Hi, I'm listening. What should I do?")
+    void prefetchPhrases() // record progress lines now so they play instantly later
+    await say(turnsRef.current.length ? VOICE_GREETINGS[1]! : VOICE_GREETINGS[0]!)
     if (phaseRef.current !== "off") {
       if (recognitionCtor()) listenRef.current()
       else setPhaseBoth("paused")

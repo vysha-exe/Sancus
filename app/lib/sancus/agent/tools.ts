@@ -12,6 +12,7 @@ import type { SancusAccount } from "@/lib/sancus/accounts"
 import { recipients as demoRecipients } from "@/lib/sancus/demo-data"
 import { signProposal, type Proposal, type ProposalKind } from "./proposals"
 import { payX402 } from "./x402-wallet"
+import { PROGRESS } from "./progress"
 
 export type AgentStep = { tool: string; label: string; ok: boolean; costLabel?: string }
 
@@ -33,18 +34,7 @@ export type AgentEvent =
   | { type: "step"; step: AgentStep }
   | { type: "proposal"; proposal: Proposal }
 
-/** What the agent says it's doing while a tool runs (short enough to speak). */
-export const PROGRESS: Record<string, string> = {
-  get_balances: "Checking your balances",
-  list_recipients: "Looking up your recipients",
-  quote_payment: "Getting a live quote",
-  propose_payment: "Preparing the payment",
-  buy_route_quote: "Buying a live route quote for one cent",
-  recent_activity: "Reading your recent activity",
-  propose_collection: "Setting up the collection",
-  list_people: "Looking up your team",
-  propose_limits: "Preparing the new limits",
-}
+export { PROGRESS }
 
 function record(ctx: AgentContext, s: AgentStep) {
   ctx.steps.push(s)
