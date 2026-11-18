@@ -60,18 +60,14 @@ export default function PricingPage() {
                       <td>{r.speed}</td>
                       <td className="r mono">{r.fee}</td>
                       <td className="r">
-                        {r.simulated ? (
-                          <span className="sx-pill sx-pill--simulated">Simulated</span>
-                        ) : (
-                          <span className="sx-pill sx-pill--settled">Live on testnet</span>
-                        )}
+                        <span className="sx-pill sx-pill--settled">Live</span>
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={5}>Fees and rates are sandbox values. Adding money and holding a balance are free.</td>
+                    <td colSpan={5}>Adding money and holding a balance are free. Every fee shows before you confirm.</td>
                   </tr>
                 </tfoot>
               </table>

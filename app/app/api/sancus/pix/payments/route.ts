@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
+import { requirePermission } from "@/lib/sancus/accounts-server"
 import { maskPixKey, toPixPaymentDto } from "@/lib/sancus/local-rails"
 import { mapPayZuStatus, payPix } from "@/lib/sancus/rails/payzu"
 
@@ -25,6 +26,8 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
 })
 
 export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "money.send")
+  if (denied) return denied
   const key = req.headers.get("idempotency-key")?.trim()
   if (!key || key.length > 100) return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 })
   const { data: replay } = await supabase.from("sancus_pix_payments").select("*").eq("user_id", user.id).eq("idempotency_key", key).maybeSingle()

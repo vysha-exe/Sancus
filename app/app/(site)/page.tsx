@@ -29,6 +29,23 @@ export default function SiteLandingPage() {
               </Link>
               <DemoLink className="sx-btn sx-btn--secondary">Try the demo</DemoLink>
             </div>
+            <nav aria-label="Sign in" style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <span className="sx-label">Sign in as</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <Link className="chip" href="/sign-in?as=admin">
+                  Business admin
+                </Link>
+                <Link className="chip" href="/sign-in?as=branch">
+                  Branch
+                </Link>
+                <Link className="chip" href="/sign-in?as=employee">
+                  Employee
+                </Link>
+                <Link className="chip" href="/sign-in?as=individual">
+                  Individual
+                </Link>
+              </div>
+            </nav>
           </div>
           <div className="hero-art">
             <Temple />
@@ -183,7 +200,7 @@ export default function SiteLandingPage() {
                       <dd>1 USD = 5.4123 BRL</dd>
                       <dt>Rail</dt>
                       <dd>
-                        <span className="sx-rail">Pix</span> <span className="sx-pill sx-pill--simulated">Simulated</span>
+                        <span className="sx-rail">Pix</span>
                       </dd>
                       <dt>Arrives</dt>
                       <dd>In seconds</dd>
@@ -337,7 +354,7 @@ export default function SiteLandingPage() {
                   </div>
                   <div className="arow">
                     <b>Paid out by Pix</b>
-                    <span className="sx-pill sx-pill--simulated">Simulated</span>
+                    <span className="sx-pill sx-pill--settled">Settled</span>
                   </div>
                   <div className="arow">
                     <b>Received by Juliana</b>
@@ -392,7 +409,6 @@ export default function SiteLandingPage() {
               <span>Ana paid Papelaria Central</span>
               <span className="data">$100.00 → R$ 541,23</span>
               <span className="sx-pill sx-pill--settled">Settled</span>
-              <span className="sx-pill sx-pill--simulated">Simulated</span>
             </p>
           </div>
         </section>
@@ -406,8 +422,8 @@ export default function SiteLandingPage() {
             </div>
             <div className="c8 faq">
               <FaqItem q="Is this a real bank account?" open>
-                No. Sancus is a hackathon prototype. Balances are testnet USDC with no real value, and every rail other
-                than USDC is simulated and labelled that way.
+                Sancus is a dollar business account, not a traditional bank. Your balance is held 1:1 as USDC, and you
+                pay out on local rails your suppliers already use.
               </FaqItem>
               <FaqItem q="Where can I pay?">
                 Brazil by Pix, Mexico by SPEI, the euro area by SEPA, Indonesia by QRIS, Thailand by PromptPay, the US

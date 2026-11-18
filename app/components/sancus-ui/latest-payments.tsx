@@ -20,7 +20,6 @@ export function LatestPayments() {
       <div className="tile-foot" style={{ marginTop: "auto" }}>
         <span className="body-s muted">
           {Math.min(CAP, rows.length)} of {rows.length}
-          {source === "live" ? " · live" : " · demo data"}
         </span>
       </div>
     </>

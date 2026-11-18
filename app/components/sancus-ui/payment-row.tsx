@@ -14,7 +14,6 @@ export function PaymentRow({ payment }: { payment: Payment }) {
         {payment.meta}
       </span>
       <span className="sx-row__status pills">
-        {payment.simulated ? <StatusPill status="Simulated" /> : null}
         <StatusPill status={payment.status} />
       </span>
     </>

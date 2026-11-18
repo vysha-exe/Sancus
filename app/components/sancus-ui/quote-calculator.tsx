@@ -87,7 +87,6 @@ export function QuoteCalculator() {
         <div className="calc-get">
           <span className="calc-get-head">
             <span className="sx-label muted">They get</span>
-            <span className="sx-pill sx-pill--simulated">Sandbox rates</span>
           </span>
           <span className="amount-xl">{fmt(d.cur, amount * d.rate)}</span>
         </div>
@@ -106,7 +105,6 @@ export function QuoteCalculator() {
             <dt>Rail</dt>
             <dd>
               <span className="sx-rail">{d.rail}</span>{" "}
-              {d.simulated ? <span className="sx-pill sx-pill--simulated">Simulated</span> : null}
             </dd>
             <dt>Arrives</dt>
             <dd>{d.speed}</dd>

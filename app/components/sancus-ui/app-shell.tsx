@@ -1,8 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import type { ReactNode } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, type ReactNode } from "react"
+import type { NavKey } from "@/lib/sancus/accounts"
+import { can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
 import { useEnsureTreasury } from "@/lib/sancus/use-ensure-treasury"
@@ -22,25 +24,33 @@ import {
   IconBranches,
 } from "./icons"
 import { SancusLockup } from "./logo"
+import { AccountMenu } from "./account-menu"
 import { WorkspaceSwitcher } from "./workspace-switcher"
 import { NotificationBell } from "./notification-bell"
 
 const nav = [
-  { href: "/home", label: "Home", icon: IconHome, match: (p: string) => p === "/home" || p.startsWith("/home/") },
-  { href: "/pay", label: "Pay", icon: IconPay, match: (p: string) => p.startsWith("/pay") },
+  { key: "home", href: "/home", label: "Home", icon: IconHome, match: (p: string) => p === "/home" || p.startsWith("/home/") },
+  { key: "branch", href: "/branch", label: "My branch", icon: IconHome, match: (p: string) => p === "/branch" || p.startsWith("/branch/") },
+  { key: "me", href: "/me", label: "My card", icon: IconSpending, match: (p: string) => p === "/me" || p.startsWith("/me/") },
+  { key: "pay", href: "/pay", label: "Pay", icon: IconPay, match: (p: string) => p.startsWith("/pay") },
+  { key: "receive", href: "/receive", label: "Receive", icon: IconInvoices, match: (p: string) => p.startsWith("/receive") },
   {
+    key: "activity",
     href: "/activity",
     label: "Activity",
     icon: IconActivity,
     match: (p: string) => p.startsWith("/activity"),
     count: true,
   },
-  { href: "/spending", label: "Spending", icon: IconSpending, match: (p: string) => p.startsWith("/spending") },
-  { href: "/branches", label: "Branches", icon: IconBranches, match: (p: string) => p.startsWith("/branches") },
-  { href: "/team", label: "Team", icon: IconTeam, match: (p: string) => p.startsWith("/team") },
-  { href: "/invoices", label: "Invoices", icon: IconInvoices, match: (p: string) => p.startsWith("/invoices") },
-  { href: "/agents", label: "Agents", icon: IconAgents, match: (p: string) => p.startsWith("/agents") },
+  { key: "spending", href: "/spending", label: "Spending", icon: IconSpending, match: (p: string) => p.startsWith("/spending") },
+  { key: "branches", href: "/branches", label: "Branches", icon: IconBranches, match: (p: string) => p.startsWith("/branches") },
+  { key: "team", href: "/team", label: "Team", icon: IconTeam, match: (p: string) => p.startsWith("/team") },
+  { key: "invoices", href: "/invoices", label: "Invoices", icon: IconInvoices, match: (p: string) => p.startsWith("/invoices") },
+  { key: "agents", href: "/agents", label: "Agents", icon: IconAgents, match: (p: string) => p.startsWith("/agents") },
 ] as const
+
+/** The admin's classic set, used for the guest demo before an account loads. */
+const DEFAULT_NAV: NavKey[] = ["home", "pay", "activity", "spending", "branches", "team", "invoices", "agents"]
 
 export function AppShell({
   children,
@@ -53,15 +63,38 @@ export function AppShell({
   const { collapsed, toggleCollapsed, theme } = useSancusPrefs()
   // Live count of payments waiting for approval (demo count when signed out).
   const approvalCount = useLiveApprovals().waiting.length
-  // New accounts get their Arc treasury wallets on first visit (no-op once they exist).
-  useEnsureTreasury()
+  const router = useRouter()
+  const { account, ready: accountReady } = useAccount()
+  // Accounts that hold money get their Arc treasury wallets on first visit (no-op once they exist).
+  useEnsureTreasury(accountReady && can(account, "money.send"))
   const ws = useWorkspace()
   // Personal mode (or no company yet): hide Team/Branches. Business selection shows them.
   const showBusinessNav = ws.ready ? !ws.isPersonal && ws.hasBusiness : false
-  const navItems = showBusinessNav
-    ? nav
-    : nav.filter((item) => item.href !== "/team" && item.href !== "/branches")
-  const actorRole = ws.isPersonal ? "Personal" : workspace.actor.role
+  // Each account type gets its own sections (see lib/sancus/accounts.ts).
+  const keys: NavKey[] = (account?.nav ?? DEFAULT_NAV).filter(
+    (k) => k !== "settings" && (account?.type === "BRANCH" || showBusinessNav || (k !== "team" && k !== "branches"))
+  )
+  const navItems = keys.map((k) => nav.find((n) => n.key === k)).filter((n): n is (typeof nav)[number] => Boolean(n))
+  const actorRole = account ? account.label : ws.isPersonal ? "Personal" : workspace.actor.role
+  const actorName = account?.firstName ? account.firstName : account?.email ? account.email.split(/[@+]/)[0].replace(/^\w/, (c) => c.toUpperCase()) : workspace.actor.firstName
+
+  // A business admin opens in their global account (once per session; they can still switch to Personal).
+  useEffect(() => {
+    if (account?.type !== "ADMIN" || !ws.ready || !ws.isPersonal || !ws.hasBusiness) return
+    try {
+      if (sessionStorage.getItem("sancus:admin-ws") === "1") return
+      sessionStorage.setItem("sancus:admin-ws", "1")
+    } catch {
+      /* storage blocked: still default once */
+    }
+    const root = account.scopes.find((s) => s.isRoot)
+    if (root) ws.selectCompany(root.companyId)
+  }, [account, ws])
+
+  // Pages outside this account's reach send it home (the APIs refuse them regardless).
+  useEffect(() => {
+    if (account && !canOpenPath(account, pathname)) router.replace(account.homePath)
+  }, [account, pathname, router])
 
   return (
     <div className="frame">
@@ -74,31 +107,15 @@ export function AppShell({
         <header className="hdr">
           <SancusLockup />
           <div className="bar">
-            <WorkspaceSwitcher />
+            {!account || account.type === "ADMIN" ? <WorkspaceSwitcher /> : null}
             <label className="search-pill">
               <IconSearch />
               <span className="vh">Search</span>
               <input placeholder="Search payments, people, invoices" />
             </label>
             {headerExtra}
-            <span
-              className="sx-pill sx-pill--simulated push"
-              title="Testnet USDC. Bank, local and card rails are simulated."
-            >
-              Sandbox
-            </span>
             <NotificationBell />
-            <button
-              type="button"
-              className="me"
-              aria-label={`Account: ${workspace.actor.firstName}, ${actorRole}`}
-            >
-              <span className="av">{workspace.actor.initial}</span>
-              <span className="me-txt">
-                {workspace.actor.firstName}
-                <small>{actorRole}</small>
-              </span>
-            </button>
+            <AccountMenu name={actorName} role={actorRole} email={account?.email ?? null} signedIn={Boolean(account)} />
           </div>
         </header>
 

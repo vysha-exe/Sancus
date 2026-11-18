@@ -18,17 +18,10 @@ const FOOTER_LINKS: { href: string; label: string; external?: boolean }[] = [
   { href: "#privacy", label: "Privacy" },
 ]
 
-/** Public marketing chrome: sandbox strip, top nav, footer panel. Pages supply their own header and main. */
+/** Public marketing chrome: top nav and footer. Pages supply their own header and main. */
 export function SiteShell({ active, children }: { active?: SiteNavKey; children: ReactNode }) {
   return (
     <div className="sx site" data-theme="day">
-      <div className="strip">
-        <div className="wrap">
-          <span className="sx-pill sx-pill--simulated">Sandbox</span>
-          <span>A hackathon prototype. Balances are testnet USDC; every other rail is simulated.</span>
-          <Link href="/security#real">What&apos;s real</Link>
-        </div>
-      </div>
       <nav className="snav" aria-label="Main">
         <div className="wrap">
           <Link href="/" className="sx-lockup sx-wordmark" aria-label="Sancus home">

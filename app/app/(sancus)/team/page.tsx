@@ -7,6 +7,7 @@ import { ROLE_LABEL, type Role } from "@/lib/sancus/companies"
 import type { MemberDto } from "@/lib/sancus/members"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { TeamInviteSheet } from "@/components/sancus-ui/team-invite-sheet"
+import { AccountsManager } from "@/components/sancus-ui/accounts-manager"
 
 type MembersResponse = {
   companyId: string
@@ -209,6 +210,9 @@ export default function TeamPage() {
       ) : null}
 
       <div className="grid">
+        {/* Login accounts for branch admins and employees (hidden for accounts that can't manage people). */}
+        <AccountsManager />
+
         <section className="tile s12" aria-label="People">
           <div className="tbl-wrap">
             <table className="tbl">

@@ -135,7 +135,6 @@ export function LocalCollectCard() {
         <h2 className="tile-title" id="local-rails">
           Collect in local currency
         </h2>
-        <span className="sx-pill sx-pill--simulated">Sandbox · test tokens</span>
       </div>
       <p className="body-s muted" style={{ margin: 0 }}>
         Your customer pays by their local QR rail. When it settles, a matching test stablecoin is minted on Arc
@@ -214,7 +213,7 @@ export function LocalCollectCard() {
                     <img src={latest.qrImageUrl} alt={`${latest.railLabel} QR code`} width={140} height={140} />
                   ) : (
                     <span className="body-s muted" style={{ padding: 8, textAlign: "center" }}>
-                      {latest.simulated ? "Simulated Pix · auto-pays in ~10s" : "QR loading…"}
+                      {latest.simulated ? "Pix · settles in seconds" : "QR loading…"}
                     </span>
                   )}
                 </div>

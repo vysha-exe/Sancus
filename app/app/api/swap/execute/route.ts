@@ -14,6 +14,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
+import { requirePermission } from "@/lib/sancus/accounts-server"
 import { CURRENCIES } from "@/lib/constants/currency"
 import {
   executeSwap,
@@ -40,6 +41,8 @@ const bodySchema = z
   })
 
 export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "money.send")
+  if (denied) return denied
   const parsed = await validateJsonBody(req, bodySchema)
   if (!parsed.ok) return parsed.response
   const { walletId, tokenIn, tokenOut, amountIn } = parsed.data

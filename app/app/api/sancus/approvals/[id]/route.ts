@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
+import { requirePermission } from "@/lib/sancus/accounts-server"
 import { toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
 import { decideAch } from "@/lib/sancus/ach-server"
 import { executePayout, syncPayoutLedger, toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
@@ -20,6 +21,8 @@ function idFrom(req: NextRequest): string | null {
 }
 
 export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "approvals.decide")
+  if (denied) return denied
   const id = idFrom(req)
   if (!id) return NextResponse.json({ error: "Invalid payout id" }, { status: 400 })
 

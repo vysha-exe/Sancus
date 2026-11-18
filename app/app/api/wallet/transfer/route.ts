@@ -20,6 +20,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { validateJsonBody, evmAddressSchema } from "@/lib/api/validate";
 import { withAuth } from "@/lib/api/with-auth";
+import { requirePermission } from "@/lib/sancus/accounts-server";
 import { CURRENCIES } from "@/lib/constants/currency";
 import {
   getAppKitSendError,
@@ -37,6 +38,8 @@ const bodySchema = z.object({
 });
 
 export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "money.send");
+  if (denied) return denied;
   try {
     const parsed = await validateJsonBody(req, bodySchema);
     if (!parsed.ok) return parsed.response;

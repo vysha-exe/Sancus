@@ -19,9 +19,9 @@ export function RisingColumn({ className }: { className?: string }) {
   )
 }
 
-export function SancusLockup({ href = "/home", className = "sx-lockup sx-wordmark brand" }: { href?: string; className?: string }) {
+export function SancusLockup({ href = "/", className = "sx-lockup sx-wordmark brand" }: { href?: string; className?: string }) {
   return (
-    <Link href={href} className={className} aria-label="Sancus home">
+    <Link href={href} className={className} aria-label="Sancus, back to the home page">
       <RisingColumn />
       <span className="lbl">SANCUS</span>
     </Link>

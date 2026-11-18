@@ -40,6 +40,7 @@ import {
 } from "@/lib/api/validate";
 import { APP_KIT_CHAIN_BY_BLOCKCHAIN } from "@/lib/constants/chains";
 import { withAuth } from "@/lib/api/with-auth";
+import { requirePermission } from "@/lib/sancus/accounts-server";
 
 // App Kit's `unifiedBalance.deposit` runs the approve + deposit pair through
 // Developer Controlled Wallets and waits for both to confirm. On busy testnets
@@ -58,6 +59,8 @@ const bodySchema = z.object({
 });
 
 export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "money.send");
+  if (denied) return denied;
   try {
     const parsed = await validateJsonBody(req, bodySchema);
     if (!parsed.ok) return parsed.response;

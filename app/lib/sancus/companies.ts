@@ -109,6 +109,15 @@ export function buildCompanyTree(
 
   const build = (c: CompanyRow, depth: number): CompanyNode => {
     const { role, inherited } = effectiveRole(companies, memberships, userId, c.id)
+    // Only the global account's Owner/Admin grows the tree (branch admins manage people, not branches).
+    const globalAdmin = memberships.some(
+      (m) => m.company_id === c.root_id && m.user_id === userId && m.status === "ACTIVE" && (m.role === "OWNER" || m.role === "ADMIN")
+    )
+    const can = capabilities(role)
+    if (!globalAdmin) {
+      can.createBranch = false
+      can.createWallet = false
+    }
     const own = wallets.filter((w) => w.companyId === c.id)
     const ownMinor = own.reduce((s, w) => s + (w.usdcMinor ? BigInt(w.usdcMinor) : 0n), 0n)
     const children = (childrenOf.get(c.id) ?? []).map((k) => build(k, depth + 1))
@@ -123,7 +132,7 @@ export function buildCompanyTree(
       depth,
       role,
       roleInherited: inherited,
-      can: capabilities(role),
+      can,
       wallets: own,
       ownMinor: ownMinor.toString(),
       totalMinor: totalMinor.toString(),

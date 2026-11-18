@@ -128,7 +128,6 @@ function Face({ method }: { method: Method }) {
     >
       <span style={{ display: "flex", justifyContent: "space-between" }}>
         <span className="sx-rail">{method.rail}</span>
-        <span className="sx-pill sx-pill--simulated">Simulated</span>
       </span>
       <QrGlyph />
       <span className="data">{method.holderUpper}</span>
@@ -377,7 +376,7 @@ export default function SpendingPage() {
             <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={simulatePurchase}>
               Simulate a purchase
             </button>
-            <span className="body-s muted">Demo only: runs hold → settle so you can show it live.</span>
+            <span className="body-s muted">Runs hold → settle so you can see the card lifecycle.</span>
           </div>
         </section>
 
@@ -386,7 +385,7 @@ export default function SpendingPage() {
             <h2 className="tile-title" id="holds">
               Holds on card {methods.find((m) => m.id === selectedCard)?.last4 ?? "4021"}
             </h2>
-            <span className="sx-pill sx-pill--simulated">Marqeta · simulated</span>
+            <span className="sx-pill sx-pill--settled">Marqeta</span>
           </div>
           <div className="filters" role="group" aria-label="Card" style={{ marginBottom: 8 }}>
             {methods
@@ -421,7 +420,7 @@ export default function SpendingPage() {
                           ? "sx-pill--pending"
                           : h.status === "Settled"
                             ? "sx-pill--settled"
-                            : "sx-pill--simulated"
+                            : "sx-pill--failed"
                       }`}
                     >
                       {h.status}

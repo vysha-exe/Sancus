@@ -143,7 +143,6 @@ export default function InvoicesPage() {
             <span className="sx-label" id="inv">
               After upload
             </span>
-            <span className="sx-pill sx-pill--simulated">Simulated extract</span>
           </div>
           <p className="body-s muted" style={{ margin: 0 }}>
             We read the supplier, amount and bank details, then send you to Confirm. Try{" "}

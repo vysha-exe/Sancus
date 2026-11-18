@@ -4,6 +4,8 @@ import Link from "next/link"
 import { HomeBalance } from "@/components/sancus-ui/home-balance"
 import { LatestPayments } from "@/components/sancus-ui/latest-payments"
 import { NeedsYou } from "@/components/sancus-ui/needs-you"
+import { ConvertCard } from "@/components/sancus-ui/convert-card"
+import { GatewayCard } from "@/components/sancus-ui/gateway-card"
 import {
   agents,
   bills,
@@ -38,7 +40,6 @@ export default function HomePage() {
               <h2 className="tile-title" id="local">
                 Get paid locally
               </h2>
-              <span className="sx-pill sx-pill--simulated">Simulated</span>
             </div>
             <div className="kv">
               <span>Pix, QRIS, PromptPay</span>
@@ -92,6 +93,10 @@ export default function HomePage() {
             </div>
           ) : null}
         </section>
+
+        <ConvertCard />
+
+        <GatewayCard />
 
         {personal ? (
           <section className="tile s4" aria-labelledby="biz">

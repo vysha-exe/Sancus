@@ -11,7 +11,7 @@ export default function PayUsBankPage() {
           </Link>
           <h1 className="sx-h heading-2">Pay a US bank account</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            USDC from your Treasury becomes USD at 1:1 and lands by ACH. The bank leg is simulated.
+            USDC from your Treasury becomes USD at 1:1 and lands by ACH.
           </p>
         </div>
       </header>

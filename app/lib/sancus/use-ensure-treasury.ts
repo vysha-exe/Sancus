@@ -19,8 +19,9 @@ function whenIdle(cb: () => void): () => void {
   return () => window.clearTimeout(t)
 }
 
-export function useEnsureTreasury() {
+export function useEnsureTreasury(enabled = true) {
   useEffect(() => {
+    if (!enabled) return // accounts that don't hold money (branch admins, employees)
     let flagged = false
     try {
       flagged = sessionStorage.getItem(FLAG) === "1"
@@ -61,5 +62,5 @@ export function useEnsureTreasury() {
       cancelled = true
       cancelIdle()
     }
-  }, [])
+  }, [enabled])
 }
