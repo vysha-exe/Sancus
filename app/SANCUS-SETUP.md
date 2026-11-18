@@ -46,7 +46,7 @@ Or cloud: `npx supabase link --project-ref <ref>` then `npx supabase db push`.
 Add to `.env.local`:
 ```bash
 SANCUS_DEMO_LOGIN=true
-SANCUS_DEMO_EMAIL=demo@sancus.localhost
+SANCUS_DEMO_EMAIL=demo@sancus.app
 SANCUS_DEMO_PASSWORD=<any password, 8+ characters>
 ```
 Opening the app then signs you in as the demo user (created on first visit) and lands on **Pay**. Restart `npm run dev` after changing env vars. It's disabled in production builds unless `SANCUS_DEMO_LOGIN_ALLOW_PRODUCTION=true` is also set, because anyone who opens the app gets the demo account.

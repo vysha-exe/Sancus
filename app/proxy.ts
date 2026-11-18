@@ -24,11 +24,12 @@
 //
 // Modified by the Sancus team, 2026: when demo login is enabled
 // (SANCUS_DEMO_LOGIN=true), signed-out visitors skip the login screen and are
-// signed in as the demo user instead.
+// signed in as the demo user instead. If that fails, a guest cookie still
+// unlocks the app screens with demo data (no redirect loop on /auth/login).
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseReqResClient } from "@/lib/supabase/server-client";
-import { DEMO_LOGIN_PATH, isDemoLoginEnabled } from "@/lib/sancus/demo-login";
+import { DEMO_GUEST_COOKIE, DEMO_LOGIN_PATH, isDemoLoginEnabled } from "@/lib/sancus/demo-login";
 import { hasEnvVars } from "@/lib/utils";
 
 // Sancus app screens. Only enforced when Supabase is configured (see the
@@ -75,17 +76,19 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
+  const demoOn = isDemoLoginEnabled();
+  const demoGuest = request.cookies.get(DEMO_GUEST_COOKIE)?.value === "1";
 
-  // Demo bypass: skip login / sign-up and protected-route bounces.
-  // Leave "/" as the public placeholder landing (CTA into /home).
-  if (
-    !user &&
-    isDemoLoginEnabled() &&
-    (isProtected || pathname === "/auth/login" || pathname === "/auth/sign-up")
-  ) {
+  // Demo mode: try a real demo session once for protected screens. If auth
+  // already failed, the guest cookie lets the UI through with demo data.
+  // Do NOT hijack /auth/login or /auth/sign-up — those stay available.
+  if (!user && demoOn && isProtected) {
+    if (demoGuest) {
+      return response;
+    }
     const url = request.nextUrl.clone();
     url.pathname = DEMO_LOGIN_PATH;
-    url.search = isProtected ? `?next=${encodeURIComponent(pathname)}` : "";
+    url.search = `?next=${encodeURIComponent(pathname)}`;
     return NextResponse.redirect(url);
   }
 
