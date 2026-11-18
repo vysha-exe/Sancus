@@ -147,17 +147,14 @@ export function SignInForm() {
 function PortalButton({ portal, onPick }: { portal: Portal; onPick: (p: Portal) => void }) {
   const business = portal === "admin" || portal === "branch"
   return (
-    <button
-      type="button"
-      className={`pick${business ? " pick--business" : ""}`}
-      onClick={() => onPick(portal)}
-      style={{ width: "100%", textAlign: "left" }}
-    >
-      <span style={{ flex: 1, minWidth: 0, display: "grid" }}>
+    <button type="button" className={`pick${business ? " pick--business" : ""}`} onClick={() => onPick(portal)} style={{ width: "100%" }}>
+      <span style={{ flex: 1, minWidth: 0, display: "grid", gap: 2, textAlign: "left", justifyItems: "start" }}>
         <span className="body-strong">{COPY[portal].title}</span>
         <span className="body-s">{COPY[portal].detail}</span>
       </span>
-      <span aria-hidden>→</span>
+      <span className="pick__chev" aria-hidden>
+        →
+      </span>
     </button>
   )
 }

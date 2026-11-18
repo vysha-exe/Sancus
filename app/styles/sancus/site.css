@@ -238,8 +238,9 @@
 .auth-q { display: grid; gap: 12px; }
 .auth-q .sx-label { color: var(--accent); }
 .auth-fields { display: grid; gap: 20px; }
-.auth-btns { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.auth-btns .sx-btn--primary { flex: 1 1 auto; }
+.auth-btns { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+.auth-btns .sx-btn { flex: 1 1 160px; justify-content: center; text-align: center; line-height: 1.2; white-space: normal; }
+.auth-btns .sx-btn--primary { flex: 1 1 160px; }
 .code { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .code input { width: 100%; min-height: 64px; text-align: center; font: 400 28px/1 var(--font-serif) !important; padding: 0 !important; }
 .code input:nth-child(3) { margin-right: 10px; }
