@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Sancus · Open a business account</title>
+<title>Sancus · Sign up · Company</title>
 <script src="./support.js"></script>
 <link rel="stylesheet" href="sancus/tokens.css">
 <link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/site.css">
 </head>
 <body>
 <x-dc>
@@ -13,59 +14,33 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
 <style>
 body{margin:0}
-a{color:var(--brand-signal)}a:hover{color:#E4EAE6}
+a{color:var(--accent)}a:hover{color:var(--brand-deep)}
 </style>
 </helmet>
-<div class="sx sx-night" data-theme="night" style="position: relative; overflow: hidden; min-height: 100vh; background: var(--brand-night); display: flex; flex-direction: column;">
-  <svg viewBox="0 0 400 400" aria-hidden="true" style="position: absolute; right: -120px; top: 50%; width: 720px; height: 720px; transform: translateY(-50%); opacity: .3; color: var(--brand-signal);">
-    <circle cx="200" cy="200" r="190" fill="none" stroke="currentColor" stroke-width="1"></circle>
-    <ellipse cx="200" cy="200" rx="190" ry="60" fill="none" stroke="currentColor" stroke-width=".6"></ellipse>
-    <ellipse cx="200" cy="200" rx="190" ry="125" fill="none" stroke="currentColor" stroke-width=".6"></ellipse>
-    <ellipse cx="200" cy="200" rx="60" ry="190" fill="none" stroke="currentColor" stroke-width=".6"></ellipse>
-    <ellipse cx="200" cy="200" rx="125" ry="190" fill="none" stroke="currentColor" stroke-width=".6"></ellipse>
-    <line x1="200" y1="10" x2="200" y2="390" stroke="currentColor" stroke-width=".6"></line>
-    <path d="M150 250 Q 200 120 290 170" fill="none" stroke="currentColor" stroke-width="1.4"></path>
-    <path d="M150 250 Q 110 150 120 120" fill="none" stroke="currentColor" stroke-width="1.4"></path>
-    <circle cx="150" cy="250" r="4" fill="currentColor"></circle>
-  </svg>
-
-  <header style="position: relative; display: flex; justify-content: space-between; align-items: center; padding: 24px 32px; gap: 16px; flex-wrap: wrap;">
-    <span class="sx-lockup sx-wordmark" style="color: #E4EAE6; font-size: 20px;"><svg viewBox="0 0 64 64" aria-hidden="true" style="color: var(--brand-signal);"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</span>
-    <span class="sx-pill sx-pill--simulated" style="color: #94A39E; border-color: #5C706B;">Sandbox · testnet</span>
-  </header>
-
-  <main style="position: relative; flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 16px 72px;">
-    <form style="width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 28px;" aria-labelledby="q">
-      <div style="display: grid; gap: 12px;">
-        <span class="sx-label" style="color: #94A39E;">Step 3 of 5</span>
-        <h1 id="q" class="sx-h heading-1" style="font-size: 44px;">What's your company <em>called</em>?</h1>
-        <p class="body-l" style="margin: 0; color: #94A39E;">Use the legal name on your registration. You can add a trading name later.</p>
+<div class="sx auth" data-theme="day">
+  <div class="auth-main">
+    <header class="auth-head">
+      <a href="Site.dc.html" class="sx-lockup sx-wordmark" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</a>
+      <div class="auth-head-end"><span class="sx-pill sx-pill--simulated">Sandbox · testnet</span></div>
+    </header>
+    <div class="auth-body">
+    <form aria-labelledby="q">
+      <div class="auth-q"><span class="sx-label">Step 3 of 5</span><h1 id="q" class="sx-h heading-1">What's your company called?</h1><p class="body-l lead">Use the legal name on your registration. You can add a trading name later.</p></div>
+      <div class="auth-fields">
+        <label class="sx-field"><span class="sx-label">Legal name</span><input class="sx-field__input" autocomplete="organization" value="Café Paulista Ltda"></label>
+        <label class="sx-field"><span class="sx-label">Country of registration</span>
+          <select class="sx-field__input"><option>Brazil</option><option>Mexico</option><option>Indonesia</option><option>Thailand</option><option>Portugal</option><option>United States</option></select>
+          <span class="sx-field__help">We'll ask for your CNPJ when you go live. Not needed in the sandbox.</span>
+        </label>
       </div>
-
-      <label class="sx-field">
-        <span class="sx-label" style="color: #94A39E;">Legal name</span>
-        <input class="sx-field__input" value="Café Paulista Ltda">
-      </label>
-      <label class="sx-field">
-        <span class="sx-label" style="color: #94A39E;">Country of registration</span>
-        <select class="sx-field__input"><option>Brazil</option><option>Mexico</option><option>United States</option><option>Portugal</option></select>
-        <span class="sx-field__help">We'll ask for your CNPJ when you go live. Not needed in the sandbox.</span>
-      </label>
-
-      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-        <a href="Main.dc.html" class="sx-btn sx-btn--primary" style="flex: 1 1 auto;">Continue</a>
-        <button type="button" class="sx-btn sx-btn--secondary">Back</button>
-      </div>
-
-      <ol class="body-s" style="margin: 0; padding: 16px 0 0 20px; border-top: 1px solid #26332F; color: #94A39E; display: grid; gap: 6px;">
-        <li>What's your email? <span style="color: var(--brand-signal);">Done</span></li>
-        <li>Enter the six-digit code <span style="color: var(--brand-signal);">Done</span></li>
-        <li style="color: #E4EAE6;">Company name and country</li>
-        <li>Your home currency (we suggest BRL)</li>
-        <li>Invite your team (optional) → "You're all set, Maya."</li>
-      </ol>
+      <div class="auth-btns"><a href="SignUpCurrency.dc.html" class="sx-btn sx-btn--primary">Continue</a><a href="SignUpCode.dc.html" class="sx-btn sx-btn--secondary">Back</a></div>
     </form>
-  </main>
+    </div>
+  </div>
+  <aside class="build" aria-label="Sign-up progress">
+    <svg class="build-col" viewBox="0 4 64 58" role="img" aria-label="2 of 5 steps done"><rect class="cap-done" x="7" y="9" width="50" height="8.5" rx="1.5"></rect><rect class="cap-done" x="12" y="20" width="40" height="3.6" rx=".6"></rect><rect class="f-done" x="13.2" y="27.5" width="4.6" height="12.5" rx="1"></rect><rect class="f-done" x="21.45" y="27.5" width="4.6" height="18.5" rx="1"></rect><path class="f-now" d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke-width="4.6"></path><rect class="f-todo" x="37.95" y="27.5" width="4.6" height="26.5" rx="1"></rect><rect class="f-todo" x="46.2" y="27.5" width="4.6" height="31.5" rx="1"></rect></svg>
+    <ol class="build-list"><li class="done"><b>1</b>Email</li><li class="done"><b>2</b>Code</li><li class="now"><b>3</b>Company</li><li class=""><b>4</b>Currency</li><li class=""><b>5</b>Team</li></ol>
+  </aside>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>

@@ -10,7 +10,11 @@ This folder is the canvas source: one `.dc.html` file per screen, the canvas lay
 
 | # | File | Screen |
 |---|---|---|
-| 01 | `Onboarding.dc.html` | Open a business account (Night, one question per step) |
+| Site | `Site.dc.html` | Landing: temple of rails, product rules, how money moves, Pay, Spend, Control, card band, questions |
+| Site | `Pricing.dc.html` | Rails and fees: live quote calculator (sandbox rates) and every rail's speed, fee and status |
+| Site | `Security.dc.html` | How your money is kept, and what's real versus simulated (the only public page that names the chain) |
+| Auth | `SignIn.dc.html` | Sign in by emailed code, or use the demo account |
+| 01 | `SignUp.dc.html` → `SignUpCode` → `Onboarding` → `SignUpCurrency` → `SignUpTeam` → `SignUpDone` | Open a business account: name and email, code, company, home currency, invite team, then "You're all set, Maya." into Home day one (03) |
 | 02 | `Main.dc.html` | Home: balance, approvals, latest payments, spending, bills, agents |
 | 03 | `HomeEmpty.dc.html` | Home on day one: every tile's empty state |
 | 04 | `Receive.dc.html` | Add money: move money in (ACH, Pix, USDC) or share your details |
@@ -27,6 +31,15 @@ This folder is the canvas source: one `.dc.html` file per screen, the canvas lay
 | 18–19 | `PhoneHome`, `PhonePay` | Phone: Home and Pay review |
 
 Demo data follows the README demo script for Café Paulista Ltda (Brazil). The numbers add up across screens: $10,000 in, $1,000 to Lumen Labs, $2,000 to Northwind (pending), $100.80 to Juliana, Ana's $100 card purchase and R$ 54,12 Pix QR payment, $398.86 held for Ana's card, $6,390.34 available, 3 approvals waiting ($2,620.05).
+
+## Public site (`sancus/site.css`)
+
+- **Light first.** White and limestone carry every public page and the sign-up, so moving into the Day app feels like the same product. Page roots set `data-theme="day"` so OS dark mode can't flip the ink. This departs from the brand book's Night-first marketing arc on purpose.
+- **The temple motif** sets Sancus apart from dark crypto sites: in the hero, the rails are the columns of a line-drawn temple (they cycle; click one to hold it and see its speed and fee). Inner pages carry a small temple (Rails and fees) or a sealed tablet (Security).
+- **Sign up builds the Rising column**, one flute per step, in a panel beside the form.
+- **brand-deep green, never black,** is the only dark ground: the card band, one bento tile and the footer panel.
+- **No invented proof.** The number row is product rules (9 rails, 60 s rate lock, 1:1 USDC, $0.00 to a USDC account). No customers, investors, logos or volume.
+- **Footer:** a deep green panel with the CTA, a links row, and the SANCUS wordmark cut off by the panel's bottom edge. The sandbox strip at the top of every page carries the disclaimer.
 
 ## Layout rules (`sancus/app.css`)
 

@@ -1,48 +1,383 @@
 {
   "v": 3,
-  "createdOnFiles": {"v": 1, "at": "2026-11-16T12:00:00Z"},
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-16T12:00:00Z"
+  },
   "title": "Sancus wireframes",
-  "launch": {"view": "canvas"},
+  "launch": {
+    "view": "canvas"
+  },
   "pages": [],
   "boards": {
-    "Onboarding.dc.html": {"x": 0, "y": 0, "w": 1280, "h": 820, "title": "01 · Open a business account", "expand": "fill", "is_interactive": true},
-    "Main.dc.html": {"x": 1360, "y": 0, "w": 1280, "h": 1060, "title": "02 · Home", "expand": "fill", "is_interactive": true},
-    "HomeEmpty.dc.html": {"x": 2720, "y": 0, "w": 1280, "h": 1060, "title": "03 · Home, day one (empty states)", "expand": "fill", "is_interactive": true},
-    "Receive.dc.html": {"x": 4080, "y": 0, "w": 1280, "h": 900, "title": "04 · Add money", "expand": "fill", "is_interactive": true},
-    "PayWho.dc.html": {"x": 0, "y": 1460, "w": 1280, "h": 900, "title": "05 · Pay · who", "expand": "fill", "is_interactive": true},
-    "PayAmount.dc.html": {"x": 1360, "y": 1460, "w": 1280, "h": 900, "title": "06 · Pay · how much + route", "expand": "fill", "is_interactive": true},
-    "PayReview.dc.html": {"x": 2720, "y": 1460, "w": 1280, "h": 900, "title": "07 · Pay · review", "expand": "fill", "is_interactive": true},
-    "PayDone.dc.html": {"x": 4080, "y": 1460, "w": 1280, "h": 900, "title": "08 · Pay · done + receipt", "expand": "fill", "is_interactive": true},
-    "Activity.dc.html": {"x": 0, "y": 2760, "w": 1280, "h": 1000, "title": "09 · Activity", "expand": "fill", "is_interactive": true},
-    "Approvals.dc.html": {"x": 1360, "y": 2760, "w": 1280, "h": 900, "title": "10 · Activity › Approvals", "expand": "fill", "is_interactive": true},
-    "Invoices.dc.html": {"x": 2720, "y": 2760, "w": 1280, "h": 1000, "title": "11 · Invoices (nice to have)", "expand": "fill", "is_interactive": true},
-    "Card.dc.html": {"x": 0, "y": 4160, "w": 1280, "h": 1180, "title": "12 · Spending (cards + local QR)", "expand": "fill", "is_interactive": true},
-    "Team.dc.html": {"x": 1360, "y": 4160, "w": 1280, "h": 960, "title": "13 · Team", "expand": "fill", "is_interactive": true},
-    "Employee.dc.html": {"x": 2720, "y": 4160, "w": 1280, "h": 900, "title": "14 · Team › Ana Souza", "expand": "fill", "is_interactive": true},
-    "AssignMethod.dc.html": {"x": 4080, "y": 4160, "w": 1280, "h": 900, "title": "15 · Give someone a card or QR", "expand": "fill", "is_interactive": true},
-    "Agents.dc.html": {"x": 0, "y": 5740, "w": 1280, "h": 1000, "title": "16 · Agents (assistant + x402)", "expand": "fill", "is_interactive": true},
-    "Settings.dc.html": {"x": 1360, "y": 5740, "w": 1280, "h": 1280, "title": "17 · Settings (rules, rails, security)", "expand": "fill", "is_interactive": true},
-    "PhoneHome.dc.html": {"x": 0, "y": 7420, "w": 390, "h": 844, "title": "18 · Phone · Home"},
-    "PhonePay.dc.html": {"x": 470, "y": 7420, "w": 390, "h": 844, "title": "19 · Phone · Pay review"}
+    "Onboarding.dc.html": {
+      "x": 4080,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up 3 · Company",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 1060,
+      "title": "02 · Home",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "HomeEmpty.dc.html": {
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 1060,
+      "title": "03 · Home, day one (empty states)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Receive.dc.html": {
+      "x": 2720,
+      "y": 0,
+      "w": 1280,
+      "h": 900,
+      "title": "04 · Add money",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "PayWho.dc.html": {
+      "x": 0,
+      "y": 1460,
+      "w": 1280,
+      "h": 900,
+      "title": "05 · Pay · who",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "PayAmount.dc.html": {
+      "x": 1360,
+      "y": 1460,
+      "w": 1280,
+      "h": 900,
+      "title": "06 · Pay · how much + route",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "PayReview.dc.html": {
+      "x": 2720,
+      "y": 1460,
+      "w": 1280,
+      "h": 900,
+      "title": "07 · Pay · review",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "PayDone.dc.html": {
+      "x": 4080,
+      "y": 1460,
+      "w": 1280,
+      "h": 900,
+      "title": "08 · Pay · done + receipt",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Activity.dc.html": {
+      "x": 0,
+      "y": 2760,
+      "w": 1280,
+      "h": 1000,
+      "title": "09 · Activity",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Approvals.dc.html": {
+      "x": 1360,
+      "y": 2760,
+      "w": 1280,
+      "h": 900,
+      "title": "10 · Activity › Approvals",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Invoices.dc.html": {
+      "x": 2720,
+      "y": 2760,
+      "w": 1280,
+      "h": 1000,
+      "title": "11 · Invoices (nice to have)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Card.dc.html": {
+      "x": 0,
+      "y": 4160,
+      "w": 1280,
+      "h": 1180,
+      "title": "12 · Spending (cards + local QR)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Team.dc.html": {
+      "x": 1360,
+      "y": 4160,
+      "w": 1280,
+      "h": 960,
+      "title": "13 · Team",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Employee.dc.html": {
+      "x": 2720,
+      "y": 4160,
+      "w": 1280,
+      "h": 900,
+      "title": "14 · Team › Ana Souza",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "AssignMethod.dc.html": {
+      "x": 4080,
+      "y": 4160,
+      "w": 1280,
+      "h": 900,
+      "title": "15 · Give someone a card or QR",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Agents.dc.html": {
+      "x": 0,
+      "y": 5740,
+      "w": 1280,
+      "h": 1000,
+      "title": "16 · Agents (assistant + x402)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Settings.dc.html": {
+      "x": 1360,
+      "y": 5740,
+      "w": 1280,
+      "h": 1280,
+      "title": "17 · Settings (rules, rails, security)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "PhoneHome.dc.html": {
+      "x": 0,
+      "y": 7420,
+      "w": 390,
+      "h": 844,
+      "title": "18 · Phone · Home"
+    },
+    "PhonePay.dc.html": {
+      "x": 470,
+      "y": 7420,
+      "w": 390,
+      "h": 844,
+      "title": "19 · Phone · Pay review"
+    },
+    "SignIn.dc.html": {
+      "x": 0,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign in",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUp.dc.html": {
+      "x": 1360,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up 1 · Name and email",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpCode.dc.html": {
+      "x": 2720,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up 2 · Code",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpCurrency.dc.html": {
+      "x": 5440,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up 4 · Home currency",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpTeam.dc.html": {
+      "x": 6800,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up 5 · Invite your team",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpDone.dc.html": {
+      "x": 8160,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up · You're all set",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Site.dc.html": {
+      "x": 0,
+      "y": -8060,
+      "w": 1280,
+      "h": 5600,
+      "title": "Site · Landing",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Pricing.dc.html": {
+      "x": 1360,
+      "y": -8060,
+      "w": 1280,
+      "h": 2200,
+      "title": "Site · Rails and fees",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Security.dc.html": {
+      "x": 2720,
+      "y": -8060,
+      "w": 1280,
+      "h": 2500,
+      "title": "Site · Security",
+      "expand": "fill",
+      "is_interactive": true
+    }
   },
   "order": [
-    "Main.dc.html", "Onboarding.dc.html", "HomeEmpty.dc.html", "Receive.dc.html",
-    "PayWho.dc.html", "PayAmount.dc.html", "PayReview.dc.html", "PayDone.dc.html",
-    "Activity.dc.html", "Approvals.dc.html", "Invoices.dc.html",
-    "Card.dc.html", "Team.dc.html", "Employee.dc.html", "AssignMethod.dc.html",
-    "Agents.dc.html", "Settings.dc.html",
-    "PhoneHome.dc.html", "PhonePay.dc.html"
+    "Main.dc.html",
+    "Onboarding.dc.html",
+    "HomeEmpty.dc.html",
+    "Receive.dc.html",
+    "PayWho.dc.html",
+    "PayAmount.dc.html",
+    "PayReview.dc.html",
+    "PayDone.dc.html",
+    "Activity.dc.html",
+    "Approvals.dc.html",
+    "Invoices.dc.html",
+    "Card.dc.html",
+    "Team.dc.html",
+    "Employee.dc.html",
+    "AssignMethod.dc.html",
+    "Agents.dc.html",
+    "Settings.dc.html",
+    "PhoneHome.dc.html",
+    "PhonePay.dc.html",
+    "Site.dc.html",
+    "Pricing.dc.html",
+    "Security.dc.html",
+    "SignIn.dc.html",
+    "SignUp.dc.html",
+    "SignUpCode.dc.html",
+    "SignUpCurrency.dc.html",
+    "SignUpTeam.dc.html",
+    "SignUpDone.dc.html"
   ],
   "notes": {
-    "rowAccount": {"x": 0, "y": -280, "text": "Set up and hold money", "kind": "title1", "maxW": 5360},
-    "rowPay": {"x": 0, "y": 1180, "text": "Pay anyone, on any rail", "kind": "title1", "maxW": 5360},
-    "rowTrack": {"x": 0, "y": 2480, "text": "Track and approve", "kind": "title1", "maxW": 5360},
-    "rowSpend": {"x": 0, "y": 3880, "text": "Team spending and limits", "kind": "title1", "maxW": 5360},
-    "rowAuto": {"x": 0, "y": 5460, "text": "Automate and configure", "kind": "title1", "maxW": 5360},
-    "rowPhone": {"x": 0, "y": 7140, "text": "Phone (375–390px)", "kind": "title1", "maxW": 5360},
-    "layout": {"x": 5440, "y": 0, "w": 480, "size": "m", "fill": "blue", "text": "Layout rules (sancus/app.css)\n\n• One 12-column grid on every screen. Tiles in a row share a height, so edges line up whatever the data does.\n• Lists in tiles are capped (5 on Home, 3 in side tiles) and end in \"See all\" with a count.\n• Names truncate with …, amounts never do.\n• Every tile has an empty state the same size (see 03).\n• 12 cols above 1100px, 6 cols to 720px, 1 col below.\n• Pay flow: form on the left, the same summary panel on the right on every step."},
-    "teammate": {"x": 5440, "y": 720, "w": 480, "size": "m", "fill": "yellow", "text": "From the GlobalPay admin mockups\n\n• Overview chart + Add funds → Home balance tile, 04 Add money\n• Activity tabs, Approvals with detail panel → 09, 10\n• Recipients → Pay step 1 (05)\n• Payment methods → Settings › Where you can pay (17)\n• Employee profile, local QR spending, Issue card → 12–15\n• x402 endpoints, Assistant → 16\n• Approval threshold, workspace → 17\n• Left out: \"Convert\" (unclear what it converts) and the network picker on Home (chain stays on the security section)."},
-    "readme": {"x": 960, "y": 7420, "w": 520, "size": "m", "fill": "teal", "text": "How to read these\n\n• Demo company: Café Paulista Ltda (Brazil), owner Maya. Numbers add up across screens: $10,000 in, Lumen $1,000, Northwind $2,000 pending, Juliana $100.80, Ana's card $100 and Pix QR $10, 3 approvals waiting ($2,620.05).\n• Built on docs/brand tokens + components, plus sancus/app.css for layout.\n• Rails other than USDC carry the Simulated pill.\n• Press Play on any desktop screen to click through."}
+    "rowAccount": {
+      "x": 0,
+      "y": -280,
+      "text": "Home and add money",
+      "kind": "title1",
+      "maxW": 4000
+    },
+    "rowPay": {
+      "x": 0,
+      "y": 1180,
+      "text": "Pay anyone, on any rail",
+      "kind": "title1",
+      "maxW": 5360
+    },
+    "rowTrack": {
+      "x": 0,
+      "y": 2480,
+      "text": "Track and approve",
+      "kind": "title1",
+      "maxW": 5360
+    },
+    "rowSpend": {
+      "x": 0,
+      "y": 3880,
+      "text": "Team spending and limits",
+      "kind": "title1",
+      "maxW": 5360
+    },
+    "rowAuto": {
+      "x": 0,
+      "y": 5460,
+      "text": "Automate and configure",
+      "kind": "title1",
+      "maxW": 5360
+    },
+    "rowPhone": {
+      "x": 0,
+      "y": 7140,
+      "text": "Phone (375–390px)",
+      "kind": "title1",
+      "maxW": 5360
+    },
+    "layout": {
+      "x": 5440,
+      "y": 0,
+      "w": 480,
+      "size": "m",
+      "fill": "blue",
+      "text": "Layout rules (sancus/app.css)\n\n• One 12-column grid on every screen. Tiles in a row share a height, so edges line up whatever the data does.\n• Lists in tiles are capped (5 on Home, 3 in side tiles) and end in \"See all\" with a count.\n• Names truncate with …, amounts never do.\n• Every tile has an empty state the same size (see 03).\n• 12 cols above 1100px, 6 cols to 720px, 1 col below.\n• Pay flow: form on the left, the same summary panel on the right on every step."
+    },
+    "teammate": {
+      "x": 5440,
+      "y": 720,
+      "w": 480,
+      "size": "m",
+      "fill": "yellow",
+      "text": "From the GlobalPay admin mockups\n\n• Overview chart + Add funds → Home balance tile, 04 Add money\n• Activity tabs, Approvals with detail panel → 09, 10\n• Recipients → Pay step 1 (05)\n• Payment methods → Settings › Where you can pay (17)\n• Employee profile, local QR spending, Issue card → 12–15\n• x402 endpoints, Assistant → 16\n• Approval threshold, workspace → 17\n• Left out: \"Convert\" (unclear what it converts) and the network picker on Home (chain stays on the security section)."
+    },
+    "readme": {
+      "x": 960,
+      "y": 7420,
+      "w": 520,
+      "size": "m",
+      "fill": "teal",
+      "text": "How to read these\n\n• Demo company: Café Paulista Ltda (Brazil), owner Maya. Numbers add up across screens: $10,000 in, Lumen $1,000, Northwind $2,000 pending, Juliana $100.80, Ana's card $100 and Pix QR $10, 3 approvals waiting ($2,620.05).\n• Built on docs/brand tokens + components, plus sancus/app.css for layout.\n• Rails other than USDC carry the Simulated pill.\n• Press Play on any desktop screen to click through."
+    },
+    "rowSite": {
+      "x": 0,
+      "y": -8340,
+      "text": "Public site",
+      "kind": "title1",
+      "maxW": 5360
+    },
+    "rowSignup": {
+      "x": 0,
+      "y": -1520,
+      "text": "Sign up and sign in",
+      "kind": "title1",
+      "maxW": 9440
+    },
+    "site": {
+      "x": 4080,
+      "y": -8060,
+      "w": 480,
+      "size": "m",
+      "fill": "teal",
+      "text": "Public site rules (sancus/site.css)\n\n• Light first: white and limestone, so the jump into the Day app is seamless. Roots force the Day theme.\n• The motif is the temple: rails are columns in the hero (they cycle; click one to hold it), and sign-up builds the Rising column one flute per step.\n• brand-deep green, never black, is the only dark ground: the card band, one bento tile, the footer panel.\n• Only facts we can stand behind: product rules (9 rails, 60 s lock, 1:1, $0.00 to USDC), no customers, investors or volume.\n• Footer: a deep panel with CTA, links, and the SANCUS wordmark cut off by the panel's bottom edge.\n• Chain names only on Security."
+    }
   },
   "designSystems": []
 }

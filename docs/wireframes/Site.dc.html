@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · Money that keeps its word</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/site.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:var(--accent)}a:hover{color:var(--brand-deep)}
+</style>
+</helmet>
+<div class="sx site" data-theme="day">
+<div class="strip"><div class="wrap"><span class="sx-pill sx-pill--simulated">Sandbox</span><span>A hackathon prototype. Balances are testnet USDC; every other rail is simulated.</span><a href="Security.dc.html#real">What's real</a></div></div>
+<nav class="snav" aria-label="Main"><div class="wrap">
+    <a href="Site.dc.html" class="sx-lockup sx-wordmark" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</a>
+    <div class="snav-links"><a href="Site.dc.html#how">How it works</a><a href="Pricing.dc.html">Rails and fees</a><a href="Security.dc.html">Security</a></div>
+    <div class="snav-end"><a class="plain" href="SignIn.dc.html">Sign in</a><a class="sx-btn sx-btn--primary" href="SignUp.dc.html">Open your account</a></div>
+  </div></nav>
+<header class="hero">
+  <div class="wrap g12">
+    <div class="hero-copy">
+      <h1 class="sx-h display-xl">Money that keeps its <em>word</em>.</h1>
+      <p class="body-l">Hold dollars in one balance. Pay suppliers, contractors and your team abroad in their own currency, on the rails they already use.</p>
+      <div class="hero-ctas"><a class="sx-btn sx-btn--primary" href="SignUp.dc.html">Open your account</a><a class="sx-btn sx-btn--secondary" href="Main.dc.html">Try the demo</a></div>
+    </div>
+    <div class="hero-art">
+        <div class="temple">
+          <svg class="pediment" viewBox="0 0 560 92" aria-hidden="true"><polygon points="4,90 280,4 556,90" fill="none" stroke="currentColor" stroke-width="1.5"></polygon><polygon points="44,82 280,18 516,82" fill="none" stroke="currentColor" stroke-width=".8"></polygon></svg>
+          <div class="architrave">One account · Every rail · Every border</div>
+          <div class="frieze"></div>
+          <div class="cols" role="group" aria-label="Rails">
+            <sc-for list="{{cols}}" as="c" hint-placeholder-count="8"><button type="button" class="{{c.cls}}" aria-pressed="{{c.on}}" onClick="{{c.pick}}"><span class="cap"></span><span class="neck"></span><span class="shaft"><span>{{c.name}}</span></span><span class="plinth"></span></button></sc-for>
+          </div>
+          <div class="steps3" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="ground" aria-hidden="true"></div>
+        </div>
+        <div class="rail-card" aria-live="polite">
+          <div class="rail-card-head"><span class="sx-rail">{{r.name}}</span><sc-if value="{{r.sim}}" hint-placeholder-val="{{ true }}"><span class="sx-pill sx-pill--simulated">Simulated</span></sc-if><sc-if value="{{r.live}}" hint-placeholder-val="{{ false }}"><span class="sx-pill sx-pill--settled">Live on testnet</span></sc-if></div>
+          <span class="body-strong">{{r.use}}</span>
+          <div class="kv"><span>Arrives</span><span>{{r.speed}}</span></div>
+          <div class="kv"><span>Fee</span><span>{{r.fee}}</span></div>
+        </div>
+    </div>
+  </div>
+</header>
+<main>
+  <section class="sec" aria-label="Sancus in numbers">
+    <div class="wrap">
+      <div class="proof">
+        <div><span class="amount-xl">9</span><p class="body-s">Ways to pay from one dollar balance, from Pix to PromptPay to team cards.</p></div>
+        <div><span class="amount-xl">60<small> s</small></span><p class="body-s">Your rate is locked at review. We never charge on an expired quote.</p></div>
+        <div><span class="amount-xl">1:1</span><p class="body-s">Every dollar in your balance is held as a USDC dollar.</p></div>
+        <div><span class="amount-xl">$0.00</span><p class="body-s">To pay a business with a USDC account. Every other fee shows before you confirm.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="explain">
+    <div class="wrap g12 explain">
+      <h2 id="explain" class="sx-h heading-1">Hold dollars. Pay in <em>theirs</em>.</h2>
+      <p class="body-l">Sancus is one US dollar account for businesses that buy and sell abroad. Add money once, then pay anyone in their local currency. You see the rate, the fee and what they get before every payment.</p>
+    </div>
+  </section>
+
+  <section id="how" class="sec white rule-top" aria-labelledby="how-h">
+    <div class="wrap">
+      <div class="sec-head"><div><h2 id="how-h" class="sx-h heading-2">Five stops, one receipt.</h2></div><p class="body muted">Juliana is a contractor in São Paulo. Here's her $100.00 invoice, start to finish.</p></div>
+      <ol class="route">
+        <li class="route-line" aria-hidden="true"></li>
+        <li class="stop"><span class="stop-dot">01</span><span class="sx-label">You</span><h3>Top up</h3><p>Add dollars by ACH, wire or USDC.</p><span class="stop-data">+$10,000.00</span></li>
+        <li class="stop"><span class="stop-dot">02</span><span class="sx-label">Circle</span><h3>Hold</h3><p>Your balance is held as USDC, one for one.</p><span class="stop-data">$10,000.00 USDC</span></li>
+        <li class="stop"><span class="stop-dot">03</span><span class="sx-label">Sancus</span><h3>Convert</h3><p>We quote the rate and lock it for 60 seconds.</p><span class="stop-data">1 USD = 5.4123 BRL</span></li>
+        <li class="stop"><span class="stop-dot">04</span><span class="sx-label">Local rail</span><h3>Pay out</h3><p>Sent on the rail she already uses.</p><span class="stop-data"><span class="sx-rail">Pix</span>&#160;&#160;fee $0.80</span></li>
+        <li class="stop"><span class="stop-dot stop-dot--end">05</span><span class="sx-label">Juliana</span><h3>Received</h3><p>In her bank in seconds, in reais.</p><span class="stop-data">R$ 541,23</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="sec rule-top" aria-labelledby="pay-h">
+    <div class="wrap g12 feature">
+      <div class="c5 feature-copy">
+        
+        <h2 id="pay-h" class="sx-h heading-2">Pay anyone abroad in their own <em>currency</em>.</h2>
+        <p class="body-l">Pick who, enter the amount in dollars or theirs, and we pick the rail.</p>
+        <ul class="ticks">
+          <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="1.6"></path></svg><span>Rate, fee and what they get, before you confirm</span></li>
+          <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="1.6"></path></svg><span>Rate locked for 60 seconds at review</span></li>
+          <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="1.6"></path></svg><span>A receipt for every hop, from your balance to their bank</span></li>
+        </ul>
+      </div>
+      <div class="c7">
+        <div class="stage">
+          <svg class="stage-lines" viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.2"><path d="M-20 400 Q 160 120 620 90"></path><path d="M-20 430 Q 260 220 620 210"></path><path d="M-20 360 Q 100 40 420 -20"></path></g></svg>
+          <div class="mock" aria-hidden="true">
+            <div class="mock-head"><span class="body-strong">Review payment</span><span class="sx-quote__lock">Locked · 0:42</span></div>
+            <div class="who"><span class="av">JC</span><span style="display: grid; min-width: 0;"><span class="body-strong">Juliana Costa</span><span class="body-s muted">Pix key ju•••@gmail.com</span></span></div>
+            <div class="sx-quote">
+              <dl><dt>You pay</dt><dd>$100.00</dd><dt>Fee</dt><dd>$0.80</dd><dt>Rate</dt><dd>1 USD = 5.4123 BRL</dd><dt>Rail</dt><dd><span class="sx-rail">Pix</span> <span class="sx-pill sx-pill--simulated">Simulated</span></dd><dt>Arrives</dt><dd>In seconds</dd></dl>
+              <div class="sx-quote__receive"><span class="body-s muted">Juliana gets</span><b>R$ 541,23</b></div>
+            </div>
+            <span class="fake-btn">Pay R$ 541,23</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec white rule-top" aria-labelledby="spend-h">
+    <div class="wrap g12 feature">
+      <div class="c7">
+        <div class="stage" style="gap: 24px; align-content: center;">
+          <svg class="stage-lines" viewBox="0 0 600 460" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><circle cx="300" cy="150" r="120"></circle><circle cx="300" cy="150" r="190"></circle><circle cx="300" cy="150" r="260"></circle></g></svg>
+          <div class="sx-card" role="img" aria-label="Ana Souza's virtual card ending 4021, limit 2,700 reais">
+            <svg class="sx-card__mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>
+            <div class="sx-card__top"><span class="sx-card__brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</span><span class="sx-card__limit">LIMIT R$ 2.700</span></div>
+            <div></div>
+            <div class="sx-card__foot"><span style="display: grid; gap: 4px;"><span style="opacity: .8;">ANA SOUZA</span><span class="sx-card__num">•••• 4021</span></span><span style="opacity: .8;">VIRTUAL</span></div>
+          </div>
+          <div class="mock" style="max-width: 420px;" aria-label="Team limits this month">
+            <div class="arow"><b>Ana · card 4021</b><span class="amt">R$ 541 of R$ 2.700</span></div>
+            <div class="meter" aria-hidden="true"><i style="width: 20%;"></i></div>
+            <div class="arow"><b>Ana · Pix QR</b><span class="amt">R$ 54 of R$ 800</span></div>
+            <div class="meter" aria-hidden="true"><i style="width: 7%;"></i></div>
+            <div class="arow"><b>Arya · QRIS, Indonesia</b><span class="amt">Rp 0 of Rp 3.200.000</span></div>
+            <div class="meter" aria-hidden="true"><i style="width: 0%;"></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="c5 feature-copy">
+        
+        <h2 id="spend-h" class="sx-h heading-2">Cards and local QR for your <em>team</em>.</h2>
+        <p class="body-l">Give people a virtual card, or a Pix, QRIS or PromptPay QR, with a limit in the currency they spend in.</p>
+        <ul class="ticks">
+          <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="1.6"></path></svg><span>Cards hold the rest of their limit in your balance</span></li>
+          <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="1.6"></path></svg><span>Every purchase shows up as it happens</span></li>
+          <li><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="1.6"></path></svg><span>Freeze a card or pause a QR in one tap</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec rule-top" aria-labelledby="rules-h">
+    <div class="wrap">
+      <div class="sec-head"><div><h2 id="rules-h" class="sx-h heading-2">Rules your money <em>keeps</em>.</h2></div><p class="body muted">Limits, holds and approvals are enforced by code, not by a reminder in someone's inbox.</p></div>
+      <div class="bento">
+        <article class="tile" style="grid-column: span 7;">
+          <h3>Big or unusual payments wait for a yes.</h3>
+          <p>Set a limit in dollars. Payments over it, or to someone new, go to an approver. Nobody approves their own.</p>
+          <div class="tile-art">
+            <div class="arow"><b>Ana → Gráfica Aurora</b><span class="amt">$592.05</span><small>Over her limit</small><span class="sx-pill sx-pill--pending">Pending</span></div>
+            <div class="arow"><b>Rafael → Torrefação Lisboa</b><span class="amt">$1,988.00</span><small>First payment to someone new</small><span class="sx-pill sx-pill--pending">Pending</span></div>
+            <div class="arow"><b>Payments agent → Crop imagery</b><span class="amt">$40.00</span><small>Over its weekly budget</small><span class="sx-pill sx-pill--pending">Pending</span></div>
+          </div>
+        </article>
+        <article class="tile tile--deep" style="grid-column: span 5;">
+          <h3>Agents get a budget, not a blank check.</h3>
+          <p>Your payments agent buys data and tools within a weekly budget. Anything over it comes to you.</p>
+          <div class="tile-art">
+            <div class="arow"><b>This week</b><span class="amt">$12.40 of $50.00</span></div>
+            <div class="meter" style="background: rgba(238,241,236,.14);" aria-hidden="true"><i style="width: 25%; background: var(--brand-signal);"></i></div>
+            <div class="arow"><b>Budget resets Monday</b><span class="amt amt-in">$37.60 left</span></div>
+          </div>
+        </article>
+        <article class="tile" style="grid-column: span 5;">
+          <h3>Every hop has a receipt.</h3>
+          <p>Each step of a payment carries its own status, so you always know where the money is.</p>
+          <div class="tile-art">
+            <div class="arow"><b>Funded from balance</b><span class="amt">$100.80</span></div>
+            <div class="arow"><b>Converted at 5.4123</b><span class="amt">R$ 541,23</span></div>
+            <div class="arow"><b>Paid out by Pix</b><span class="sx-pill sx-pill--simulated">Simulated</span></div>
+            <div class="arow"><b>Received by Juliana</b><span class="sx-pill sx-pill--settled">Settled</span></div>
+          </div>
+        </article>
+        <article class="tile" style="grid-column: span 7;">
+          <h3>Earn when other agents use your data.</h3>
+          <p>Publish an endpoint and set a price per call. What other agents pay lands straight in your balance.</p>
+          <div class="tile-art">
+            <div class="arow"><b>Route quotes</b><span class="amt">$0.04 a call</span><small>Paid by other agents</small><span class="sx-pill sx-pill--settled">Live</span></div>
+            <div class="arow"><b>Earned so far</b><span class="amt" style="color: var(--settled);">+$1.20</span><small>30 calls</small></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="band-h">
+    <svg class="band-lines" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><circle cx="600" cy="420" r="180"></circle><circle cx="600" cy="420" r="300"></circle><circle cx="600" cy="420" r="420"></circle><circle cx="600" cy="420" r="540"></circle></g></svg>
+    <div class="wrap" style="position: relative;">
+      <h2 id="band-h" class="sx-h display-l">One card. <em>Settled</em> in local currency.</h2>
+      <div class="stack" aria-hidden="true">
+        <div class="sx-card s1"><div class="sx-card__top"><span class="sx-card__brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</span><span class="sx-card__limit">LIMIT Rp 3.200.000</span></div><div></div><div class="sx-card__foot"><span style="display: grid; gap: 4px;"><span style="opacity: .8;">ARYA PUTRA</span><span class="sx-card__num">•••• 5530</span></span><span style="opacity: .8;">VIRTUAL</span></div></div>
+        <div class="sx-card s2"><div class="sx-card__top"><span class="sx-card__brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</span><span class="sx-card__limit">LIMIT ฿12,000</span></div><div></div><div class="sx-card__foot"><span style="display: grid; gap: 4px;"><span style="opacity: .8;">NIDA SRISAI</span><span class="sx-card__num">•••• 8816</span></span><span style="opacity: .8;">VIRTUAL</span></div></div>
+        <div class="sx-card s3"><svg class="sx-card__mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg><div class="sx-card__top"><span class="sx-card__brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</span><span class="sx-card__limit">LIMIT R$ 2.700</span></div><div></div><div class="sx-card__foot"><span style="display: grid; gap: 4px;"><span style="opacity: .8;">ANA SOUZA</span><span class="sx-card__num">•••• 4021</span></span><span style="opacity: .8;">VIRTUAL</span></div></div>
+      </div>
+      <p class="band-foot"><span>Ana paid Papelaria Central</span><span class="data">$100.00 → R$ 541,23</span><span class="sx-pill sx-pill--settled">Settled</span><span class="sx-pill sx-pill--simulated">Simulated</span></p>
+    </div>
+  </section>
+
+  <section class="sec white" aria-labelledby="faq-h">
+    <div class="wrap g12">
+      <div class="c4" style="display: grid; gap: 12px; align-content: start;"><h2 id="faq-h" class="sx-h heading-2">Before you open an account</h2></div>
+      <div class="c8 faq">
+        <details open><summary>Is this a real bank account?<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="1.5"></path></svg></summary><p class="body">No. Sancus is a hackathon prototype. Balances are testnet USDC with no real value, and every rail other than USDC is simulated and labelled that way.</p></details>
+        <details><summary>Where can I pay?<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="1.5"></path></svg></summary><p class="body">Brazil by Pix, Mexico by SPEI, the euro area by SEPA, Indonesia by QRIS, Thailand by PromptPay, the US by ACH, anywhere by wire, and any business with a USDC account.</p></details>
+        <details><summary>How fast does money arrive?<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="1.5"></path></svg></summary><p class="body">Pix, QRIS, PromptPay and USDC arrive in seconds, SPEI in minutes, SEPA the same day, and ACH in 1–2 days. Review shows the arrival time before you pay.</p></details>
+        <details><summary>What does it cost?<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="1.5"></path></svg></summary><p class="body">Each rail has its own fee, from $0.00 for USDC to $3.50 for a wire. You see the fee and the rate before you confirm. <a href="Pricing.dc.html">Rails and fees</a></p></details>
+        <details><summary>Who holds the money?<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="1.5"></path></svg></summary><p class="body">Your balance is held as USDC, one for one, and the rules on it are enforced by a contract. <a href="Security.dc.html">How your money is kept</a></p></details>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="foot">
+  <div class="foot-panel">
+    <svg class="foot-lines" viewBox="0 0 1400 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><circle cx="1080" cy="780" r="560"></circle><ellipse cx="1080" cy="634" rx="541" ry="108"></ellipse><ellipse cx="1080" cy="500" rx="485" ry="97"></ellipse><ellipse cx="1080" cy="382" rx="396" ry="79"></ellipse><ellipse cx="1080" cy="293" rx="280" ry="56"></ellipse><ellipse cx="1080" cy="237" rx="146" ry="29"></ellipse><ellipse cx="1080" cy="780" rx="146" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="280" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="398" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="487" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="543" ry="560"></ellipse><line x1="1080" y1="220" x2="1080" y2="1340"></line></g><g fill="none" stroke="currentColor" stroke-width="2"><path d="M660 620 Q 780 220 1040 310"></path><path d="M1040 310 Q 1280 140 1410 450"></path></g></svg>
+    <div class="foot-in">
+      <div class="foot-cta">
+        <h2 class="sx-h heading-1">Money that keeps its <em>word</em>.</h2>
+        <div class="hero-ctas"><a class="sx-btn sx-btn--primary" href="SignUp.dc.html">Open your account</a><a class="sx-btn sx-btn--secondary" href="Main.dc.html">Try the demo</a></div>
+      </div>
+      <div class="foot-meta"><span>One account. Every rail. Every border.</span><hr></div>
+      <ul class="foot-links" aria-label="Footer">
+        <li><a href="Site.dc.html#how">How it works</a></li>
+        <li><a href="Pricing.dc.html">Rails and fees</a></li>
+        <li><a href="Security.dc.html">Security</a></li>
+        <li><a href="PayWho.dc.html">Pay</a></li>
+        <li><a href="Card.dc.html">Cards and QR</a></li>
+        <li><a href="Agents.dc.html">Agents</a></li>
+        <li><a href="https://github.com/vysha-exe/Sancus">Source code</a></li>
+        <li><a href="#terms">Terms</a></li>
+        <li><a href="#privacy">Privacy</a></li>
+      </ul>
+    </div>
+    <div class="foot-word" aria-hidden="true">SANCUS</div>
+  </div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":5600}}'>
+class Component extends DCLogic {
+  rails() {
+    return [['USDC', 'Businesses with a USDC account', 'Seconds', '$0.00', false], ['ACH', 'US bank accounts', '1–2 days', '$0.00', true],
+      ['Wire', 'Bank accounts anywhere', 'Same or next day', '$3.50', true], ['Pix', 'Brazil, bank or QR', 'Seconds', '$0.80', true],
+      ['SEPA', 'Euro bank accounts', 'Same day', '$0.80', true], ['SPEI', 'Mexico', 'Minutes', '$0.80', true],
+      ['QRIS', 'Indonesia QR', 'Seconds', '$0.50', true], ['PromptPay', 'Thailand QR', 'Seconds', '$0.50', true]];
+  }
+  componentDidMount() {
+    const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce) this.timer = setInterval(() => { const s = this.state || {}; if (s.held) return; this.setState({ sel: ((s.sel == null ? 3 : s.sel) + 1) % 8 }); }, 2600);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+  renderVals() {
+    const s = this.state || {}, sel = s.sel == null ? 3 : s.sel, list = this.rails(), r = list[sel];
+    return {
+      cols: list.map((x, i) => ({ name: x[0], on: String(i === sel), cls: i === sel ? 'col col--on' : 'col', pick: () => this.setState({ sel: i, held: true }) })),
+      r: { name: r[0], use: r[1], speed: r[2], fee: r[3], sim: r[4], live: !r[4] }
+    };
+  }
+}
+</script>
+</body>
+</html>
