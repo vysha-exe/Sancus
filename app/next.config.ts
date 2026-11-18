@@ -32,12 +32,10 @@ const nextConfig: NextConfig = {
     root: path.join(__dirname),
   },
 
-  // Externalize heavy server SDKs. Avoid packages with fragile subpath exports
-  // (e.g. @circle-fin/x402-batching/server) — those must stay bundled.
-  serverExternalPackages: [
-    "viem",
-    "@circle-fin/developer-controlled-wallets",
-  ],
+  // Externalize heavy server SDKs. Do NOT externalize
+  // @circle-fin/developer-controlled-wallets — its .es.js build fails on Vercel
+  // Node ("Cannot use import statement outside a module"). Keep it bundled.
+  serverExternalPackages: ["viem"],
 
   experimental: {
     optimizePackageImports: ["lucide-react", "@tabler/icons-react", "date-fns"],
