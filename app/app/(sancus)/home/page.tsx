@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { HomeBalance } from "@/components/sancus-ui/home-balance"
-import { LatestPayments } from "@/components/sancus-ui/latest-payments"
 import { NeedsYou } from "@/components/sancus-ui/needs-you"
 import { ConvertCard } from "@/components/sancus-ui/convert-card"
 import { GatewayCard } from "@/components/sancus-ui/gateway-card"
@@ -65,18 +64,6 @@ export default function HomePage() {
         ) : (
           <NeedsYou />
         )}
-
-        <section className="tile s8 r2" aria-labelledby="latest">
-          <div className="tile-head">
-            <h2 className="tile-title" id="latest">
-              Latest payments
-            </h2>
-            <Link href="/activity" className="sx-btn sx-btn--quiet">
-              See all
-            </Link>
-          </div>
-          <LatestPayments />
-        </section>
 
         <section className="tile s4" aria-labelledby="month">
           <div className="tile-head">

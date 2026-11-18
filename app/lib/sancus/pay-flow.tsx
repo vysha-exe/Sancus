@@ -18,11 +18,13 @@ import {
   type ReactNode,
 } from "react"
 import {
-  getRecipient,
+  getRecipient as getDemoRecipient,
   julianaQuote,
-  recipients,
+  recipients as demoRecipients,
   type Recipient,
 } from "@/lib/sancus/demo-data"
+import { buildCustomPayee, loadCustomPayees, saveCustomPayees, type NewPayeeInput } from "@/lib/sancus/custom-payees"
+import { validateRecipient } from "@/lib/sancus/paynow"
 import { displayMinor, parseToMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { SerializedQuote } from "@/lib/sancus/fx"
 import type { PayoutDto } from "@/lib/sancus/payouts"
@@ -69,7 +71,10 @@ type SubmitResult = { ok: true } | { ok: false; error: string }
 type PayContextValue = {
   state: PayState
   recipient: Recipient
+  /** Demo recipients plus any payees added on this device. */
+  recipients: Recipient[]
   setRecipientId: (id: string) => void
+  addPayee: (input: NewPayeeInput) => { ok: true; recipient: Recipient } | { ok: false; error: string }
   setUsdAmount: (v: string) => void
   setLocalAmount: (v: string) => void
   setRail: (v: string) => void
@@ -97,6 +102,10 @@ const defaultState: PayState = {
   rail: julianaQuote.rail,
   memo: "November design hours",
   side: "send",
+}
+
+function findRecipient(id: string, custom: Recipient[]): Recipient | undefined {
+  return custom.find((r) => r.id === id) ?? getDemoRecipient(id)
 }
 
 /** Payout currency for a non-Singapore recipient on a rail (a wire follows their usual currency). */
@@ -128,6 +137,7 @@ function feeUsdcMinor(q: SerializedQuote): bigint {
 
 export function PayFlowProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PayState>(defaultState)
+  const [customPayees, setCustomPayees] = useState<Recipient[]>([])
   const [liveQuote, setLiveQuote] = useState<LiveQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
@@ -138,27 +148,61 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   // One idempotency key per payment attempt: retries can't double-pay.
   const idempotencyKey = useRef<string | null>(null)
 
-  const recipient = getRecipient(state.recipientId) ?? recipients[0]
+  useEffect(() => {
+    setCustomPayees(loadCustomPayees())
+  }, [])
+
+  const recipients = useMemo(() => [...customPayees, ...demoRecipients], [customPayees])
+  const recipient = findRecipient(state.recipientId, customPayees) ?? recipients[0]!
   const isLive = Boolean(recipient.payout)
   const isPix = recipient.id === "juliana"
 
-  const setRecipientId = useCallback((id: string) => {
-    const r = getRecipient(id) ?? recipients[0]
+  const setRecipientId = useCallback(
+    (id: string) => {
+      const r = findRecipient(id, customPayees) ?? recipients[0]!
+      idempotencyKey.current = null
+      setState((s) => ({
+        ...s,
+        recipientId: r.id,
+        rail: r.payout ? (r.payout.proxyType === "BANK" ? "FAST" : "PayNow") : r.rail,
+        localAmount: r.payout ? LIVE_DEFAULT_SGD : "",
+        usdAmount: r.payout ? "" : r.id === "juliana" ? julianaQuote.totalLabel.replace("$", "") : "100.00",
+        side: r.payout ? "receive" : "send",
+      }))
+    },
+    [customPayees, recipients]
+  )
+
+  const addPayee = useCallback((input: NewPayeeInput) => {
+    const issues = validateRecipient({
+      name: input.name,
+      proxyType: input.proxyType,
+      proxyValue: input.proxyValue,
+      bankCode: input.bankCode,
+    })
+    if (issues.length) return { ok: false as const, error: issues[0]!.message }
+    const payee = buildCustomPayee(input)
+    setCustomPayees((prev) => {
+      const next = [payee, ...prev]
+      saveCustomPayees(next)
+      return next
+    })
     idempotencyKey.current = null
     setState((s) => ({
       ...s,
-      recipientId: r.id,
-      rail: r.payout ? (r.payout.proxyType === "BANK" ? "FAST" : "PayNow") : r.rail,
-      localAmount: r.payout ? LIVE_DEFAULT_SGD : "",
-      usdAmount: r.payout ? "" : r.id === "juliana" ? julianaQuote.totalLabel.replace("$", "") : "100.00",
-      side: r.payout ? "receive" : "send",
+      recipientId: payee.id,
+      rail: payee.payout?.proxyType === "BANK" ? "FAST" : "PayNow",
+      localAmount: LIVE_DEFAULT_SGD,
+      usdAmount: "",
+      side: "receive",
     }))
+    return { ok: true as const, recipient: payee }
   }, [])
 
   const setUsdAmount = useCallback(
     (v: string) => {
       setState((s) => {
-        const r = getRecipient(s.recipientId)
+        const r = findRecipient(s.recipientId, customPayees)
         const n = Number.parseFloat(v.replace(/,/g, ""))
         if (r?.payout) {
           // Live: convert at the last quoted rate, net of the fee.
@@ -172,17 +216,20 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
         return { ...s, usdAmount: v, side: "send" }
       })
     },
-    [liveQuote]
+    [liveQuote, customPayees]
   )
 
-  const setLocalAmount = useCallback((v: string) => {
-    idempotencyKey.current = null
-    setState((s) => {
-      const r = getRecipient(s.recipientId)
-      if (r?.payout) return { ...s, localAmount: v, usdAmount: "" }
-      return { ...s, localAmount: v, side: "receive" }
-    })
-  }, [])
+  const setLocalAmount = useCallback(
+    (v: string) => {
+      idempotencyKey.current = null
+      setState((s) => {
+        const r = findRecipient(s.recipientId, customPayees)
+        if (r?.payout) return { ...s, localAmount: v, usdAmount: "" }
+        return { ...s, localAmount: v, side: "receive" }
+      })
+    },
+    [customPayees]
+  )
 
   const setRail = useCallback((v: string) => setState((s) => ({ ...s, rail: v })), [])
   const setMemo = useCallback((v: string) => setState((s) => ({ ...s, memo: v })), [])
@@ -370,7 +417,9 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       recipient,
+      recipients,
       setRecipientId,
+      addPayee,
       setUsdAmount,
       setLocalAmount,
       setRail,
@@ -390,7 +439,9 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     [
       state,
       recipient,
+      recipients,
       setRecipientId,
+      addPayee,
       setUsdAmount,
       setLocalAmount,
       setRail,
