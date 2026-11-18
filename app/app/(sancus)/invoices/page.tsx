@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { CollectionDemo } from "@/components/sancus/collection-demo"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { bills } from "@/lib/sancus/demo-data"
 
@@ -172,6 +173,16 @@ export default function InvoicesPage() {
           </div>
         </section>
       </div>
+
+      <section style={{ display: "grid", gap: 12 }} aria-labelledby="get-paid-locally">
+        <div>
+          <h2 id="get-paid-locally" className="sx-h heading-3">Get paid locally</h2>
+          <p className="body-s muted" style={{ margin: 0 }}>
+            Create a customer invoice QR for Pix, QRIS or PromptPay and follow it through settlement.
+          </p>
+        </div>
+        <CollectionDemo />
+      </section>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }} aria-labelledby="due">
         <div
