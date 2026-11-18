@@ -59,7 +59,7 @@ describe("route quotes sold over x402", () => {
     const r = routeQuote({ country: "SG", amount: "2000", recipientType: "UEN" }, {}, now)
     if (!r.ok) throw new Error(r.error)
     expect(r.body.best.rail).toBe("PayNow")
-    expect(r.body.best.usdcCost).toBe("1,497.402656") // same as POST /api/sancus/payouts/quote
+    expect(r.body.best.usdcCost).toBe("1,497.492328") // fixed 1 USD = 1.3359 SGD demo rate
     expect(r.body.live).toBe(true)
     expect(r.body.alternatives[0]).toMatchObject({ rail: "FAST", available: false })
   })
@@ -76,7 +76,7 @@ describe("route quotes sold over x402", () => {
     if (!id.ok || !th.ok) throw new Error("expected quotes")
     expect(id.body).toMatchObject({ live: false, currency: "IDR" })
     expect(id.body.best).toMatchObject({ rail: "BI-FAST", simulated: true })
-    expect(th.body.best.rate).toContain("36.")
+    expect(th.body.best.rate).toContain("35.0000")
   })
 
   it("rejects bad input", () => {

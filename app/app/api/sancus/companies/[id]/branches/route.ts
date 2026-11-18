@@ -1,5 +1,4 @@
-// Sancus: add a branch (or sub-branch) under a company node, with its first wallet.
-// Requires Owner/Admin on the parent or any ancestor (checked in sancus_create_company).
+// Sancus: add a direct country branch under the single global treasury.
 import { NextResponse } from "next/server"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
@@ -17,6 +16,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   const parent = await getCompany(supabase, parentId)
   if (!parent) return NextResponse.json({ error: "Branch not found" }, { status: 404 })
+  if (parent.parent_id !== null) {
+    return NextResponse.json({ error: "Add branches under the global treasury, not under another branch" }, { status: 400 })
+  }
 
   const { data: id, error } = await supabase.rpc("sancus_create_company", {
     p_parent: parentId,

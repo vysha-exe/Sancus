@@ -107,7 +107,7 @@ export default function SiteLandingPage() {
                 <span className="stop-dot">03</span>
                 <span className="sx-label">Sancus</span>
                 <h3>Convert</h3>
-                <p>We quote the rate and lock it for 60 seconds.</p>
+                <p>We apply the fixed hackathon demo rate.</p>
                 <span className="stop-data">1 USD = 5.4123 BRL</span>
               </li>
               <li className="stop">
@@ -142,7 +142,7 @@ export default function SiteLandingPage() {
               <Ticks
                 items={[
                   "Rate, fee and what they get, before you confirm",
-                  "Rate locked for 60 seconds at review",
+                  "Fixed rates throughout the hackathon demo",
                   "A receipt for every hop, from your balance to their bank",
                 ]}
               />
@@ -164,7 +164,7 @@ export default function SiteLandingPage() {
                 <div className="mock" aria-hidden="true">
                   <div className="mock-head">
                     <span className="body-strong">Review payment</span>
-                    <span className="sx-quote__lock">Locked · 0:42</span>
+                    <span className="sx-quote__lock">Fixed demo rate</span>
                   </div>
                   <div className="who">
                     <span className="av">JC</span>

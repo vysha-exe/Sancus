@@ -12,6 +12,9 @@ import {
 } from "@/lib/sancus/demo-data"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { accountDisplayName, useAccount } from "@/lib/sancus/use-account"
+import { countryByCode } from "@/lib/sancus/countries"
+import type { CompanyNode } from "@/lib/sancus/companies"
+import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 
 export default function HomePage() {
   const ws = useWorkspace()
@@ -73,6 +76,10 @@ export default function HomePage() {
               </Link>
             </div>
           </section>
+        ) : null}
+
+        {account?.type === "ADMIN" ? (
+          <ParentBranchBalances tree={ws.tree} ready={ws.ready} formatBalance={ws.formatBalance} />
         ) : null}
 
         <section className="tile s4" aria-labelledby="month">
@@ -162,4 +169,68 @@ export default function HomePage() {
       </div>
     </div>
   )
+}
+
+function ParentBranchBalances({
+  tree,
+  ready,
+  formatBalance,
+}: {
+  tree: CompanyNode[]
+  ready: boolean
+  formatBalance: (minor: string) => string
+}) {
+  const parent = tree.find((node) => node.parentId === null) ?? tree[0] ?? null
+  const branches = parent?.children ?? []
+  const rows = parent
+    ? [{ node: parent, level: "Parent" }, ...branches.map((node) => ({ node, level: "Branch" }))]
+    : []
+
+  return (
+    <section className="tile s12" aria-labelledby="branch-balances" aria-busy={!ready}>
+      <div className="tile-head">
+        <div>
+          <h2 className="tile-title" id="branch-balances">Branch balances</h2>
+          <span className="body-s muted">Global treasury and direct country branches</span>
+        </div>
+        <Link href="/branches" className="sx-btn sx-btn--quiet">Manage branches</Link>
+      </div>
+      {!ready ? (
+        <div className="fill-grid"><div className="rail-tile"><span className="sx-label">Loading</span><span className="big">***</span></div></div>
+      ) : rows.length ? (
+        <div className="fill-grid">
+          {rows.map(({ node, level }) => {
+            const isParent = level === "Parent"
+            return (
+              <Link href={`/branches/${node.id}`} className="rail-tile" style={{ color: "inherit", textDecoration: "none" }} key={node.id}>
+                <div className="tile-head" style={{ margin: 0 }}>
+                  <span className="sx-label">{level}</span>
+                  {!isParent ? <span aria-hidden>{countryByCode(node.country)?.flag ?? "🏳️"}</span> : null}
+                </div>
+                <span className="body-strong">{node.name}</span>
+                <span className="big">{formatBalance(node.ownMinor)}</span>
+                <span className="body-s muted">
+                  {isParent ? "Global treasury · USDC" : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}
+                </span>
+                {!isParent ? <span className="body-strong">{localBalance(node.ownMinor, node.currency)}</span> : null}
+              </Link>
+            )
+          })}
+        </div>
+      ) : <div className="empty">No company branches yet.</div>}
+    </section>
+  )
+}
+
+function localBalance(usdcMinor: string, currency: string): string {
+  const rate = FIXED_USD_RATES[currency as keyof typeof FIXED_USD_RATES]
+  if (!rate) return `Local balance unavailable · ${currency}`
+  const localAmount = Number(BigInt(usdcMinor)) / 1_000_000 * rate
+  const zeroDecimal = new Set(["IDR", "JPY", "KRW", "VND"])
+  const formatted = new Intl.NumberFormat("en-US", {
+    style: "currency", currency, currencyDisplay: "narrowSymbol",
+    minimumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
+    maximumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
+  }).format(localAmount)
+  return `${formatted} ${currency} at the fixed demo rate`
 }

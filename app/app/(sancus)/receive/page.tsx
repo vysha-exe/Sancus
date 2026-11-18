@@ -2,43 +2,11 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { LocalCollectCard } from "@/components/sancus-ui/local-collect-card"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { ledger } from "@/lib/sancus/demo-data"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
-import { CollectionDemo } from "@/components/sancus/collection-demo"
 
 type DepositSource = "ach" | "usdc"
-
-const localRails = [
-  {
-    id: "pix",
-    rail: "Pix",
-    country: "Brazil",
-    keyLabel: "Pix key",
-    keyValue: "pix@cafepaulista.com.br",
-    received: "R$ 0,00",
-    primary: "Copy key",
-  },
-  {
-    id: "qris",
-    rail: "QRIS",
-    country: "Indonesia",
-    keyLabel: "Merchant ID",
-    keyValue: "ID1024 3381 7720",
-    received: "Rp 0",
-    primary: "Download QR",
-  },
-  {
-    id: "promptpay",
-    rail: "PromptPay",
-    country: "Thailand",
-    keyLabel: "PromptPay ID",
-    keyValue: "0105 5671 2384 9",
-    received: "฿0.00",
-    primary: "Download QR",
-  },
-] as const
 
 const deposits: {
   id: DepositSource
@@ -84,7 +52,7 @@ export default function ReceivePage() {
   const label = money.format(value)
   const treasury = useLiveTreasury()
   const arcWallet = treasury.summary?.wallets.find((w) => w.blockchain === "ARC-TESTNET")
-  const usdcAddress = arcWallet?.address ?? "0x4F2a9b1e…77d0c81E"
+  const usdcAddress = treasury.loading ? "***" : arcWallet?.address ?? "0x4F2a9b1e…77d0c81E"
   const mercado = ledger.find((p) => p.id === "mercado")
 
   function copy(text: string, id: string) {
@@ -109,54 +77,6 @@ export default function ReceivePage() {
       </header>
 
       <div className="grid">
-        <section className="tile s12" aria-labelledby="local">
-          <div className="tile-head">
-            <h2 className="tile-title" id="local">
-              Get paid locally
-            </h2>
-            <span className="body-s muted">Customers pay in their currency. You get dollars.</span>
-          </div>
-          <div className="grid" style={{ gap: 16 }}>
-            {localRails.map((r) => (
-              <article key={r.id} className="rail-tile s4" aria-labelledby={`r-${r.id}`}>
-                <div className="tile-head">
-                  <span className="rail-name">
-                    <span className="sx-rail">{r.rail}</span>
-                    <b id={`r-${r.id}`}>{r.country}</b>
-                  </span>
-                </div>
-                <div className="rail-body">
-                  <div className="qr" role="img" aria-label={`${r.rail} QR code`}>
-                    <span className="sx-label">QR</span>
-                  </div>
-                  <div className="rail-kv">
-                    <span className="sx-label">{r.keyLabel}</span>
-                    <span className="data trunc">{r.keyValue}</span>
-                    <span className="sx-label">Received</span>
-                    <span className="data">{r.received}</span>
-                  </div>
-                </div>
-                <div className="tile-foot">
-                  <button
-                    type="button"
-                    className="sx-btn sx-btn--secondary sx-btn--sm"
-                    onClick={() => copy(r.keyValue, r.id)}
-                  >
-                    {copied === r.id ? "Copied" : r.primary}
-                  </button>
-                  <button type="button" className="sx-btn sx-btn--quiet">
-                    New charge
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <LocalCollectCard />
-            <CollectionDemo />
-          </div>
-        </section>
-
         <section className="tile s7" aria-labelledby="in">
           <h2 className="tile-title" id="in">
             Move money in

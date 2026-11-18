@@ -170,6 +170,46 @@ export function sanitizeXenditPayout(payout: XenditPayout): XenditPayout {
   return copy
 }
 
+export const SIMULATED_XENDIT_PREFIX = "SIM-XE-"
+
+const SANDBOX_FAILURES: Record<string, { status: XenditPayoutStatus; failure_code: string }> = {
+  "121212": { status: "FAILED", failure_code: "INVALID_DESTINATION" },
+  "999999": { status: "FAILED", failure_code: "REJECTED_BY_CHANNEL" },
+  "123456": { status: "FAILED", failure_code: "TEMPORARY_TRANSFER_ERROR" },
+}
+
+export function isSimulatedXenditPayout(providerId: string) {
+  return providerId.startsWith(SIMULATED_XENDIT_PREFIX)
+}
+
+export function isXenditMoneyOutForbidden(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /forbidden|Money-out Write|not configured/i.test(message)
+}
+
+/** Xendit's documented sandbox account numbers, applied by the local stand-in. */
+export function sandboxPayoutFailure(accountNumber: string) {
+  return SANDBOX_FAILURES[accountNumber.replace(/\D/g, "")] ?? null
+}
+
+export function simulatedXenditPayout(input: XenditCreateInput, now = new Date()): XenditPayout {
+  const failure = sandboxPayoutFailure(input.accountNumber)
+  const stamp = now.toISOString()
+  return {
+    payout_id: `${SIMULATED_XENDIT_PREFIX}${input.referenceId}`,
+    status: failure?.status ?? "SUCCEEDED",
+    failure_code: failure?.failure_code,
+    reference_id: input.referenceId,
+    source_currency: input.currency,
+    source_amount: input.amountMinor,
+    destination_currency: input.currency,
+    destination_amount: input.amountMinor,
+    created: stamp,
+    updated: stamp,
+    simulated: true,
+  }
+}
+
 export function verifyXenditWebhookToken(value: string | null) {
   const expected = process.env.XENDIT_WEBHOOK_TOKEN?.trim()
   if (!expected || !value) return false

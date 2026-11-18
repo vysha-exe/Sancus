@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export type DemoAs = "admin" | "branch" | "employee" | "individual"
 export const DEMO_AS: DemoAs[] = ["admin", "branch", "employee", "individual"]
 export const DEMO_HOME: Record<DemoAs, string> = { admin: "/home", branch: "/branch", employee: "/me", individual: "/home" }
-const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", branch: "Ploy", employee: "Niran", individual: "Jayden" }
+const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", branch: "Ploy", employee: "Niran", individual: "Alex" }
 
 export function parseDemoAs(v: string | null | undefined): DemoAs {
   return DEMO_AS.includes(v as DemoAs) ? (v as DemoAs) : "admin"
@@ -97,23 +97,29 @@ async function ensureMembership(admin: SupabaseClient, companyId: string, userId
 }
 
 async function ensureEmployeeMethods(admin: SupabaseClient, adminId: string, employeeId: string, name: string) {
-  const { data } = await admin.from("sancus_spending_methods").select("id").eq("employee_id", employeeId).limit(1)
-  if (data?.length) return
-  await admin.from("sancus_spending_methods").insert([
+  const { data } = await admin.from("sancus_spending_methods").select("method_type").eq("employee_id", employeeId).neq("status", "REVOKED")
+  const existing = new Set((data ?? []).map((method) => method.method_type as string))
+  const missing = [
     { user_id: adminId, employee_id: employeeId, employee_name: name, method_type: "CARD", provider: "SIMULATED", currency: "USD", label: "Virtual card", monthly_limit_minor: "300000" },
     { user_id: adminId, employee_id: employeeId, employee_name: name, method_type: "PROMPTPAY", provider: "SIMULATED", currency: "THB", label: "PromptPay QR (Bangkok trip)", monthly_limit_minor: "2000000" },
-  ])
+    { user_id: adminId, employee_id: employeeId, employee_name: name, method_type: "PIX", provider: "PAYZU", currency: "BRL", label: "Pix spending", monthly_limit_minor: "80000" },
+  ].filter((method) => !existing.has(method.method_type))
+  if (missing.length) await admin.from("sancus_spending_methods").insert(missing)
 }
 
 /** Makes sure the demo login for `as` exists and has the right access. Returns its credentials. */
 export async function ensureDemoAccount(
   admin: SupabaseClient,
   base: { email: string; password: string },
-  as: DemoAs
+  as: DemoAs,
+  emailOverride?: string
 ): Promise<{ email: string; password: string }> {
-  const email = demoEmailFor(base.email, as)
-  if (as === "admin") return { email, password: base.password }
+  const email = emailOverride ?? demoEmailFor(base.email, as)
   const userId = await ensureUser(admin, email, base.password, DEMO_NAMES[as])
+  if (as === "admin") {
+    await ensureDemoCompany(admin, userId)
+    return { email, password: base.password }
+  }
   if (as === "individual") return { email, password: base.password }
 
   const adminId = await ensureUser(admin, base.email, base.password, DEMO_NAMES.admin)

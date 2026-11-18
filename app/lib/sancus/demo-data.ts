@@ -1,11 +1,13 @@
 /** Café Paulista Ltda demo model — numbers match docs/wireframes/README.md */
 
+import { FIXED_USD_RATES, fixedUsdRateLabel } from "./fixed-rates"
+
 export const workspace = {
   name: "Café Paulista Ltda",
   country: "Brazil",
   homeCurrency: "BRL",
   balanceCurrency: "USD",
-  actor: { firstName: "Admin", role: "Owner", initial: "A" },
+  actor: { firstName: "Admin", role: "Admin", initial: "A" },
   sandbox: true,
 } as const
 
@@ -17,7 +19,7 @@ export const balance = {
   pendingOutUsd: 2000,
   pendingOutLabel: "$2,000.00",
   pendingOutWho: "Northwind",
-  meta: "$398.86 held for cards · $2,000.00 on its way to Northwind · backed 1:1 by USDC",
+  meta: "$398.86 held for cards · $2,000.00 on its way to Northwind",
 } as const
 
 export const monthStats = {
@@ -193,10 +195,10 @@ export type Person = {
 
 export const people: Person[] = [
   {
-    id: "maya",
-    name: "Business admin",
+    id: "admin",
+    name: "Admin",
     initials: "A",
-    role: "Owner",
+    role: "Admin",
     country: "Brazil",
     method: "—",
     limit: "—",
@@ -388,8 +390,8 @@ export const julianaQuote = {
   totalUsd: 100.8,
   brl: 541.23,
   brlLabel: "R$ 541,23",
-  rate: 5.4123,
-  rateLabel: "1 USD = 5.4123 BRL",
+  rate: FIXED_USD_RATES.BRL,
+  rateLabel: fixedUsdRateLabel("BRL"),
   feeLabel: "$0.80",
   totalLabel: "$100.80",
   usdLabel: "$100.00",

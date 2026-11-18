@@ -8,8 +8,29 @@ import { useLiveActivity } from "@/lib/sancus/use-live-activity"
 const CAP = 5
 
 export function LatestPayments() {
-  const { source, payments } = useLiveActivity()
+  const { source, payments, loading } = useLiveActivity()
   const rows = source === "live" ? payments : latestPayments
+
+  if (loading) {
+    return (
+      <>
+        <div className="sx-rows" aria-busy="true" aria-label="Loading payments">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div className="sx-row" key={index}>
+              <span className="sx-row__who">***</span>
+              <span className="sx-row__amount">***</span>
+              <span className="sx-row__meta">***</span>
+              <span className="sx-row__status">***</span>
+            </div>
+          ))}
+        </div>
+        <div className="tile-foot" style={{ marginTop: "auto" }}>
+          <span className="body-s muted">***</span>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
       <div className="sx-rows">

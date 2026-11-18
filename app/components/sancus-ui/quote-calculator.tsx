@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 
 type Dest = {
   value: string
@@ -15,14 +16,14 @@ type Dest = {
 
 /** Sandbox rates from the Rails and fees wireframe. Not live market prices. */
 const DESTS: Dest[] = [
-  { value: "pix", label: "Brazil · Pix · BRL", rail: "Pix", cur: "BRL", rate: 5.4123, fee: 0.8, speed: "Seconds", simulated: true },
-  { value: "spei", label: "Mexico · SPEI · MXN", rail: "SPEI", cur: "MXN", rate: 17.24, fee: 0.8, speed: "Minutes", simulated: true },
-  { value: "sepa", label: "Euro area · SEPA · EUR", rail: "SEPA", cur: "EUR", rate: 0.92, fee: 0.8, speed: "Same day", simulated: true },
-  { value: "qris", label: "Indonesia · QRIS · IDR", rail: "QRIS", cur: "IDR", rate: 16000, fee: 0.5, speed: "Seconds", simulated: true },
-  { value: "promptpay", label: "Thailand · PromptPay · THB", rail: "PromptPay", cur: "THB", rate: 35, fee: 0.5, speed: "Seconds", simulated: true },
-  { value: "ach", label: "United States · ACH · USD", rail: "ACH", cur: "USD", rate: 1, fee: 0, speed: "1–2 days", simulated: true },
-  { value: "wire", label: "Anywhere · Wire · USD", rail: "Wire", cur: "USD", rate: 1, fee: 3.5, speed: "Same or next day", simulated: true },
-  { value: "usdc", label: "A USDC account · USDC", rail: "USDC", cur: "USDC", rate: 1, fee: 0, speed: "Seconds", simulated: false },
+  { value: "pix", label: "Brazil · Pix · BRL", rail: "Pix", cur: "BRL", rate: FIXED_USD_RATES.BRL, fee: 0.8, speed: "Seconds", simulated: true },
+  { value: "spei", label: "Mexico · SPEI · MXN", rail: "SPEI", cur: "MXN", rate: FIXED_USD_RATES.MXN, fee: 0.8, speed: "Minutes", simulated: true },
+  { value: "sepa", label: "Euro area · SEPA · EUR", rail: "SEPA", cur: "EUR", rate: FIXED_USD_RATES.EUR, fee: 0.8, speed: "Same day", simulated: true },
+  { value: "qris", label: "Indonesia · QRIS · IDR", rail: "QRIS", cur: "IDR", rate: FIXED_USD_RATES.IDR, fee: 0.5, speed: "Seconds", simulated: true },
+  { value: "promptpay", label: "Thailand · PromptPay · THB", rail: "PromptPay", cur: "THB", rate: FIXED_USD_RATES.THB, fee: 0.5, speed: "Seconds", simulated: true },
+  { value: "ach", label: "United States · ACH · USD", rail: "ACH", cur: "USD", rate: FIXED_USD_RATES.USD, fee: 0, speed: "1–2 days", simulated: true },
+  { value: "wire", label: "Anywhere · Wire · USD", rail: "Wire", cur: "USD", rate: FIXED_USD_RATES.USD, fee: 3.5, speed: "Same or next day", simulated: true },
+  { value: "usdc", label: "A USDC account · USDC", rail: "USDC", cur: "USDC", rate: FIXED_USD_RATES.USDC, fee: 0, speed: "Seconds", simulated: false },
 ]
 
 const n = (x: number, loc: string, dp: number) =>

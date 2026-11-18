@@ -5,28 +5,42 @@ import type { CompanyNode } from "./companies"
 
 type Me = { tree: CompanyNode[]; nodeCount: number }
 
+let cachedCompanies: Me | null = null
+let companiesRequest: Promise<Me | null> | null = null
+
+function fetchCompanies() {
+  if (!companiesRequest) {
+    companiesRequest = fetch("/api/sancus/companies/me", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return null
+        const body = (await res.json()) as Me
+        cachedCompanies = { tree: body.tree ?? [], nodeCount: body.nodeCount ?? 0 }
+        return cachedCompanies
+      })
+      .catch(() => null)
+      .finally(() => { companiesRequest = null })
+  }
+  return companiesRequest
+}
+
 /** Loads company trees for shell gating (personal vs business chrome). */
 export function useCompanies() {
-  const [me, setMe] = useState<Me | null>(null)
-  const [ready, setReady] = useState(false)
+  const [me, setMe] = useState<Me | null>(cachedCompanies)
+  const [ready, setReady] = useState(cachedCompanies !== null)
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/sancus/companies/me", { cache: "no-store" })
-      if (!res.ok) {
-        setMe(null)
-        setReady(true)
-        return
-      }
-      const body = (await res.json()) as Me
-      setMe({ tree: body.tree ?? [], nodeCount: body.nodeCount ?? 0 })
+      const next = await fetchCompanies()
+      if (next) setMe(next)
     } catch {
-      setMe(null)
+      // Keep the last confirmed workspace visible if a background refresh fails.
     }
     setReady(true)
   }, [])
 
   useEffect(() => {
+    // Initial/background server sync; state changes after the request resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh()
   }, [refresh])
 

@@ -48,7 +48,7 @@ const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString(und
 
 const STATUS: Record<string, { label: string; pill: string }> = {
   PENDING_APPROVAL: { label: "Waiting for approval", pill: "sx-pill--held" },
-  CREATED: { label: "Quote locked", pill: "sx-pill--pending" },
+  CREATED: { label: "Rate fixed", pill: "sx-pill--pending" },
   FUNDS_RECEIVED: { label: "USDC at partner", pill: "sx-pill--pending" },
   PAYMENT_SUBMITTED: { label: "ACH submitted", pill: "sx-pill--pending" },
   PAYMENT_PROCESSED: { label: "Delivered", pill: "sx-pill--settled" },
@@ -115,7 +115,7 @@ export function AchPayout() {
     return () => clearInterval(t)
   }, [active, activeMoving])
 
-  // Live quote, debounced.
+  // Recalculate totals when the fixed-rate payment inputs change.
   const amountValid = /^\d+(\.\d{1,2})?$/.test(amount.replace(/,/g, "")) && Number(amount.replace(/,/g, "")) > 0
   useEffect(() => {
     if (!recipientId || !amountValid) return

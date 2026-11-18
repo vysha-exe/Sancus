@@ -9,6 +9,8 @@ import { approvals as demoApprovals } from "@/lib/sancus/demo-data"
 import { displayMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { AchPaymentDto } from "@/lib/sancus/ach"
 import type { PayoutDto } from "@/lib/sancus/payouts"
+import type { InternalTransferDto } from "@/lib/sancus/internal-transfers"
+import { fixedUsdRateLabel } from "@/lib/sancus/fixed-rates"
 
 const CHANGED = "sancus:approvals-changed"
 
@@ -53,7 +55,7 @@ export function fromPayout(p: PayoutDto): ApprovalItem {
     amountUsd: Number(usdc) / 1_000_000,
     reason: p.approvalReason ?? "Needs an approver",
     localAmount: `S$ ${displayMinor(BigInt(p.sgdAmountMinor), SGD_DECIMALS, "", 2)}`,
-    rate: `1 USD = ${p.clientRate} SGD`,
+    rate: fixedUsdRateLabel("SGD"),
     fee: `S$ ${displayMinor(BigInt(p.feeSgdMinor), SGD_DECIMALS, "", 2)}`,
     arrival: "within seconds",
     when: `${new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}${p.reference ? ` · "${p.reference}"` : ""}`,
@@ -81,6 +83,28 @@ export function fromAch(p: AchPaymentDto): ApprovalItem {
     arrival: p.timeline.eta,
     when: `${new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}${p.reference ? ` · "${p.reference}"` : ""}`,
     decision: p.status === "PENDING_APPROVAL" ? undefined : p.status === "REJECTED" ? "declined" : "approved",
+    live: true,
+  }
+}
+
+export function fromInternalTransfer(p: InternalTransferDto): ApprovalItem {
+  const usdc = BigInt(p.usdcAmountMinor)
+  return {
+    id: p.id,
+    who: `${p.sourceName} → ${p.destinationName}`,
+    asker: p.sourceName,
+    initials: initials(p.destinationName),
+    to: p.destinationName,
+    rail: "Internal",
+    amountLabel: `$${displayMinor(usdc, USDC_DECIMALS, "", 2)}`,
+    amountUsd: Number(usdc) / 1_000_000,
+    reason: p.approvalReason ?? "Internal treasury transfer needs approval",
+    localAmount: `${p.sourceCurrency} → ${p.destinationCurrency}`,
+    rate: "Fixed demo rates",
+    fee: "$0.00",
+    arrival: "within seconds",
+    when: new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
+    decision: p.status === "PENDING_APPROVAL" ? undefined : p.status === "DECLINED" ? "declined" : "approved",
     live: true,
   }
 }
@@ -120,8 +144,16 @@ async function fetchApprovals(): Promise<Result> {
     if (!res.ok) return { ok: false, unauthorized: false, error: body.error }
     return {
       ok: true,
-      waiting: [...(body.waiting as PayoutDto[]).map(fromPayout), ...((body.achWaiting ?? []) as AchPaymentDto[]).map(fromAch)],
-      decided: [...(body.decided as PayoutDto[]).map(fromPayout), ...((body.achDecided ?? []) as AchPaymentDto[]).map(fromAch)],
+      waiting: [
+        ...(body.waiting as PayoutDto[]).map(fromPayout),
+        ...((body.achWaiting ?? []) as AchPaymentDto[]).map(fromAch),
+        ...((body.internalWaiting ?? []) as InternalTransferDto[]).map(fromInternalTransfer),
+      ],
+      decided: [
+        ...(body.decided as PayoutDto[]).map(fromPayout),
+        ...((body.achDecided ?? []) as AchPaymentDto[]).map(fromAch),
+        ...((body.internalDecided ?? []) as InternalTransferDto[]).map(fromInternalTransfer),
+      ],
     }
   } catch {
     return { ok: false, unauthorized: false, error: "Could not reach the server" }
@@ -131,18 +163,23 @@ async function fetchApprovals(): Promise<Result> {
 export function useLiveApprovals() {
   const [state, setState] = useState<{ source: "live" | "demo"; waiting: ApprovalItem[]; decided: ApprovalItem[] }>({
     source: "demo",
-    waiting: demoItems,
+    waiting: [],
     decided: [],
   })
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const apply = useCallback((r: Result) => {
     if (r.ok) {
       setState({ source: "live", waiting: r.waiting, decided: r.decided })
       setError(null)
+    } else if (r.unauthorized) {
+      setState({ source: "demo", waiting: demoItems, decided: [] })
     } else if (!r.unauthorized && r.error) {
+      setState({ source: "demo", waiting: demoItems, decided: [] })
       setError(r.error)
     }
+    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -176,7 +213,7 @@ export function useLiveApprovals() {
   )
 
   const waitingTotal = state.waiting.reduce((s, a) => s + a.amountUsd, 0)
-  return { ...state, waitingTotal, error, decide }
+  return { ...state, waitingTotal, loading, error, decide }
 }
 
 /** Tell every approvals hook on the page to refetch (e.g. after a payout was sent for approval). */

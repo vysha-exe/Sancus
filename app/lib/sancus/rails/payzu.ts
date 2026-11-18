@@ -1,4 +1,5 @@
 import type { LocalRailStatus } from "../local-rails"
+import { stableDemoToken } from "../demo-fallback"
 
 const DEFAULT_BASE_URL = "https://pix.sandbox.payzu.dev/v1"
 
@@ -22,21 +23,64 @@ export type PayZuTransaction = {
   [key: string]: unknown
 }
 
-/**
- * No PayZu token (their sandbox tokens expire every 24 h): fall back to a local simulation so the
- * Brazil corridor still works in the demo. Simulated ids start with "sim_"; rows are already
- * stored with simulated: true. Payouts settle at once; collections settle ~10 s after creation.
- */
-export function payzuConfigured(): boolean {
+const SIM_PREFIX = "SIM-PZ-"
+
+function simulatedId(kind: "COL" | "PAY", reference: string) {
+  return `${SIM_PREFIX}${kind}-${Date.now()}-${stableDemoToken(reference, 12)}`
+}
+
+function simulatedCreatedAt(id: string) {
+  const value = Number(id.split("-")[3])
+  return Number.isFinite(value) ? value : Date.now()
+}
+
+export function isPayZuConfigured() {
   return Boolean(process.env.PAYZU_SANDBOX_TOKEN?.trim())
 }
-const SIM_COLLECTION_SECONDS = 10
-const simId = (kind: "pay" | "col") => `sim_${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-const isSim = (id: string) => id.startsWith("sim_")
-function simCollectionStatus(id: string): PayZuTransaction {
-  const created = Number(id.split("_")[2])
-  const done = Number.isFinite(created) && Date.now() - created >= SIM_COLLECTION_SECONDS * 1000
-  return { id, status: done ? "COMPLETED" : "PENDING", ...(done ? { paidAt: new Date().toISOString() } : {}) }
+
+export function simulatedPixCollection(input: { amountBrl: number; reference: string }): PayZuTransaction {
+  const id = simulatedId("COL", input.reference)
+  return {
+    id,
+    status: "PENDING",
+    amount: input.amountBrl,
+    qrCodeText: `000201-SANCUS-PIX-${stableDemoToken(input.reference, 24)}`,
+    name: "Sancus demo customer",
+    message: "Deterministic Pix collection fallback",
+  }
+}
+
+export function simulatedPixPayment(input: { amountBrl: number; reference: string }): PayZuTransaction {
+  return {
+    id: simulatedId("PAY", input.reference),
+    status: "PENDING",
+    amount: input.amountBrl,
+    name: "Churrascaria Demo",
+    message: "Deterministic Pix payment fallback",
+  }
+}
+
+export function simulatedPixStatus(id: string): PayZuTransaction {
+  const settled = Date.now() - simulatedCreatedAt(id) >= 3_000
+  return {
+    id,
+    status: settled ? "COMPLETED" : "PENDING",
+    endToEndId: settled ? `E2E-${stableDemoToken(id, 20)}` : undefined,
+    paidAt: settled ? new Date(simulatedCreatedAt(id) + 3_000).toISOString() : undefined,
+  }
+}
+
+export function simulatedPixQr(qrPayload: string): PayZuTransaction {
+  return {
+    id: `${SIM_PREFIX}QR-${stableDemoToken(qrPayload, 12)}`,
+    status: "COMPLETED",
+    amount: 54.12,
+    name: "Churrascaria Demo",
+    document: "00.000.000/0001-00",
+    qrCodeType: "DYNAMIC",
+    amountEditable: true,
+    expiresIn: 600,
+  }
 }
 
 function config() {
@@ -78,9 +122,6 @@ function one(value: PayZuTransaction | PayZuTransaction[]): PayZuTransaction {
 }
 
 export async function createPixCollection(input: { amountBrl: number; reference: string }) {
-  if (!payzuConfigured()) {
-    return { id: simId("col"), status: "PENDING", amount: input.amountBrl, qrCodeText: `SIMULATED-PIX:${input.reference}` } as PayZuTransaction
-  }
   const transaction = one(await request("/pix", {
     method: "POST",
     body: JSON.stringify({ amount: input.amountBrl, expiresIn: 600, clientReference: input.reference }),
@@ -90,12 +131,10 @@ export async function createPixCollection(input: { amountBrl: number; reference:
 }
 
 export async function getPixCollection(id: string) {
-  if (isSim(id)) return simCollectionStatus(id)
   return one(await request(`/pix?id=${encodeURIComponent(id)}`))
 }
 
 export async function resolvePixQr(qrPayload: string) {
-  if (!payzuConfigured()) return { name: "Pix recipient (simulated)", qrCodeType: "STATIC", amountEditable: true, emv: qrPayload } as PayZuTransaction
   return one(await request("/pix/qrcode/read", { method: "POST", body: JSON.stringify({ emv: qrPayload }) }))
 }
 
@@ -106,10 +145,6 @@ export async function payPix(input: {
   pixKey?: string
   description?: string
 }) {
-  if (!payzuConfigured()) {
-    const id = simId("pay")
-    return { id, status: "COMPLETED", amount: input.amountBrl, endToEndId: `E${Date.now()}SIM`, paidAt: new Date().toISOString() } as PayZuTransaction
-  }
   const byQr = Boolean(input.qrPayload)
   const transaction = one(await request(byQr ? "/withdraw/qrcode" : "/withdraw", {
     method: "POST",
@@ -130,7 +165,6 @@ export async function payPix(input: {
 }
 
 export async function getPixPayment(id: string) {
-  if (isSim(id)) return { id, status: "COMPLETED" } as PayZuTransaction
   return one(await request(`/withdraw?id=${encodeURIComponent(id)}`))
 }
 

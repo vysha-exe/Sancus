@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
 
 export function NeedsYou() {
-  const { waiting } = useLiveApprovals()
+  const { waiting, loading } = useLiveApprovals()
   const oldest = waiting.slice(0, 3)
   return (
     <section className="tile s4" aria-labelledby="needs">
@@ -14,10 +14,21 @@ export function NeedsYou() {
           Needs you
         </h2>
         <span className={`sx-pill ${waiting.length ? "sx-pill--pending" : "sx-pill--settled"}`}>
-          {waiting.length} waiting
+          {loading ? "***" : `${waiting.length} waiting`}
         </span>
       </div>
-      {oldest.length === 0 ? (
+      {loading ? (
+        <div className="sx-rows" aria-busy="true" aria-label="Loading approvals">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div className="sx-row" key={index}>
+              <span className="sx-row__who">***</span>
+              <span className="sx-row__amount">***</span>
+              <span className="sx-row__meta">***</span>
+              <span />
+            </div>
+          ))}
+        </div>
+      ) : oldest.length === 0 ? (
         <div className="empty">Nothing needs you right now.</div>
       ) : (
         <div className="sx-rows">
@@ -32,7 +43,7 @@ export function NeedsYou() {
         </div>
       )}
       <div className="tile-foot">
-        <span className="body-s muted">Shows the {Math.min(3, waiting.length) || 3} oldest</span>
+        <span className="body-s muted">{loading ? "***" : `Shows the ${Math.min(3, waiting.length) || 3} oldest`}</span>
         <Link href="/activity/approvals" className="sx-btn sx-btn--quiet">
           Review all
         </Link>

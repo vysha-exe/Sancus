@@ -2,51 +2,22 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
 
 export default function PayReviewPage() {
   const router = useRouter()
-  const { recipient, state, view, refreshQuote, quoteLoading, quoteError, submit, submitting, providerBacked } = usePayFlow()
-  const [demoSeconds, setDemoSeconds] = useState(42)
-  const [now, setNow] = useState(0)
+  const { recipient, state, view, liveQuote, quoteLoading, quoteError, submit, submitting, providerBacked, sourceAccount } = usePayFlow()
   const [error, setError] = useState<string | null>(null)
-
-  // Demo recipients: the wireframe countdown. Live: tick a clock against the quote's expiry.
-  // Don't seed with Date.now() during prerender (cacheComponents / Vercel build).
-  useEffect(() => {
-    setNow(Date.now())
-    const t = window.setInterval(() => {
-      setNow(Date.now())
-      setDemoSeconds((s) => (s > 0 ? s - 1 : 0))
-    }, 1000)
-    return () => window.clearInterval(t)
-  }, [])
-
-  const seconds = view.live
-    ? view.expiresAt
-      ? Math.max(0, Math.floor((new Date(view.expiresAt).getTime() - now) / 1000))
-      : 0
-    : demoSeconds
-
-  const lockLabel = quoteLoading
-    ? "Refreshing rate…"
-    : seconds > 0
-      ? `Rate locked · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
-      : "Rate expired"
+  const quoteReady = !view.live || Boolean(liveQuote)
 
   async function pay() {
     setError(null)
     const result = await submit()
     if (result.ok) router.push("/pay/done")
     else setError(result.error)
-  }
-
-  function refresh() {
-    if (view.live) refreshQuote()
-    else setDemoSeconds(60)
   }
 
   return (
@@ -68,15 +39,17 @@ export default function PayReviewPage() {
           <div style={{ display: "grid", gap: 0, marginTop: 8 }}>
             <div className="hop">
               <i />
-              <span className="body-strong">Fund from your balance</span>
+              <span className="body-strong">
+                Fund from {sourceAccount?.parentId === null ? "parent treasury" : sourceAccount?.name ?? "selected account"}
+              </span>
               <StatusPill status="Pending" />
               <span className="data">{view.totalLabel} including fee</span>
             </div>
             <div className="hop">
               <i className="todo" />
-              <span className="body-strong">Convert at locked rate</span>
+              <span className="body-strong">Convert at fixed rate</span>
               <span className="body-s muted">{view.rateLabel}</span>
-              <span className="data">Locks when you confirm</span>
+              <span className="data">Fixed for this demo</span>
             </div>
             <div className="hop">
               <i className="todo" />
@@ -96,7 +69,7 @@ export default function PayReviewPage() {
 
           <div className="tile-foot">
             <span className="body-s muted">
-              If the rate moves more than 1% before they receive it, we stop and ask you.
+              The hackathon demo uses the same USD–SGD rate for every payment.
             </span>
           </div>
         </section>
@@ -104,6 +77,8 @@ export default function PayReviewPage() {
         <aside className="tile s5">
           <div className="sx-quote">
             <dl>
+              <dt>Paying from</dt>
+              <dd>{sourceAccount?.parentId === null ? "Parent treasury" : sourceAccount?.name ?? "***"}</dd>
               <dt>You send</dt>
               <dd>{view.usdLabel}</dd>
               <dt>Fee</dt>
@@ -123,7 +98,7 @@ export default function PayReviewPage() {
               <span className="sx-label">They receive</span>
               <b>{view.localLabel}</b>
             </div>
-            <span className="sx-quote__lock">{lockLabel}</span>
+            <span className="sx-quote__lock">Fixed demo rate</span>
           </div>
 
           {error || quoteError ? (
@@ -133,7 +108,7 @@ export default function PayReviewPage() {
           ) : null}
 
           <div className="tile-foot" style={{ borderTop: 0, paddingTop: 0 }}>
-            {seconds > 0 && !quoteLoading ? (
+            {quoteReady && !quoteLoading && !quoteError ? (
               providerBacked ? (
                 <button
                   type="button"
@@ -154,10 +129,9 @@ export default function PayReviewPage() {
                 type="button"
                 className="sx-btn sx-btn--primary"
                 style={{ width: "100%" }}
-                onClick={refresh}
-                disabled={quoteLoading}
+                disabled
               >
-                Refresh rate
+                {quoteLoading ? "Calculating…" : "Rate unavailable"}
               </button>
             )}
           </div>
