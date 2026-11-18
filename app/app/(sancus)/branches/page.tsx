@@ -10,6 +10,7 @@ import {
   type CompanyWallet,
 } from "@/lib/sancus/companies"
 import { COUNTRIES, countryByCode } from "@/lib/sancus/countries"
+import { CompanyTreeDiagram } from "@/components/sancus-ui/company-tree-diagram"
 import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
 
 type Me = { circleConfigured: boolean; tree: CompanyNode[]; nodeCount: number; walletCount: number }
@@ -147,11 +148,22 @@ export default function BranchesPage() {
         ) : tree.length === 0 ? (
           <CreateGlobalAccount circleConfigured={me?.circleConfigured ?? false} onCreated={load} />
         ) : (
-          tree.map((root) => (
+          <>
+          <section className="tile s12" aria-labelledby="structure">
+            <div className="tile-head">
+              <h2 className="tile-title" id="structure">
+                Company structure
+              </h2>
+              <span className="body-s muted">Totals include sub-branches · tap a box to see its wallets</span>
+            </div>
+            <CompanyTreeDiagram tree={tree} />
+          </section>
+          {tree.map((root) => (
             <section key={root.id} className="tile s12" aria-label={root.name} style={{ gap: 12 }}>
               <BranchNode node={root} live={mode === "live"} onChanged={load} />
             </section>
-          ))
+          ))}
+          </>
         )}
       </div>
     </div>
@@ -167,11 +179,7 @@ function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured
     const f = new FormData(e.currentTarget)
     setBusy(true)
     setError(null)
-    const r = await postJson("/api/sancus/companies", {
-      name: f.get("name"),
-      country: f.get("country"),
-      walletName: f.get("walletName") || undefined,
-    })
+    const r = await postJson("/api/sancus/companies", { name: f.get("name"), country: f.get("country") })
     setBusy(false)
     if (!r.ok) return setError(String(r.data.error ?? "Could not create the account"))
     if (r.data.walletError) setError(`Account created, but the wallet wasn't: ${r.data.walletError}`)
@@ -185,7 +193,7 @@ function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured
       </h2>
       <p className="body-s muted" style={{ margin: 0, maxWidth: "62ch" }}>
         This is the top of your company. You&apos;ll be its Owner, and you can add a branch for each country, then
-        sub-branches under those. Each one gets its own Circle wallet on Arc.
+        sub-branches under those. Each one gets its own wallet automatically.
       </p>
       {!circleConfigured ? (
         <p className="body-s" style={{ margin: 0 }}>
@@ -194,17 +202,13 @@ function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured
         </p>
       ) : null}
       <form onSubmit={submit} className="grid" style={{ gap: 12 }}>
-        <label className="sx-field" style={{ gridColumn: "span 5" }}>
+        <label className="sx-field" style={{ gridColumn: "span 7" }}>
           <span className="sx-label">Company name</span>
           <input name="name" className="sx-field__input" placeholder="Lion City Trading" required maxLength={120} />
         </label>
-        <label className="sx-field" style={{ gridColumn: "span 3" }}>
+        <label className="sx-field" style={{ gridColumn: "span 5" }}>
           <span className="sx-label">Headquarters</span>
           <CountrySelect name="country" defaultValue="SG" />
-        </label>
-        <label className="sx-field" style={{ gridColumn: "span 4" }}>
-          <span className="sx-label">First wallet name</span>
-          <input name="walletName" className="sx-field__input" placeholder="Global treasury" maxLength={80} />
         </label>
         <div style={{ gridColumn: "span 12", display: "flex", gap: 12, alignItems: "center" }}>
           <button type="submit" className="sx-btn sx-btn--primary" disabled={busy}>
@@ -234,7 +238,7 @@ function CountrySelect({ name, defaultValue }: { name: string; defaultValue: str
 }
 
 function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolean; onChanged: () => void }) {
-  const [adding, setAdding] = useState<"branch" | "wallet" | null>(null)
+  const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -245,27 +249,12 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
     const f = new FormData(e.currentTarget)
     setBusy(true)
     setError(null)
-    const r = await postJson(`/api/sancus/companies/${node.id}/branches`, {
-      name: f.get("name"),
-      country: f.get("country"),
-      walletName: f.get("walletName") || undefined,
-    })
+    // The branch's wallet is created automatically with it.
+    const r = await postJson(`/api/sancus/companies/${node.id}/branches`, { name: f.get("name"), country: f.get("country") })
     setBusy(false)
     if (!r.ok) return setError(String(r.data.error ?? "Could not add the branch"))
     if (r.data.walletError) setError(`Branch added, but its wallet wasn't: ${r.data.walletError}`)
-    else setAdding(null)
-    onChanged()
-  }
-
-  async function addWallet(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const f = new FormData(e.currentTarget)
-    setBusy(true)
-    setError(null)
-    const r = await postJson(`/api/sancus/companies/${node.id}/wallets`, { name: f.get("name") })
-    setBusy(false)
-    if (!r.ok) return setError(String(r.data.error ?? "Could not add the wallet"))
-    setAdding(null)
+    else setAdding(false)
     onChanged()
   }
 
@@ -280,7 +269,7 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
   }
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div id={`branch-${node.id}`} style={{ display: "grid", gap: 10, scrollMarginTop: 80 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: isRoot ? 28 : 22 }} aria-hidden>
           {flag(node.country)}
@@ -339,61 +328,34 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
         <span className="body-s muted">No wallets yet.</span>
       )}
 
-      {live && (node.can.createWallet || node.can.createBranch) ? (
+      {live && node.can.createBranch ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {node.can.createWallet ? (
-            <button
-              type="button"
-              className="sx-btn sx-btn--secondary sx-btn--sm"
-              onClick={() => setAdding(adding === "wallet" ? null : "wallet")}
-              aria-expanded={adding === "wallet"}
-            >
-              + Wallet
-            </button>
-          ) : null}
-          {node.can.createBranch ? (
-            <button
-              type="button"
-              className="sx-btn sx-btn--secondary sx-btn--sm"
-              onClick={() => setAdding(adding === "branch" ? null : "branch")}
-              aria-expanded={adding === "branch"}
-            >
-              + {isRoot ? "Branch" : "Sub-branch"}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="sx-btn sx-btn--secondary sx-btn--sm"
+            onClick={() => setAdding(!adding)}
+            aria-expanded={adding}
+          >
+            + {isRoot ? "Branch" : "Sub-branch"}
+          </button>
         </div>
       ) : null}
 
-      {adding === "wallet" ? (
-        <form onSubmit={addWallet} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
-          <label className="sx-field" style={{ flex: "1 1 220px" }}>
-            <span className="sx-label">New wallet in {node.name}</span>
-            <input name="name" className="sx-field__input" placeholder="Payroll" required maxLength={80} autoFocus />
-          </label>
-          <button type="submit" className="sx-btn sx-btn--primary" disabled={busy}>
-            {busy ? "Creating…" : "Create wallet"}
-          </button>
-        </form>
-      ) : null}
-
-      {adding === "branch" ? (
+      {adding ? (
         <form onSubmit={addBranch} className="grid" style={{ gap: 8 }}>
-          <label className="sx-field" style={{ gridColumn: "span 5" }}>
+          <label className="sx-field" style={{ gridColumn: "span 7" }}>
             <span className="sx-label">{isRoot ? "Branch" : "Sub-branch"} name</span>
             <input name="name" className="sx-field__input" placeholder={isRoot ? "Indonesia" : "Jakarta warehouse"} required maxLength={120} autoFocus />
           </label>
-          <label className="sx-field" style={{ gridColumn: "span 4" }}>
+          <label className="sx-field" style={{ gridColumn: "span 5" }}>
             <span className="sx-label">Country</span>
             <CountrySelect name="country" defaultValue={node.country} />
           </label>
-          <label className="sx-field" style={{ gridColumn: "span 3" }}>
-            <span className="sx-label">First wallet</span>
-            <input name="walletName" className="sx-field__input" placeholder="Treasury" maxLength={80} />
-          </label>
-          <div style={{ gridColumn: "span 12" }}>
+          <div style={{ gridColumn: "span 12", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <button type="submit" className="sx-btn sx-btn--primary" disabled={busy}>
               {busy ? "Creating…" : `Add ${isRoot ? "branch" : "sub-branch"}`}
             </button>
+            <span className="body-s muted">Its wallet is created automatically.</span>
           </div>
         </form>
       ) : null}
