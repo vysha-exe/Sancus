@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useState } from "react"
-import { AgentConsole, useAgentStatus } from "@/components/sancus-ui/agent-console"
+import { AgentActivity, AgentConsole, useAgentStatus } from "@/components/sancus-ui/agent-console"
 import { X402Earnings } from "@/components/sancus-ui/x402-earnings"
 
 const PAUSE_KEY = "sancus-agent-paused"
@@ -42,7 +42,7 @@ export default function AgentsPage() {
         <div>
           <h1 className="sx-h heading-2">Agents</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            Ask about your money or let an agent handle small payments inside a budget.
+            Ask about your money, let an agent pay for small things inside a budget, and charge other agents for your data. Every agent payment shows up in Activity.
           </p>
         </div>
         <Link href="/activity" className="sx-btn sx-btn--secondary sx-btn--sm">
@@ -50,9 +50,7 @@ export default function AgentsPage() {
         </Link>
       </header>
 
-      <div className="grid">
-        <AgentConsole paused={paused} />
-      </div>
+      <AgentConsole paused={paused} />
 
       <div className="grid">
         <section className="tile s6" aria-labelledby="pa">
@@ -108,6 +106,8 @@ export default function AgentsPage() {
         </section>
 
         <X402Earnings />
+
+        <AgentActivity />
       </div>
     </div>
   )
