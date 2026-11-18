@@ -14,21 +14,32 @@ import {
   workspace,
 } from "@/lib/sancus/demo-data"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
+import { accountDisplayName, useAccount } from "@/lib/sancus/use-account"
 
 export default function HomePage() {
   const ws = useWorkspace()
-  const personal = ws.ready ? ws.isPersonal : !ws.hasBusiness
+  const { account } = useAccount()
+  const isAdmin = account?.type === "ADMIN"
+  // A business admin's dashboard is always the company (never personal tiles).
+  const personal = isAdmin ? false : ws.ready ? ws.isPersonal : !ws.hasBusiness
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
 
   return (
     <div className="page">
       <header className="page-head">
         <div>
-          <h1 className="sx-h heading-2">Good morning, {workspace.actor.firstName}</h1>
+          <h1 className="sx-h heading-2">
+            {isAdmin
+              ? `Welcome, ${accountDisplayName(account, workspace.name)} Admin`
+              : `Good morning, ${personal && account?.type === "INDIVIDUAL" && account.firstName ? account.firstName : !personal && ws.activeNode ? ws.activeNode.name : accountDisplayName(account, workspace.name)}`}
+          </h1>
           {!personal && ws.activeNode ? (
             <span className="scope">{ws.activeNode.name}{ws.activeNode.children.length ? " and below" : ""}</span>
           ) : null}
         </div>
-        <span className="body-s muted">Monday, November 16</span>
+        <span className="body-s muted" suppressHydrationWarning>
+          {today}
+        </span>
       </header>
 
       <div className="grid">

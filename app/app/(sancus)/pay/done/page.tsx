@@ -74,8 +74,8 @@ export default function PayDonePage() {
       <div className="grid">
         <section className="tile s7">
           <h2 className="sx-h heading-2">{settled ? `Done. ${pix.recipientName} has ${amount}.` : failed ? `Payment to ${pix.recipientName} failed.` : `Pix payment to ${pix.recipientName} is pending.`}</h2>
-          <div className="hop"><i /><span className="body-strong">Submitted to PayZu</span><StatusPill status={failed ? "Failed" : settled ? "Settled" : "Pending"} /><span className="data">{amount}</span></div>
-          <p className="body-s muted">Pix payout via PayZu.</p>
+          <div className="hop"><i /><span className="body-strong">{pix.providerTransactionId.startsWith("sim_") ? "Pix payout (simulated)" : "Submitted to PayZu"}</span><StatusPill status={failed ? "Failed" : settled ? "Settled" : "Pending"} /><span className="data">{amount}</span></div>
+          <p className="body-s muted">{pix.providerTransactionId.startsWith("sim_") ? "No PayZu sandbox key is set, so the Pix leg was simulated." : "Pix payout via PayZu sandbox."}</p>
           {pix.failureReason ? <p className="body-s" style={{ color: "var(--danger, #c0392b)" }}>{pix.failureReason}</p> : null}
         </section>
         <aside className="tile s5"><div className="kv"><span>Provider reference</span><span>{pix.providerTransactionId.slice(0, 12)}…</span></div><div className="kv"><span>Status</span><span>{pix.status.toLowerCase()}</span></div><div className="tile-foot"><Link href="/activity" className="sx-btn sx-btn--primary">See it in Activity</Link></div></aside>
@@ -214,7 +214,7 @@ export default function PayDonePage() {
                 Download ledger (CSV)
               </a>
               <Link href="/pay" className="sx-btn sx-btn--primary">
-                Pay someone else
+                Make another payment
               </Link>
               <Link href="/activity" className="sx-btn sx-btn--quiet">
                 See it in Activity
@@ -246,7 +246,7 @@ export default function PayDonePage() {
               />
             </svg>
             <h2 className="sx-h heading-2" style={{ margin: 0 }}>
-              Done. {recipient.name.split(" ")[0]} has her {view.live ? view.localLabel : quote.brlLabel}.
+              Done. {recipient.name.split(" ")[0]} received {view.localLabel}.
             </h2>
             <p className="body muted" style={{ margin: 0, maxWidth: "62ch" }}>
               {quote.totalLabel} left your balance · {state.rail} · ref pay_7f2a…c91
@@ -297,7 +297,7 @@ export default function PayDonePage() {
               Send receipt
             </button>
             <Link href="/pay" className="sx-btn sx-btn--primary">
-              Pay someone else
+              Make another payment
             </Link>
             <Link href="/home" className="sx-btn sx-btn--quiet">
               Back to Home

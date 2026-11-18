@@ -500,8 +500,9 @@ const ARROW = (
 export function SignUpDoneStep() {
   const { data, update } = useSignUp()
   const [busy, setBusy] = useState(false)
-  const name = data.firstName.trim() || "there"
   const personal = data.accountType === "personal"
+  // Business accounts are addressed by the business, never a person.
+  const name = personal ? data.firstName.trim() || "there" : data.company.trim() || "your business"
   const meta = [
     `Home currency ${data.currency}`,
     !personal && data.invitesSent > 0
@@ -630,7 +631,7 @@ export function SignUpDoneStep() {
                 <span>
                   {personal ? (
                     <>
-                      Pay someone<small>Anyone, in their currency</small>
+                      Make a payment<small>Anyone, in their currency</small>
                     </>
                   ) : (
                     <>

@@ -115,6 +115,68 @@ function mapXenditPayout(p: XenditPayoutDto): Payment {
   }
 }
 
+// US ACH payouts (/api/sancus/payments).
+type AchRow = {
+  id: string
+  recipient: { name: string; bankName: string; accountMasked: string }
+  usdAmountMinor: string
+  feeUsdMinor: string
+  usdcAmountMinor: string
+  status: string
+  speed: string
+  settlement: { fundedOnchain: boolean }
+  createdAt: string
+}
+function mapAch(p: AchRow): Payment {
+  const usd = displayMinor(BigInt(p.usdAmountMinor), 2, "", 2)
+  const status: Status =
+    p.status === "PAYMENT_PROCESSED" ? "Settled" : ["FAILED", "RETURNED", "REJECTED"].includes(p.status) ? "Failed" : "Pending"
+  return {
+    id: `ach-${p.id}`,
+    who: p.recipient.name,
+    amount: `−$${displayMinor(BigInt(p.usdcAmountMinor), USDC_DECIMALS, "", 2)}`,
+    meta: `US$ ${usd} to ${p.recipient.bankName} ${p.recipient.accountMasked} · ${new Date(p.createdAt).toLocaleString()}${p.status === "RETURNED" ? " · returned" : ""}`,
+    rail: p.speed === "SAME_DAY" ? "Same-day ACH" : "ACH",
+    status,
+    simulated: !p.settlement.fundedOnchain,
+    href: "/pay/us-bank",
+    ledger: {
+      when: new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
+      by: "You",
+      theyGot: `US$ ${usd}`,
+      fee: `US$ ${displayMinor(BigInt(p.feeUsdMinor), 2, "", 2)}`,
+      rail: "ACH",
+    },
+  }
+}
+
+// Local-rail collections that mint mock stablecoins (/api/sancus/rails/collections).
+type RailCollectionRow = { id: string; rail: string; currency: string; amountMinor: string; status: string; destination: { label: string | null }; createdAt: string }
+function mapRailCollection(c: RailCollectionRow): Payment {
+  const amount = `${(Number(c.amountMinor) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${c.currency}`
+  const rail = c.rail === "PROMPTPAY" ? "PromptPay" : c.rail === "PIX" ? "Pix" : c.rail
+  return {
+    id: `rail-collection-${c.id}`,
+    who: `${rail} customer`,
+    amount: `+${amount}`,
+    amountIn: true,
+    meta: `${new Date(c.createdAt).toLocaleString()} · into ${c.destination.label ?? "your wallet"}`,
+    rail,
+    status: c.status === "MINTED" ? "Settled" : ["FAILED", "EXPIRED"].includes(c.status) ? "Failed" : "Pending",
+    simulated: true,
+    href: "/receive",
+    ledger: {
+      when: new Date(c.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
+      by: "Customer",
+      theyGot: amount,
+      fee: "—",
+      rail,
+    },
+  }
+}
+
+const POLL_MS = 5000
+
 export function useLiveActivity(): {
   source: "live" | "demo"
   payments: Payment[]
@@ -122,9 +184,18 @@ export function useLiveActivity(): {
 } {
   const [live, setLive] = useState<Payment[] | null>(null)
   const [loading, setLoading] = useState(true)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    const json = async <T,>(url: string): Promise<T | null> => {
+      try {
+        const r = await fetch(url, { cache: "no-store" })
+        return r.ok ? ((await r.json()) as T) : null
+      } catch {
+        return null
+      }
+    }
     ;(async () => {
       try {
         let res = await fetch("/api/sancus/payouts", { cache: "no-store" })
@@ -135,22 +206,25 @@ export function useLiveActivity(): {
           res = await fetch("/api/sancus/payouts", { cache: "no-store" })
         }
         const payoutBody = res.ok ? ((await res.json()) as { payouts?: PayoutDto[] }) : {}
-        const [collectionsRes, pixRes, xenditRes] = await Promise.all([
-          fetch("/api/sancus/collections", { cache: "no-store" }),
-          fetch("/api/sancus/pix/payments", { cache: "no-store" }),
-          fetch("/api/sancus/xendit/payouts", { cache: "no-store" }),
+        const [collectionsBody, pixBody, xenditBody, achBody, railBody] = await Promise.all([
+          json<{ collections?: CollectionDto[] }>("/api/sancus/collections"),
+          json<{ payments?: PixPaymentDto[] }>("/api/sancus/pix/payments"),
+          json<{ payouts?: XenditPayoutDto[] }>("/api/sancus/xendit/payouts"),
+          json<{ payments?: AchRow[] }>("/api/sancus/payments"),
+          json<{ collections?: RailCollectionRow[] }>("/api/sancus/rails/collections"),
         ])
-        const collectionsBody = collectionsRes.ok ? ((await collectionsRes.json()) as { collections?: CollectionDto[] }) : {}
-        const pixBody = pixRes.ok ? ((await pixRes.json()) as { payments?: PixPaymentDto[] }) : {}
-        const xenditBody = xenditRes.ok ? ((await xenditRes.json()) as { payouts?: XenditPayoutDto[] }) : {}
-        const rows = [
-          ...(collectionsBody.collections ?? []).map(mapCollection),
-          ...(pixBody.payments ?? []).map(mapPixPayment),
-          ...(xenditBody.payouts ?? []).map(mapXenditPayout),
-          ...(payoutBody.payouts ?? []).map(mapPayout),
+        // Newest first across every rail.
+        const dated: { at: string; row: Payment }[] = [
+          ...(collectionsBody?.collections ?? []).map((c) => ({ at: c.createdAt, row: mapCollection(c) })),
+          ...(pixBody?.payments ?? []).map((p) => ({ at: p.createdAt, row: mapPixPayment(p) })),
+          ...(xenditBody?.payouts ?? []).map((p) => ({ at: p.createdAt, row: mapXenditPayout(p) })),
+          ...(payoutBody.payouts ?? []).map((p) => ({ at: p.createdAt, row: mapPayout(p) })),
+          ...(achBody?.payments ?? []).map((p) => ({ at: p.createdAt, row: mapAch(p) })),
+          ...(railBody?.collections ?? []).map((c) => ({ at: c.createdAt, row: mapRailCollection(c) })),
         ]
+        dated.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
         if (!cancelled) {
-          setLive(rows)
+          setLive(dated.map((d) => d.row))
           setLoading(false)
         }
       } catch {
@@ -160,7 +234,19 @@ export function useLiveActivity(): {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [tick])
+
+  // Keep it current: re-check while anything is in progress, and whenever the tab regains focus.
+  const pending = live?.some((p) => p.status === "Pending") ?? false
+  useEffect(() => {
+    const onFocus = () => setTick((t) => t + 1)
+    window.addEventListener("focus", onFocus)
+    const timer = pending ? window.setInterval(onFocus, POLL_MS) : undefined
+    return () => {
+      window.removeEventListener("focus", onFocus)
+      if (timer) window.clearInterval(timer)
+    }
+  }, [pending])
 
   if (!live || live.length === 0) {
     return { source: "demo", payments: demoLedger, loading }

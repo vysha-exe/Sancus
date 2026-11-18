@@ -11,7 +11,7 @@ export async function getRecipient(db: SupabaseClient, userId: string, id: strin
 }
 
 /** Treasury (source) and settlement wallet for TESTNET_SETTLEMENT. */
-export async function settlementWallets(db: SupabaseClient, userId: string) {
+export async function settlementWallets(db: SupabaseClient, userId: string, companyId: string | null = null) {
   const { data } = await db
     .from("wallets")
     .select("address, type")
@@ -20,7 +20,12 @@ export async function settlementWallets(db: SupabaseClient, userId: string) {
     .in("type", ["treasury", "payout"])
     .is("company_id", null)
     .order("created_at", { ascending: true })
-  const treasury = data?.find((w) => w.type === "treasury")?.address ?? null
+  // Paying wallet: the company's own treasury when acting for a company, else the personal one.
+  let treasury = data?.find((w) => w.type === "treasury")?.address ?? null
+  if (companyId) {
+    const { data: companyWallets } = await db.from("wallets").select("address").eq("company_id", companyId).order("created_at").limit(1)
+    treasury = (companyWallets?.[0]?.address as string | undefined) ?? treasury
+  }
   const envAddr = process.env.ACH_SETTLEMENT_ADDRESS?.trim()
   const settlement = envAddr && evmAddressSchema.safeParse(envAddr).success ? envAddr : (data?.find((w) => w.type === "payout")?.address ?? null)
   return { treasury: treasury as string | null, settlement: settlement as string | null }

@@ -6,6 +6,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { requirePermission } from "@/lib/sancus/accounts-server"
 import { maskPixKey, toPixPaymentDto } from "@/lib/sancus/local-rails"
 import { mapPayZuStatus, payPix } from "@/lib/sancus/rails/payzu"
+import { workspaceCompany } from "@/lib/sancus/workspace-server"
 
 const schema = z.object({
   purpose: z.enum(["EMPLOYEE_SPEND", "SUPPLIER_PAYMENT"]),
@@ -54,8 +55,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     const transaction = await payPix({ ...parsed.data, reference })
     const providerStatus = transaction.status || "PENDING"
     const status = mapPayZuStatus(providerStatus)
+    const companyId = await workspaceCompany(req, supabase, user.id) // the company paying, if any
     const { data, error } = await supabase.from("sancus_pix_payments").insert({
-      user_id: user.id, idempotency_key: key, purpose: parsed.data.purpose,
+      user_id: user.id, company_id: companyId, idempotency_key: key, purpose: parsed.data.purpose,
       spending_method_id: spendingMethod?.id || null,
       employee_id: spendingMethod?.employee_id || parsed.data.employeeId || null,
       employee_name: spendingMethod?.employee_name || parsed.data.employeeName || null,

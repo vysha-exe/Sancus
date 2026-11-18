@@ -43,7 +43,7 @@ const initialMethods: Method[] = [
     last4: "4021",
     monthly: "R$ 2.700 / MONTH",
     heldNote: "$398.86 held",
-    frozenNote: "Frozen by Maya · today",
+    frozenNote: "Frozen by an admin · today",
     frozen: false,
   },
   {
@@ -59,7 +59,7 @@ const initialMethods: Method[] = [
     last4: "7310",
     monthly: "R$ 10.800 / MONTH",
     heldNote: "No hold",
-    frozenNote: "Frozen by Maya · Nov 12",
+    frozenNote: "Frozen by an admin · Nov 12",
     frozen: true,
   },
 ]

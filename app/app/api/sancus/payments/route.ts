@@ -16,6 +16,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { requirePermission } from "@/lib/sancus/accounts-server"
 import { quoteInputSchema, toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
 import { prepareAch, settlementWallets } from "@/lib/sancus/ach-api"
+import { workspaceCompany } from "@/lib/sancus/workspace-server"
 import { ACH_PROVIDER, executeAch, refreshAchPayments, syncAchLedger } from "@/lib/sancus/ach-server"
 
 const createSchema = quoteInputSchema.extend({ reference: z.string().max(80).optional() })
@@ -52,8 +53,10 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
   const needsApproval = evaluation.decision === "NEEDS_APPROVAL"
 
+  // Acting for a company (workspace switcher): the payment is the company's, paid from its treasury.
+  const companyId = await workspaceCompany(req, supabase, user.id)
   const testnet = quote.settlementMode === "TESTNET_SETTLEMENT"
-  const wallets = testnet ? await settlementWallets(supabase, user.id) : { treasury: null, settlement: null }
+  const wallets = testnet ? await settlementWallets(supabase, user.id, companyId) : { treasury: null, settlement: null }
   if (testnet && (!wallets.treasury || !wallets.settlement)) {
     return NextResponse.json({ error: "Testnet settlement needs a Treasury and a settlement wallet (set up your Treasury first)" }, { status: 409 })
   }
@@ -62,6 +65,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     .from("sancus_ach_payments")
     .insert({
       user_id: user.id,
+      company_id: companyId,
       recipient_id: recipient.id,
       idempotency_key: idempotencyKey,
       recipient_name: recipient.name,
