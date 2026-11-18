@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · Rails and fees</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/site.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:var(--accent)}a:hover{color:var(--brand-deep)}
+</style>
+</helmet>
+<div class="sx site" data-theme="day">
+<div class="strip"><div class="wrap"><span class="sx-pill sx-pill--simulated">Sandbox</span><span>A hackathon prototype. Balances are testnet USDC; every other rail is simulated.</span><a href="Security.dc.html#real">What's real</a></div></div>
+<nav class="snav" aria-label="Main"><div class="wrap">
+    <a href="Site.dc.html" class="sx-lockup sx-wordmark" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</a>
+    <div class="snav-links"><a href="Site.dc.html#how">How it works</a><a href="Pricing.dc.html" aria-current="page">Rails and fees</a><a href="Security.dc.html">Security</a></div>
+    <div class="snav-end"><a class="plain" href="SignIn.dc.html">Sign in</a><a class="sx-btn sx-btn--primary" href="SignUp.dc.html">Open your account</a></div>
+  </div></nav>
+<header class="phead phead--wide"><div class="wrap g12">
+  <div class="phead-copy"><h1 class="sx-h display-l">One balance. Every <em>rail</em>.</h1><p class="body-l">What each payment costs and when it arrives. Review shows the rate and fee again before you confirm.</p></div>
+  <div class="phead-art"><div class="calc calc--stack">
+        <div class="calc-in">
+          <label class="sx-field"><span class="sx-label">You send</span><span class="money-in"><span aria-hidden="true">$</span><input class="sx-field__input" inputmode="decimal" value="{{amt}}" onChange="{{onAmt}}" aria-label="Amount in US dollars"></span></label>
+          <label class="sx-field"><span class="sx-label">Pay to</span>
+            <select class="sx-field__input" value="{{dest}}" onChange="{{onDest}}">
+              <option value="pix">Brazil · Pix · BRL</option>
+              <option value="spei">Mexico · SPEI · MXN</option>
+              <option value="sepa">Euro area · SEPA · EUR</option>
+              <option value="qris">Indonesia · QRIS · IDR</option>
+              <option value="promptpay">Thailand · PromptPay · THB</option>
+              <option value="ach">United States · ACH · USD</option>
+              <option value="wire">Anywhere · Wire · USD</option>
+              <option value="usdc">A USDC account · USDC</option>
+            </select>
+          </label>
+        </div>
+        <div class="calc-out" aria-live="polite">
+          <div class="calc-get"><span class="calc-get-head"><span class="sx-label muted">They get</span><span class="sx-pill sx-pill--simulated">Sandbox rates</span></span><span class="amount-xl">{{q.get}}</span></div>
+          <div class="sx-quote"><dl>
+            <dt>Rate</dt><dd>{{q.rate}}</dd>
+            <dt>Fee</dt><dd>{{q.fee}}</dd>
+            <dt>You pay</dt><dd>{{q.total}}</dd>
+            <dt>Rail</dt><dd><span class="sx-rail">{{q.rail}}</span> <sc-if value="{{q.sim}}" hint-placeholder-val="{{ true }}"><span class="sx-pill sx-pill--simulated">Simulated</span></sc-if></dd>
+            <dt>Arrives</dt><dd>{{q.speed}}</dd>
+          </dl></div>
+        </div>
+      </div></div>
+</div></header>
+<main>
+  
+
+  <section class="sec" aria-labelledby="rails-h">
+    <div class="wrap">
+      <div class="sec-head"><div><h2 id="rails-h" class="sx-h heading-2">Where you can pay</h2></div><p class="body muted">The fee is per payment. Rates are set at review and locked for 60 seconds.</p></div>
+      <div class="tbl-box"><table class="tbl">
+        <thead><tr><th scope="col">Rail</th><th scope="col">Use it for</th><th scope="col">Arrives</th><th scope="col" class="r">Fee</th><th scope="col" class="r">Status</th></tr></thead>
+        <tbody><tr><td><span class="sx-rail">USDC</span></td><td>Businesses with a USDC account</td><td>Seconds</td><td class="r mono">$0.00</td><td class="r"><span class="sx-pill sx-pill--settled">Live on testnet</span></td></tr><tr><td><span class="sx-rail">ACH</span></td><td>US bank accounts</td><td>1–2 days</td><td class="r mono">$0.00</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr><tr><td><span class="sx-rail">Wire</span></td><td>Bank accounts anywhere</td><td>Same or next day</td><td class="r mono">$3.50</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr><tr><td><span class="sx-rail">Pix</span></td><td>Brazil, bank or QR</td><td>Seconds</td><td class="r mono">$0.80</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr><tr><td><span class="sx-rail">SEPA</span></td><td>Euro bank accounts</td><td>Same day</td><td class="r mono">$0.80</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr><tr><td><span class="sx-rail">SPEI</span></td><td>Mexico</td><td>Minutes</td><td class="r mono">$0.80</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr><tr><td><span class="sx-rail">QRIS</span></td><td>Indonesia QR</td><td>Seconds</td><td class="r mono">$0.50</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr><tr><td><span class="sx-rail">PromptPay</span></td><td>Thailand QR</td><td>Seconds</td><td class="r mono">$0.50</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr><tr><td><span class="sx-rail">Card</span></td><td>Team cards</td><td>Instant hold</td><td class="r mono">$0.00</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr></tbody>
+        <tfoot><tr><td colspan="5">Fees and rates are sandbox values. Adding money and holding a balance are free.</td></tr></tfoot>
+      </table></div>
+    </div>
+  </section>
+</main>
+<footer class="foot">
+  <div class="foot-panel">
+    <svg class="foot-lines" viewBox="0 0 1400 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><circle cx="1080" cy="780" r="560"></circle><ellipse cx="1080" cy="634" rx="541" ry="108"></ellipse><ellipse cx="1080" cy="500" rx="485" ry="97"></ellipse><ellipse cx="1080" cy="382" rx="396" ry="79"></ellipse><ellipse cx="1080" cy="293" rx="280" ry="56"></ellipse><ellipse cx="1080" cy="237" rx="146" ry="29"></ellipse><ellipse cx="1080" cy="780" rx="146" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="280" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="398" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="487" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="543" ry="560"></ellipse><line x1="1080" y1="220" x2="1080" y2="1340"></line></g><g fill="none" stroke="currentColor" stroke-width="2"><path d="M660 620 Q 780 220 1040 310"></path><path d="M1040 310 Q 1280 140 1410 450"></path></g></svg>
+    <div class="foot-in">
+      <div class="foot-cta">
+        <h2 class="sx-h heading-1">Money that keeps its <em>word</em>.</h2>
+        <div class="hero-ctas"><a class="sx-btn sx-btn--primary" href="SignUp.dc.html">Open your account</a><a class="sx-btn sx-btn--secondary" href="Main.dc.html">Try the demo</a></div>
+      </div>
+      <div class="foot-meta"><span>One account. Every rail. Every border.</span><hr></div>
+      <ul class="foot-links" aria-label="Footer">
+        <li><a href="Site.dc.html#how">How it works</a></li>
+        <li><a href="Pricing.dc.html">Rails and fees</a></li>
+        <li><a href="Security.dc.html">Security</a></li>
+        <li><a href="PayWho.dc.html">Pay</a></li>
+        <li><a href="Card.dc.html">Cards and QR</a></li>
+        <li><a href="Agents.dc.html">Agents</a></li>
+        <li><a href="https://github.com/vysha-exe/Sancus">Source code</a></li>
+        <li><a href="#terms">Terms</a></li>
+        <li><a href="#privacy">Privacy</a></li>
+      </ul>
+    </div>
+    <div class="foot-word" aria-hidden="true">SANCUS</div>
+  </div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2200}}'>
+class Component extends DCLogic {
+  quote() {
+    const D = {
+      pix: ['Pix', 'BRL', 5.4123, 0.8, 'Seconds', true], spei: ['SPEI', 'MXN', 17.24, 0.8, 'Minutes', true],
+      sepa: ['SEPA', 'EUR', 0.92, 0.8, 'Same day', true], qris: ['QRIS', 'IDR', 16000, 0.5, 'Seconds', true],
+      promptpay: ['PromptPay', 'THB', 35, 0.5, 'Seconds', true], ach: ['ACH', 'USD', 1, 0, '1–2 days', true],
+      wire: ['Wire', 'USD', 1, 3.5, 'Same or next day', true], usdc: ['USDC', 'USDC', 1, 0, 'Seconds', false]
+    };
+    const st = this.state || {};
+    const [rail, cur, rate, fee, speed, sim] = D[st.dest] || D.pix;
+    const amt = Math.max(0, parseFloat(String(st.amt != null ? st.amt : '100').replace(/,/g, '')) || 0);
+    const n = (x, loc, dp) => x.toLocaleString(loc, { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    const fmt = (c, x) => c === 'BRL' ? 'R$ ' + n(x, 'pt-BR', 2) : c === 'MXN' ? 'MX$ ' + n(x, 'en-US', 2) : c === 'EUR' ? '€ ' + n(x, 'de-DE', 2)
+      : c === 'IDR' ? 'Rp ' + n(Math.round(x), 'id-ID', 0) : c === 'THB' ? '฿' + n(x, 'en-US', 2) : c === 'USDC' ? n(x, 'en-US', 2) + ' USDC' : '$' + n(x, 'en-US', 2);
+    return {
+      get: fmt(cur, amt * rate), rate: cur === 'USD' || cur === 'USDC' ? 'No conversion' : '1 USD = ' + rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' ' + cur,
+      fee: '$' + n(fee, 'en-US', 2), total: '$' + n(amt + fee, 'en-US', 2), rail, speed, sim
+    };
+  }
+  renderVals() {
+    const s = this.state || {};
+    return { amt: s.amt != null ? s.amt : '100', dest: s.dest || 'pix', q: this.quote(), onAmt: (e) => this.setState({ amt: e.target.value }), onDest: (e) => this.setState({ dest: e.target.value }) };
+  }
+}
+</script>
+</body>
+</html>

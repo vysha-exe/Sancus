@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · How your money is kept</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/site.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:var(--accent)}a:hover{color:var(--brand-deep)}
+</style>
+</helmet>
+<div class="sx site" data-theme="day">
+<div class="strip"><div class="wrap"><span class="sx-pill sx-pill--simulated">Sandbox</span><span>A hackathon prototype. Balances are testnet USDC; every other rail is simulated.</span><a href="Security.dc.html#real">What's real</a></div></div>
+<nav class="snav" aria-label="Main"><div class="wrap">
+    <a href="Site.dc.html" class="sx-lockup sx-wordmark" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg>SANCUS</a>
+    <div class="snav-links"><a href="Site.dc.html#how">How it works</a><a href="Pricing.dc.html">Rails and fees</a><a href="Security.dc.html" aria-current="page">Security</a></div>
+    <div class="snav-end"><a class="plain" href="SignIn.dc.html">Sign in</a><a class="sx-btn sx-btn--primary" href="SignUp.dc.html">Open your account</a></div>
+  </div></nav>
+<header class="phead phead--wide"><div class="wrap g12">
+  <div class="phead-copy"><h1 class="sx-h display-l">How your money is <em>kept</em>.</h1><p class="body-l">Where your balance lives, what checks every payment, and what's real in this prototype.</p></div>
+  <div class="phead-art"><article class="receipt" aria-label="Example receipt">
+    <div class="receipt-top">
+      <div class="receipt-who"><span class="av">JC</span><span><span class="body-strong">Juliana Costa</span><span class="body-s muted">Today, 9:41 · <span class="sx-rail">Pix</span></span></span></div>
+      <span class="receipt-amt">R$ 541,23</span>
+    </div>
+    <ol class="hops"><li><span class="hop-dot" aria-hidden="true"></span><span class="hop-txt"><b>Rules checked</b><span class="data">Treasury contract · within limits</span></span><span class="sx-pill sx-pill--settled">Settled</span></li><li><span class="hop-dot" aria-hidden="true"></span><span class="hop-txt"><b>Rate locked</b><span class="data">1 USD = 5.4123 BRL · 60 s</span></span><span class="sx-pill sx-pill--settled">Settled</span></li><li><span class="hop-dot" aria-hidden="true"></span><span class="hop-txt"><b>Funded from balance</b><span class="data">$100.80 · USDC on Arc</span></span><span class="sx-pill sx-pill--settled">Settled</span></li><li><span class="hop-dot" aria-hidden="true"></span><span class="hop-txt"><b>Paid out by Pix</b><span class="data">Pix key ju•••@gmail.com</span></span><span class="sx-pill sx-pill--simulated">Simulated</span></li><li><span class="hop-dot" aria-hidden="true"></span><span class="hop-txt"><b>Received by Juliana</b><span class="data">R$ 541,23</span></span><span class="sx-pill sx-pill--settled">Settled</span></li></ol>
+    <div class="receipt-foot"><span class="sx-label muted">Receipt</span><span class="data muted">Every hop is in the ledger</span></div>
+  </article></div>
+</div></header>
+<main>
+  <section class="sec" aria-label="How Sancus keeps your money">
+    <div class="wrap layers">
+      <div class="layer"><span class="n">01</span><h2 class="sx-h">Held as USDC, one for one</h2><div><p class="body">Every dollar in your balance is a USDC dollar, issued by Circle and held in a treasury contract on Arc testnet. Circle Gateway keeps it one balance across chains, and Gas Station pays network fees, so you never hold a gas token.</p><div class="chips"><span class="sx-rail">USDC</span><span class="sx-rail">Arc testnet</span><span class="sx-rail">Circle Gateway</span></div></div></div>
+      <div class="layer"><span class="n">02</span><h2 class="sx-h">Rules live in the contract</h2><p class="body">Card and QR limits, holds and approval rules are enforced by the treasury contract, not only by the app. A payment that breaks a rule can't settle.</p></div>
+      <div class="layer"><span class="n">03</span><h2 class="sx-h">A second person signs</h2><p class="body">Payments over your limit, or to someone new, wait for an approver, who signs with a passkey. Nobody approves their own request, and requests expire after 7 days.</p></div>
+      <div class="layer"><span class="n">04</span><h2 class="sx-h">No surprise rates</h2><p class="body">The rate is locked for 60 seconds at review. When the lock runs out, the button becomes Refresh rate. We never charge on an expired quote.</p></div>
+      <div class="layer"><span class="n">05</span><h2 class="sx-h">One ledger, every hop</h2><p class="body">A double-entry ledger records every payment, fee and hold, onchain or simulated. Each receipt shows every hop with its status, and USDC payments show their transaction reference.</p></div>
+    </div>
+  </section>
+
+  <section id="real" class="sec white rule-top" aria-labelledby="real-h">
+    <div class="wrap">
+      <div class="sec-head"><div><h2 id="real-h" class="sx-h heading-2">What's real <em>today</em></h2></div><p class="body muted">Sancus is a hackathon prototype. Here's exactly what runs for real and what's simulated.</p></div>
+      <div class="tbl-box"><table class="tbl">
+        <thead><tr><th scope="col">Feature</th><th scope="col">How it runs</th><th scope="col" class="r">Status</th></tr></thead>
+        <tbody>
+          <tr><td>Dollar balance</td><td>USDC in Circle wallets and Gateway, on Arc</td><td class="r"><span class="sx-pill sx-pill--settled">Testnet</span></td></tr>
+          <tr><td>Pay a USDC account</td><td>Real USDC transfers with a transaction reference</td><td class="r"><span class="sx-pill sx-pill--settled">Testnet</span></td></tr>
+          <tr><td>Limits, holds and approvals</td><td>Treasury contract and app</td><td class="r"><span class="sx-pill sx-pill--settled">Testnet</span></td></tr>
+          <tr><td>Paid endpoints for agents</td><td>Other agents pay per call; revenue lands in the balance</td><td class="r"><span class="sx-pill sx-pill--settled">Testnet</span></td></tr>
+          <tr><td>QRIS and PromptPay</td><td>Provider sandboxes</td><td class="r"><span class="sx-pill sx-pill--pending">Sandbox</span></td></tr>
+          <tr><td>Team cards</td><td>Card issuer sandbox</td><td class="r"><span class="sx-pill sx-pill--pending">Sandbox</span></td></tr>
+          <tr><td>Pix, SPEI, SEPA, ACH and wire</td><td>Simulated payouts</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr>
+          <tr><td>Rates</td><td>Sandbox rates, not live market prices</td><td class="r"><span class="sx-pill sx-pill--simulated">Simulated</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="sec rule-top" aria-labelledby="not-h">
+    <div class="wrap g12">
+      <h2 id="not-h" class="c5 sx-h heading-2">What Sancus isn't</h2>
+      <p class="c7 body-l muted">Sancus isn't a bank and doesn't hold customer funds. Real banking, cards and cross-border payouts need licensed partners and regulatory approval, and we'd work with them before anyone's real money moved.</p>
+    </div>
+  </section>
+</main>
+<footer class="foot">
+  <div class="foot-panel">
+    <svg class="foot-lines" viewBox="0 0 1400 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><circle cx="1080" cy="780" r="560"></circle><ellipse cx="1080" cy="634" rx="541" ry="108"></ellipse><ellipse cx="1080" cy="500" rx="485" ry="97"></ellipse><ellipse cx="1080" cy="382" rx="396" ry="79"></ellipse><ellipse cx="1080" cy="293" rx="280" ry="56"></ellipse><ellipse cx="1080" cy="237" rx="146" ry="29"></ellipse><ellipse cx="1080" cy="780" rx="146" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="280" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="398" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="487" ry="560"></ellipse><ellipse cx="1080" cy="780" rx="543" ry="560"></ellipse><line x1="1080" y1="220" x2="1080" y2="1340"></line></g><g fill="none" stroke="currentColor" stroke-width="2"><path d="M660 620 Q 780 220 1040 310"></path><path d="M1040 310 Q 1280 140 1410 450"></path></g></svg>
+    <div class="foot-in">
+      <div class="foot-cta">
+        <h2 class="sx-h heading-1">Money that keeps its <em>word</em>.</h2>
+        <div class="hero-ctas"><a class="sx-btn sx-btn--primary" href="SignUp.dc.html">Open your account</a><a class="sx-btn sx-btn--secondary" href="Main.dc.html">Try the demo</a></div>
+      </div>
+      <div class="foot-meta"><span>One account. Every rail. Every border.</span><hr></div>
+      <ul class="foot-links" aria-label="Footer">
+        <li><a href="Site.dc.html#how">How it works</a></li>
+        <li><a href="Pricing.dc.html">Rails and fees</a></li>
+        <li><a href="Security.dc.html">Security</a></li>
+        <li><a href="PayWho.dc.html">Pay</a></li>
+        <li><a href="Card.dc.html">Cards and QR</a></li>
+        <li><a href="Agents.dc.html">Agents</a></li>
+        <li><a href="https://github.com/vysha-exe/Sancus">Source code</a></li>
+        <li><a href="#terms">Terms</a></li>
+        <li><a href="#privacy">Privacy</a></li>
+      </ul>
+    </div>
+    <div class="foot-word" aria-hidden="true">SANCUS</div>
+  </div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
