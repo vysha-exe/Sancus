@@ -5,8 +5,10 @@
 //
 //   total      = wallet USDC + Gateway USDC                    (real, onchain)
 //   reserved   = in-flight payouts whose USDC hasn't left yet   (still in the treasury)
+//                + in-progress simulated ACH holds
 //   inFlight   = in-flight payouts whose USDC already left      (on its way to the partner)
-//   available  = total − reserved
+//   available  = max(0, total − reserved)
+//   simulated spend is tracked separately and does not reduce Available (USDC never left)
 //
 // The ledger's payouts:in_transit balance should equal reserved + inFlight;
 // if it doesn't, the summary reports the ledger as out of sync.
@@ -114,11 +116,15 @@ export function summarizeTreasury(input: TreasuryInputs) {
     }
   }
 
-  // Simulated legs: settled ones are spent, in-progress ones are held like any reserved payout.
+  // In-progress simulated ACH is held like any reserved payout.
+  // Do not subtract settled simulated spends from Available — that USDC is still in the wallet
+  // (Pix/mock ACH never left onchain). Subtracting them zeroed Available while the treasury still had funds.
   const simulatedSpentMinor = input.simulated?.spentMinor ?? 0n
   reservedMinor += input.simulated?.heldMinor ?? 0n
-  const availableMinor = totalMinor - reservedMinor - simulatedSpentMinor
-  if (availableMinor < 0n) warnings.push("Payments exceed the treasury balance.")
+  const rawAvailable = totalMinor - reservedMinor
+  const availableMinor = rawAvailable < 0n ? 0n : rawAvailable
+  if (rawAvailable < 0n) warnings.push("Reserved payouts exceed the treasury balance.")
+  if (simulatedSpentMinor > totalMinor) warnings.push("Simulated payments exceed on-chain USDC (demo).")
 
   const balances = accountBalances(input.ledgerRows)
   const ledgerInTransit = balances[ACCOUNTS.inTransit] ?? 0n

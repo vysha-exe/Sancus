@@ -1,30 +1,63 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import { AddPayeeSheet } from "@/components/sancus-ui/add-payee-sheet"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
-import { recipients } from "@/lib/sancus/demo-data"
+import type { Recipient } from "@/lib/sancus/demo-data"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
 
-const filters = ["Recent", "Suppliers", "Contractors", "Team"] as const
+const filters = ["All", "Suppliers", "Contractors", "Team"] as const
+
+function matchesFilter(r: Recipient, filter: (typeof filters)[number]) {
+  if (filter === "All") return true
+  if (filter === "Suppliers") return r.kind === "Supplier"
+  if (filter === "Contractors") return r.kind === "Contractor"
+  return r.kind === "Team"
+}
 
 export default function PayWhoPage() {
-  const { recipient, setRecipientId } = usePayFlow()
-  const [filter, setFilter] = useState<(typeof filters)[number]>("Recent")
+  const { recipient, recipients, setRecipientId } = usePayFlow()
+  const [filter, setFilter] = useState<(typeof filters)[number]>("All")
+  const [query, setQuery] = useState("")
+  const [adding, setAdding] = useState(false)
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return recipients.filter((r) => {
+      if (!matchesFilter(r, filter)) return false
+      if (!q) return true
+      return [r.name, r.detail, r.rail, r.country, r.kind].join(" ").toLowerCase().includes(q)
+    })
+  }, [filter, query, recipients])
+
+  const method = recipient.methods[0]
 
   return (
     <div className="page">
-      <PayFlowHead title="Choose a recipient" step={1} />
+      <PayFlowHead title="Who are you paying?" step={1} />
+
+      <p className="body-s muted" style={{ margin: "-8px 0 20px" }}>
+        Pick someone from your list, or add a new payee. Then continue to enter the amount.
+      </p>
 
       <div className="grid">
-        <section className="tile s7" aria-label="Choose a recipient">
-          <label className="sx-field">
-            <span className="sx-label">Search or add someone new</span>
-            <input
-              className="sx-field__input"
-              placeholder="Name, email, Pix key, IBAN, CLABE or USDC address"
-            />
-          </label>
+        <section className="tile s8" aria-label="Choose a recipient">
+          <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+            <label className="sx-field" style={{ flex: "1 1 220px", margin: 0 }}>
+              <span className="sx-label">Find a payee</span>
+              <input
+                className="sx-field__input"
+                placeholder="Search by name"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <button type="button" className="sx-btn sx-btn--secondary" onClick={() => setAdding(true)}>
+              Add payee
+            </button>
+          </div>
+
           <div className="filters" role="group" aria-label="Filter recipients">
             {filters.map((f) => (
               <button
@@ -38,86 +71,70 @@ export default function PayWhoPage() {
               </button>
             ))}
           </div>
-          <div role="radiogroup" aria-label="Recent recipients" style={{ display: "grid", gap: 8 }}>
-            {recipients.map((r) => {
-              const on = r.id === recipient.id
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  className={`pick${on ? " pick--on" : ""}`}
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => setRecipientId(r.id)}
-                  style={{ width: "100%", textAlign: "left" }}
-                >
-                  <span className="av">{r.initials}</span>
-                  <span style={{ flex: 1, minWidth: 0, display: "grid" }}>
-                    <span className="body-strong trunc">{r.name}</span>
-                    <span className="body-s trunc">{r.detail}</span>
-                  </span>
-                  {r.payout ? <span className="sx-pill sx-pill--settled">Live</span> : null}
-                  <span className="sx-rail">{r.rail}</span>
+
+          <div role="radiogroup" aria-label="Payees" style={{ display: "grid", gap: 8 }}>
+            {visible.length === 0 ? (
+              <div style={{ display: "grid", gap: 12, padding: "8px 2px" }}>
+                <span className="body-s muted">
+                  {query.trim() ? "No payees match that search." : "No payees in this filter yet."}
+                </span>
+                <button type="button" className="sx-btn sx-btn--primary" onClick={() => setAdding(true)} style={{ justifySelf: "start" }}>
+                  Add a payee
                 </button>
-              )
-            })}
-          </div>
-          <div className="tile-foot">
-            <span className="body-s muted">
-              {recipients.length} recipients · <b>Live</b> ones are paid through the Sancus backend
-            </span>
-            <button type="button" className="sx-btn sx-btn--quiet">
-              Show all
-            </button>
+              </div>
+            ) : (
+              visible.map((r) => {
+                const on = r.id === recipient.id
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className={`pick${on ? " pick--on" : ""}`}
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setRecipientId(r.id)}
+                    style={{ width: "100%", textAlign: "left" }}
+                  >
+                    <span className="av">{r.initials}</span>
+                    <span style={{ flex: 1, minWidth: 0, display: "grid" }}>
+                      <span className="body-strong trunc">{r.name}</span>
+                      <span className="body-s trunc">
+                        {r.kind} · {r.rail}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })
+            )}
           </div>
         </section>
 
-        <aside className="tile s5" aria-labelledby="sel">
-          <div className="tile-head">
-            <span className="sx-label">Paying</span>
-            <button type="button" className="sx-btn sx-btn--quiet">
-              Edit
-            </button>
-          </div>
-          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <aside className="tile s4" aria-labelledby="sel">
+          <span className="sx-label">Selected</span>
+          <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 8 }}>
             <span className="av av--lg">{recipient.initials}</span>
             <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-              <h2 id="sel" className="sx-h heading-3 trunc">
+              <h2 id="sel" className="sx-h heading-3 trunc" style={{ margin: 0 }}>
                 {recipient.name}
               </h2>
-              <span className="body-s muted">
-                {recipient.kind} · {recipient.country}
+              <span className="body-s muted trunc">
+                {method ? `${method.rail} · ${method.detail}` : recipient.rail}
               </span>
             </div>
           </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <span className="sx-label">How we can pay them</span>
-            {recipient.methods.map((m) => (
-              <div className="kv" key={m.rail + m.detail}>
-                <span>
-                  <span className="sx-rail">{m.rail}</span> {m.detail}
-                </span>
-                <span>{m.tag}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gap: 8, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
-            <span className="sx-label">History</span>
-            <span className="body-s muted">{recipient.history}</span>
-          </div>
-          <div className="tile-foot">
-            <Link href="/invoices" className="sx-btn sx-btn--quiet">
-              Pay from invoice
-            </Link>
-            <Link href="/pay/us-bank" className="sx-btn sx-btn--secondary">
-              US bank (ACH)
-            </Link>
+
+          <div className="tile-foot" style={{ marginTop: 24, flexDirection: "column", alignItems: "stretch", gap: 10 }}>
             <Link href="/pay/amount" className="sx-btn sx-btn--primary">
-              Continue
+              Continue to amount
+            </Link>
+            <Link href="/pay/us-bank" className="body-s muted" style={{ textAlign: "center", textDecoration: "underline", textUnderlineOffset: 3 }}>
+              Or pay a US bank by ACH
             </Link>
           </div>
         </aside>
       </div>
+
+      {adding ? <AddPayeeSheet onClose={() => setAdding(false)} /> : null}
     </div>
   )
 }

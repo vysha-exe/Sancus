@@ -3,11 +3,22 @@
 import Link from "next/link"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
+import type { CompanyNode } from "@/lib/sancus/companies"
+
+const usd6 = (minor: string) => `$${(Number(minor) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export function HomeBalance() {
   const ws = useWorkspace()
+  // Business workspace: that company plus its branches. Personal: your own wallets + Gateway.
   const scope = !ws.ready ? undefined : ws.isPersonal || !ws.activeNode ? null : ws.activeNode.id
   const live = useLiveTreasury(undefined, scope)
+  // Where the balance sits: each node's own balance after its payments (adds up to the headline).
+  const nodes: { id: string; name: string; ownMinor: string }[] = []
+  const walk = (n: CompanyNode) => {
+    if (n.ownMinor !== "0") nodes.push({ id: n.id, name: n.parentId ? n.name : `${n.name} (HQ)`, ownMinor: n.ownMinor })
+    n.children.forEach(walk)
+  }
+  if (scope && ws.activeNode) walk(ws.activeNode)
 
   return (
     <section className="tile s8" aria-labelledby="bal" aria-busy={live.loading}>
@@ -36,6 +47,16 @@ export function HomeBalance() {
           {live.loading ? "***" : `${scope && ws.activeNode ? `${ws.activeNode.name} and its branches · ` : ""}${live.meta}`}
         </span>
       </div>
+      {scope && nodes.length ? (
+        <div style={{ display: "grid", gap: 4 }} aria-label="Where the balance sits">
+          {nodes.map((n) => (
+            <div className="kv" key={n.id}>
+              <span className="body-s">{n.name}</span>
+              <span className="body-s data">{usd6(n.ownMinor)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <svg
         viewBox="0 0 600 120"
         preserveAspectRatio="none"

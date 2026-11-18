@@ -95,7 +95,7 @@ export function SignInForm() {
             </button>
             <span className="sx-label">{portal === "admin" || portal === "branch" ? "Business" : COPY[portal].title}</span>
             <h1 id="q" className="sx-h heading-1">
-              {portal === "individual" ? "Welcome back." : `Sign in as ${COPY[portal].title.toLowerCase()}.`}
+              {portal === "individual" ? "Welcome back." : `Sign in as ${COPY[portal].title}.`}
             </h1>
           </div>
           <div className="auth-fields">
@@ -135,7 +135,7 @@ export function SignInForm() {
               {busy ? "Signing in…" : "Sign in"}
             </button>
             <a href={`/api/sancus/demo-login?as=${portal}`} className="sx-btn sx-btn--secondary">
-              Try the {COPY[portal].title.toLowerCase()} demo
+              Try demo
             </a>
           </div>
         </form>
@@ -146,12 +146,14 @@ export function SignInForm() {
 
 function PortalButton({ portal, onPick }: { portal: Portal; onPick: (p: Portal) => void }) {
   return (
-    <button type="button" className="pick" onClick={() => onPick(portal)} style={{ width: "100%", textAlign: "left" }}>
-      <span style={{ flex: 1, minWidth: 0, display: "grid" }}>
+    <button type="button" className="pick pick--portal" onClick={() => onPick(portal)} style={{ width: "100%" }}>
+      <span className="pick__copy">
         <span className="body-strong">{COPY[portal].title}</span>
         <span className="body-s">{COPY[portal].detail}</span>
       </span>
-      <span aria-hidden>→</span>
+      <span className="pick__chev" aria-hidden>
+        →
+      </span>
     </button>
   )
 }

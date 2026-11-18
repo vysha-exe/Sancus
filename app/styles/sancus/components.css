@@ -19,7 +19,7 @@
 .sx-night .sx-h em { color: var(--brand-signal); }
 
 /* Buttons */
-.sx-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--touch-min); padding: 0 20px; border-radius: var(--radius-full); border: 1px solid transparent; font: 600 15px/1 var(--font-sans); cursor: pointer; transition: transform .15s ease-out, background-color .15s ease-out, border-color .15s ease-out; text-decoration: none; }
+.sx-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--touch-min); padding: 0 20px; border-radius: var(--radius-full); border: 1px solid transparent; font: 600 15px/1.25 var(--font-sans); cursor: pointer; transition: transform .15s ease-out, background-color .15s ease-out, border-color .15s ease-out; text-decoration: none; text-align: center; }
 .sx-btn:hover { transform: translateY(-1px); }
 .sx-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 .sx-btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }

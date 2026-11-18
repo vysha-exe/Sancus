@@ -358,6 +358,28 @@ export const recipients: Recipient[] = [
     methods: [{ rail: "SPEI", detail: "CLABE ••• 0453", tag: "Default" }],
     history: "No payments yet",
   },
+  {
+    id: "ana-souza",
+    name: "Ana Souza",
+    initials: "AS",
+    kind: "Team",
+    detail: "Team · Employee · card ••• 4412",
+    rail: "Card",
+    country: "Brazil",
+    methods: [{ rail: "Card", detail: "Sancus card ••• 4412", tag: "Default" }],
+    history: "Last paid $240.00 · Monday",
+  },
+  {
+    id: "rafael-lima",
+    name: "Rafael Lima",
+    initials: "RL",
+    kind: "Team",
+    detail: "Team · Finance · Pix key rafael•••@sancus.app",
+    rail: "Pix",
+    country: "Brazil",
+    methods: [{ rail: "Pix", detail: "rafael•••@sancus.app", tag: "Default" }],
+    history: "Last paid $1,200.00 · Friday",
+  },
 ]
 
 /** Juliana Pix quote used across Pay Amount / Review / Done */

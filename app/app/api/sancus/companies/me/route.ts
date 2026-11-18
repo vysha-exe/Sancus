@@ -3,11 +3,11 @@ import { NextResponse } from "next/server"
 import { withAuth } from "@/lib/api/with-auth"
 import { buildCompanyTree, countNodes, effectiveRole, type CompanyRow, type MembershipRow } from "@/lib/sancus/companies"
 import { listCompanyWallets, withBalances } from "@/lib/sancus/company-wallets"
+import { loadNodeDeductions } from "@/lib/sancus/node-spend"
 import { circleConfigured } from "@/lib/sancus/provision"
 
 export const GET = withAuth(async (_req, { user, supabase }) => {
-  // This route can run with the service-role client for the simple hackathon login,
-  // so RLS may be bypassed. Filter explicitly before returning companies or wallets.
+  // This can run with the service-role client for simple login, so filter explicitly.
   const { data: companies, error } = await supabase
     .from("sancus_companies")
     .select("id, parent_id, root_id, name, country, base_currency, created_at")
@@ -25,8 +25,12 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
   const membershipRows = (memberships ?? []) as MembershipRow[]
   const rows = allRows.filter((company) => effectiveRole(allRows, membershipRows, user.id, company.id).role !== null)
   const ids = rows.map((company) => company.id)
-  const wallets = await withBalances(await listCompanyWallets(supabase, ids))
-  const tree = buildCompanyTree(rows, membershipRows, wallets, user.id)
+  const [wallets, deductions] = await Promise.all([
+    listCompanyWallets(supabase, ids).then(withBalances),
+    // Payments each node made on simulated legs (same rule as the dashboard balance).
+    loadNodeDeductions(supabase, ids),
+  ])
+  const tree = buildCompanyTree(rows, membershipRows, wallets, user.id, deductions)
 
   return NextResponse.json({
     circleConfigured: circleConfigured(),

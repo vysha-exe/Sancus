@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { HomeBalance } from "@/components/sancus-ui/home-balance"
-import { LatestPayments } from "@/components/sancus-ui/latest-payments"
 import { NeedsYou } from "@/components/sancus-ui/needs-you"
 import { ConvertCard } from "@/components/sancus-ui/convert-card"
 import { GatewayCard } from "@/components/sancus-ui/gateway-card"
@@ -13,7 +12,7 @@ import {
   workspace,
 } from "@/lib/sancus/demo-data"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
-import { useAccount } from "@/lib/sancus/use-account"
+import { accountDisplayName, useAccount } from "@/lib/sancus/use-account"
 import { countryByCode } from "@/lib/sancus/countries"
 import type { CompanyNode } from "@/lib/sancus/companies"
 import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
@@ -21,26 +20,27 @@ import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 export default function HomePage() {
   const ws = useWorkspace()
   const { account } = useAccount()
-  const personal = account?.type === "ADMIN"
-    ? false
-    : account?.type === "INDIVIDUAL"
-      ? true
-      : ws.ready
-        ? ws.isPersonal
-        : !ws.hasBusiness
-  const displayName = account?.type === "ADMIN"
-    ? "Admin"
-    : account?.firstName || account?.email?.split("@")[0] || workspace.actor.firstName
+  const isAdmin = account?.type === "ADMIN"
+  // A business admin's dashboard is always the company (never personal tiles).
+  const personal = isAdmin ? false : ws.ready ? ws.isPersonal : !ws.hasBusiness
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
 
   return (
     <div className="page">
       <header className="page-head">
         <div>
-          <h1 className="sx-h heading-2">Good morning, {displayName}</h1>
+          <h1 className="sx-h heading-2">
+            {isAdmin
+              ? `Welcome, ${accountDisplayName(account, workspace.name)} Admin`
+              : `Good morning, ${personal && account?.type === "INDIVIDUAL" && account.firstName ? account.firstName : !personal && ws.activeNode ? ws.activeNode.name : accountDisplayName(account, workspace.name)}`}
+          </h1>
           {!personal && ws.activeNode ? (
             <span className="scope">{ws.activeNode.name}{ws.activeNode.children.length ? " and below" : ""}</span>
           ) : null}
         </div>
+        <span className="body-s muted" suppressHydrationWarning>
+          {today}
+        </span>
       </header>
 
       <div className="grid">
@@ -70,18 +70,6 @@ export default function HomePage() {
         {account?.type === "ADMIN" ? (
           <ParentBranchBalances tree={ws.tree} ready={ws.ready} formatBalance={ws.formatBalance} />
         ) : null}
-
-        <section className="tile s8 r2" aria-labelledby="latest">
-          <div className="tile-head">
-            <h2 className="tile-title" id="latest">
-              Latest payments
-            </h2>
-            <Link href="/activity" className="sx-btn sx-btn--quiet">
-              See all
-            </Link>
-          </div>
-          <LatestPayments />
-        </section>
 
         <section className="tile s4" aria-labelledby="month">
           <div className="tile-head">
@@ -200,19 +188,10 @@ function ParentBranchBalances({
   ready: boolean
   formatBalance: (minor: string) => string
 }) {
-  const parent = tree[0] ?? null
-  const normalizedParentName = parent?.name.trim().toLowerCase() ?? ""
-  const duplicateParents = tree.filter((node) => node.name.trim().toLowerCase() === normalizedParentName)
-  const parentBalanceMinor = duplicateParents.reduce((sum, node) => sum + BigInt(node.ownMinor), 0n).toString()
-  const flattenBranches = (nodes: CompanyNode[]): CompanyNode[] => nodes.flatMap((node) => [node, ...flattenBranches(node.children)])
-  const branches = [
-    ...(parent ? flattenBranches(parent.children) : []),
-    ...tree.slice(1).flatMap((node) =>
-      node.name.trim().toLowerCase() === normalizedParentName ? flattenBranches(node.children) : flattenBranches([node])
-    ),
-  ].filter((node, index, all) => all.findIndex((candidate) => candidate.id === node.id) === index)
+  const parent = tree.find((node) => node.parentId === null) ?? tree[0] ?? null
+  const branches = parent?.children ?? []
   const rows = parent
-    ? [{ node: parent, level: "Parent", balanceMinor: parentBalanceMinor }, ...branches.map((node) => ({ node, level: "Branch", balanceMinor: node.ownMinor }))]
+    ? [{ node: parent, level: "Parent" }, ...branches.map((node) => ({ node, level: "Branch" }))]
     : []
 
   return (
@@ -220,42 +199,33 @@ function ParentBranchBalances({
       <div className="tile-head">
         <div>
           <h2 className="tile-title" id="branch-balances">Branch balances</h2>
-          <span className="body-s muted">Parent company and direct country branches</span>
+          <span className="body-s muted">Global treasury and direct country branches</span>
         </div>
         <Link href="/branches" className="sx-btn sx-btn--quiet">Manage branches</Link>
       </div>
       {!ready ? (
-        <div className="fill-grid">
-          <div className="rail-tile"><span className="sx-label">Loading</span><span className="big">***</span></div>
-        </div>
+        <div className="fill-grid"><div className="rail-tile"><span className="sx-label">Loading</span><span className="big">***</span></div></div>
       ) : rows.length ? (
         <div className="fill-grid">
-          {rows.map(({ node, level, balanceMinor }) => {
+          {rows.map(({ node, level }) => {
             const isParent = level === "Parent"
             return (
-            <Link
-              href={`/branches/${node.id}`}
-              className="rail-tile"
-              style={{ color: "inherit", textDecoration: "none" }}
-              key={node.id}
-            >
-              <div className="tile-head" style={{ margin: 0 }}>
-                <span className="sx-label">{level}</span>
-                {!isParent ? <span aria-hidden>{countryByCode(node.country)?.flag ?? "🏳️"}</span> : null}
-              </div>
-              <span className="body-strong">{node.name}</span>
-              <span className="big">{formatBalance(balanceMinor)}</span>
-              <span className="body-s muted">
-                {isParent ? "Global treasury · USDC" : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}
-              </span>
-              {!isParent ? <span className="body-strong">{localBalance(balanceMinor, node.currency)}</span> : null}
-            </Link>
+              <Link href={`/branches/${node.id}`} className="rail-tile" style={{ color: "inherit", textDecoration: "none" }} key={node.id}>
+                <div className="tile-head" style={{ margin: 0 }}>
+                  <span className="sx-label">{level}</span>
+                  {!isParent ? <span aria-hidden>{countryByCode(node.country)?.flag ?? "🏳️"}</span> : null}
+                </div>
+                <span className="body-strong">{node.name}</span>
+                <span className="big">{formatBalance(node.ownMinor)}</span>
+                <span className="body-s muted">
+                  {isParent ? "Global treasury · USDC" : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}
+                </span>
+                {!isParent ? <span className="body-strong">{localBalance(node.ownMinor, node.currency)}</span> : null}
+              </Link>
             )
           })}
         </div>
-      ) : (
-        <div className="empty">No company branches yet.</div>
-      )}
+      ) : <div className="empty">No company branches yet.</div>}
     </section>
   )
 }
@@ -266,9 +236,7 @@ function localBalance(usdcMinor: string, currency: string): string {
   const localAmount = Number(BigInt(usdcMinor)) / 1_000_000 * rate
   const zeroDecimal = new Set(["IDR", "JPY", "KRW", "VND"])
   const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    currencyDisplay: "narrowSymbol",
+    style: "currency", currency, currencyDisplay: "narrowSymbol",
     minimumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
     maximumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
   }).format(localAmount)
