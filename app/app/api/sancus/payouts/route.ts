@@ -65,10 +65,24 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
   const { recipient, quote } = prepared
 
-  const settlementRaw = process.env.SANCUS_SETTLEMENT_ADDRESS?.trim()
+  // Treasury and Settlement wallets from one-click setup (POST /api/sancus/treasury/setup).
+  const { data: arcWallets } = await supabase
+    .from("wallets")
+    .select("address, blockchain, type")
+    .eq("user_id", user.id)
+    .eq("blockchain", "ARC-TESTNET")
+    .in("type", ["treasury", "payout"])
+    .is("company_id", null)
+    .order("created_at", { ascending: true })
+  const treasuryWallet = arcWallets?.find((w) => w.type === "treasury") ?? null
+  const settlementWallet = arcWallets?.find((w) => w.type === "payout") ?? null
+
+  // Partner deposit address: env override (e.g. StraitsX's address), else our Settlement wallet.
+  const settlementRaw = process.env.SANCUS_SETTLEMENT_ADDRESS?.trim() || settlementWallet?.address || ""
   const settlementAddress = settlementRaw && evmAddressSchema.safeParse(settlementRaw).success ? settlementRaw : null
 
-  let sourceWallet: { address: string; blockchain: string } | null = null
+  // Paying wallet: the one picked in the UI, else the Treasury.
+  let sourceWallet: { address: string; blockchain: string } | null = treasuryWallet
   if (sourceWalletId) {
     const { data: wallet } = await supabase
       .from("wallets")

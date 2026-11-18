@@ -46,6 +46,7 @@ const PROTECTED_PREFIXES: string[] = [
   "/receive",
   "/spending",
   "/team",
+  "/branches",
   "/invoices",
   "/agents",
   "/settings",
