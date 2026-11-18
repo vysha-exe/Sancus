@@ -97,8 +97,8 @@ const PayContext = createContext<PayContextValue | null>(null)
 
 const defaultState: PayState = {
   recipientId: julianaQuote.recipientId,
-  usdAmount: julianaQuote.totalLabel.replace("$", ""),
-  localAmount: String(julianaQuote.brl),
+  usdAmount: "",
+  localAmount: "",
   rail: julianaQuote.rail,
   memo: "November design hours",
   side: "send",
@@ -114,8 +114,6 @@ function payoutCurrency(primaryRail: string, rail: string): PayCurrency | null {
   if (rail === "Wire") return isPayRail(primaryRail) && primaryRail !== "Wire" ? defaultCurrency(primaryRail) : "USD"
   return defaultCurrency(rail)
 }
-
-const LIVE_DEFAULT_SGD = "2000.00"
 
 const usd = (minor: bigint) => `$${displayMinor(minor, USDC_DECIMALS, "", 2)}`
 const sgd = (minor: bigint) => `S$ ${displayMinor(minor, SGD_DECIMALS, "", 2)}`
@@ -165,8 +163,8 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
         ...s,
         recipientId: r.id,
         rail: r.payout ? (r.payout.proxyType === "BANK" ? "FAST" : "PayNow") : r.rail,
-        localAmount: r.payout ? LIVE_DEFAULT_SGD : "",
-        usdAmount: r.payout ? "" : r.id === "juliana" ? julianaQuote.totalLabel.replace("$", "") : "100.00",
+        localAmount: "",
+        usdAmount: "",
         side: r.payout ? "receive" : "send",
       }))
     },
@@ -192,7 +190,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       ...s,
       recipientId: payee.id,
       rail: payee.payout?.proxyType === "BANK" ? "FAST" : "PayNow",
-      localAmount: LIVE_DEFAULT_SGD,
+      localAmount: "",
       usdAmount: "",
       side: "receive",
     }))

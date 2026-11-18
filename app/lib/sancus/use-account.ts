@@ -56,6 +56,7 @@ export function canOpenPath(account: AccountDto | null, pathname: string): boole
   if (!account) return true
   const key = navKeyForPath(pathname)
   if (key === null) return true
+  if (key === "devqa" && account.nav.includes("devqa")) return true
   const extra: Record<AccountDto["type"], string[]> = {
     ADMIN: ["receive", "branch"],
     BRANCH: [],

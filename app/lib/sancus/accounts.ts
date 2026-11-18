@@ -46,7 +46,23 @@ export type NavKey =
   | "team"
   | "invoices"
   | "agents"
+  | "devqa" // REMOVE BEFORE SUBMISSION — temporary rail test dashboard
   | "settings"
+
+/** Client/server: Dev QA tab + /dev-qa. Turn off / delete before submission. */
+export function isDevQaEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_SANCUS_DEV_QA === "true"
+}
+
+/** Inserts Dev QA before Settings when the flag is on. */
+export function navWithDevQa(nav: NavKey[]): NavKey[] {
+  if (!isDevQaEnabled()) return [...nav]
+  const out = nav.filter((k) => k !== "devqa")
+  const i = out.indexOf("settings")
+  if (i >= 0) out.splice(i, 0, "devqa")
+  else out.push("devqa")
+  return out
+}
 
 /** A company node the account has a role on. */
 export type AccountScope = {
@@ -108,6 +124,7 @@ export function navKeyForPath(pathname: string): NavKey | null {
     team: "team",
     invoices: "invoices",
     agents: "agents",
+    "dev-qa": "devqa",
     settings: "settings",
   }
   return map[seg] ?? null
@@ -136,7 +153,9 @@ export abstract class SancusAccount {
 
   canAccessPath(pathname: string): boolean {
     const key = navKeyForPath(pathname)
-    return key === null || this.paths.includes(key)
+    if (key === null) return true
+    if (key === "devqa" && isDevQaEnabled()) return true
+    return this.paths.includes(key)
   }
 
   /** Ids of `companyId` and everything under it. */
@@ -170,7 +189,7 @@ export abstract class SancusAccount {
       userId: this.userId,
       email: this.email,
       homePath: this.homePath,
-      nav: [...this.nav],
+      nav: navWithDevQa(this.nav),
       permissions: [...this.permissions],
       scopes: this.scopes,
       manageableCompanyIds: this.manageableCompanyIds(),

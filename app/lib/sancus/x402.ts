@@ -61,7 +61,9 @@ export function buildRequirements(payTo: string, amountMinor: bigint): PaymentRe
     asset: ARC_TESTNET_USDC,
     amount: amountMinor.toString(),
     payTo,
-    maxTimeoutSeconds: 345600,
+    // Gateway settles in batches later, so the signed authorization must stay valid long enough;
+    // Circle's facilitator rejected 4 days ("authorization_validity_too_short").
+    maxTimeoutSeconds: Number(process.env.SANCUS_X402_VALIDITY_SECONDS || 604800), // 7 days
     extra: { name: "GatewayWalletBatched", version: "1", verifyingContract: ARC_TESTNET_GATEWAY_WALLET },
   }
 }
