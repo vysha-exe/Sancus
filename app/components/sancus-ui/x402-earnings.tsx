@@ -18,7 +18,6 @@ type Earnings = {
 }
 
 const usd = (minor: string, digits = 2) => `$${displayMinor(BigInt(minor), USDC_DECIMALS, "", digits)}`
-const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a)
 
 async function load(): Promise<Earnings | null> {
   try {
@@ -40,7 +39,6 @@ export function X402Earnings() {
     let cancelled = false
     const tick = () => load().then((d) => !cancelled && d && setData(d))
     tick()
-    // Earnings arrive from outside agents at any time; keep the tile fresh.
     const t = setInterval(tick, 5000)
     return () => {
       cancelled = true
@@ -48,85 +46,40 @@ export function X402Earnings() {
     }
   }, [])
 
+  const endpoint = data?.endpoints[0]
+  const pathLabel = endpoint ? `GET ${endpoint.path.replace("/api/x402", "")}` : "GET /market-data"
+  const priceLabel = endpoint ? `$${endpoint.price} / call` : "$0.05 / call"
+  const earnedLabel = data ? `+${usd(data.totalMinor)}` : agents.earned
+  const callsLabel = data ? `${data.calls} call${data.calls === 1 ? "" : "s"} paid` : "24 calls paid"
+  const footLabel = data
+    ? data.configured
+      ? `${data.last24hCalls} paid in 24 h`
+      : "Not set up yet"
+    : "$0.10 on its way"
+
   return (
-    <section className="tile s5" aria-labelledby="x402">
+    <section className="tile s6" aria-labelledby="x402">
       <div className="tile-head">
         <h2 className="tile-title" id="x402">
           Paid by other agents
         </h2>
-        {data ? (
-          <span className={`sx-pill ${data.configured ? "sx-pill--settled" : "sx-pill--pending"}`}>
-            {data.configured ? "Live" : "Not set up"}
-          </span>
-        ) : (
-          <button type="button" className="sx-btn sx-btn--quiet">
-            Add an endpoint
-          </button>
-        )}
+        <span className="body-s muted">{data?.endpoints.length ?? 1} endpoint{(data?.endpoints.length ?? 1) === 1 ? "" : "s"}</span>
       </div>
-      <div className="tbl-wrap">
-        <table className="tbl" style={{ minWidth: 0 }}>
-          <thead>
-            <tr>
-              <th>Endpoint</th>
-              <th className="num">Price</th>
-              <th className="num">Paid</th>
-              <th className="num">Earned</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data ? (
-              data.endpoints.map((e) => (
-                <tr key={e.path}>
-                  <td className="data" title={e.description}>
-                    GET {e.path.replace("/api/x402", "")}
-                  </td>
-                  <td className="num">${e.price}</td>
-                  <td className="num">{data.calls}</td>
-                  <td className="num" style={{ color: "var(--settled)" }}>
-                    +{usd(data.totalMinor)}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="data">GET /market-data</td>
-                <td className="num">$0.05</td>
-                <td className="num">24</td>
-                <td className="num" style={{ color: "var(--settled)" }}>
-                  {agents.earned}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {data && data.recent.length > 0 ? (
-        <div className="sx-rows">
-          {data.recent.slice(0, 3).map((r) => (
-            <div key={r.id} className="sx-row">
-              <span className="sx-row__who">Agent {short(r.payer)}</span>
-              <span className="sx-row__amount sx-row__amount--in">+{usd(r.amountMinor, 4)}</span>
-              <span className="sx-row__meta">
-                <span className="sx-rail">x402</span> {new Date(r.createdAt).toLocaleTimeString()}
-              </span>
-              <span />
-            </div>
-          ))}
+      <div className="ag-mini">
+        <div className="kv">
+          <span className="data">{pathLabel}</span>
+          <span>{priceLabel}</span>
         </div>
-      ) : null}
-
+        <div className="kv">
+          <span>Earned this month</span>
+          <span style={{ color: "var(--settled)" }}>{earnedLabel}</span>
+        </div>
+        <span className="body-s muted">{callsLabel}</span>
+      </div>
       <div className="tile-foot">
-        <span className="body-s muted">
-          {data
-            ? data.configured
-              ? `${data.last24hCalls} paid call${data.last24hCalls === 1 ? "" : "s"} in 24 h · ${data.payers} agent${data.payers === 1 ? "" : "s"} · lands in ${short(data.payTo ?? "")} via Circle Gateway`
-              : "Create an Arc wallet (or set SANCUS_X402_PAY_TO) to start earning"
-            : "$0.10 is on its way to your balance"}
-        </span>
-        <a href="/api/x402" target="_blank" rel="noreferrer" className="sx-btn sx-btn--quiet">
-          Discovery
+        <span className="body-s muted">{footLabel}</span>
+        <a href="/api/x402" target="_blank" rel="noreferrer" className="sx-btn sx-btn--secondary sx-btn--sm">
+          Add endpoint
         </a>
       </div>
     </section>
