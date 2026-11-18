@@ -5,6 +5,7 @@ import type { Address } from "viem"
 import { circleDeveloperSdk } from "@/lib/circle/developer-controlled-wallets-client"
 import { getUsdcBalance } from "@/lib/circle/gateway-sdk"
 import { syncGatewayWebhookSubscription } from "@/lib/circle/gateway-webhooks"
+import { mockTokenBalances, type LocalCurrency } from "./mock-tokens"
 import { circleConfigured, TREASURY_CHAIN } from "./provision"
 import type { CompanyRow, CompanyWallet } from "./companies"
 
@@ -34,7 +35,14 @@ export async function withBalances(rows: WalletDbRow[]): Promise<CompanyWallet[]
     } catch {
       /* leave null */
     }
-    out.push({ walletId: r.circle_wallet_id, name: r.name, address: r.address, blockchain: r.blockchain, companyId: r.company_id, usdcMinor })
+    const local: Partial<Record<LocalCurrency, string>> = {}
+    try {
+      const bals = await mockTokenBalances(r.address)
+      for (const [c, v] of Object.entries(bals)) if (v && v !== "0") local[c as LocalCurrency] = v
+    } catch {
+      /* mock tokens are optional */
+    }
+    out.push({ walletId: r.circle_wallet_id, name: r.name, address: r.address, blockchain: r.blockchain, companyId: r.company_id, usdcMinor, local })
   }
   return out
 }

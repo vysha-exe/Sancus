@@ -23,6 +23,8 @@ export type CompanyWallet = {
   blockchain: string
   companyId: string
   usdcMinor: string | null
+  /** Mock local stablecoins held (mIDR / mTHB / mBRL), non-zero only, minor units. */
+  local?: Partial<Record<"BRL" | "IDR" | "THB", string>>
 }
 
 export type CompanyNode = {
