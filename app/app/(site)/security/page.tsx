@@ -4,28 +4,23 @@ export const metadata: Metadata = {
   title: "Sancus · How your money is kept",
 }
 
-const HOPS: { title: string; data: string; pill: "settled" | "simulated" }[] = [
-  { title: "Rules checked", data: "Treasury contract · within limits", pill: "settled" },
-  { title: "Rate locked", data: "1 USD = 5.4123 BRL · 60 s", pill: "settled" },
-  { title: "Funded from balance", data: "$100.80 · USDC on Arc", pill: "settled" },
-  { title: "Paid out by Pix", data: "Pix key ju•••@gmail.com", pill: "simulated" },
-  { title: "Received by Juliana", data: "R$ 541,23", pill: "settled" },
+const HOPS: { title: string; data: string }[] = [
+  { title: "Rules checked", data: "Treasury contract · within limits" },
+  { title: "Rate locked", data: "1 USD = 5.4123 BRL · 60 s" },
+  { title: "Funded from balance", data: "$100.80 · USDC" },
+  { title: "Paid out by Pix", data: "Pix key ju•••@gmail.com" },
+  { title: "Received by Juliana", data: "R$ 541,23" },
 ]
 
-const REAL: { feature: string; how: string; pill: "settled" | "pending" | "simulated"; status: string }[] = [
-  { feature: "Dollar balance", how: "USDC in Circle wallets and Gateway, on Arc", pill: "settled", status: "Testnet" },
-  { feature: "Pay a USDC account", how: "Real USDC transfers with a transaction reference", pill: "settled", status: "Testnet" },
-  { feature: "Limits, holds and approvals", how: "Treasury contract and app", pill: "settled", status: "Testnet" },
-  {
-    feature: "Paid endpoints for agents",
-    how: "Other agents pay per call; revenue lands in the balance",
-    pill: "settled",
-    status: "Testnet",
-  },
-  { feature: "QRIS and PromptPay", how: "Provider sandboxes", pill: "pending", status: "Sandbox" },
-  { feature: "Team cards", how: "Card issuer sandbox", pill: "pending", status: "Sandbox" },
-  { feature: "Pix, SPEI, SEPA, ACH and wire", how: "Simulated payouts", pill: "simulated", status: "Simulated" },
-  { feature: "Rates", how: "Sandbox rates, not live market prices", pill: "simulated", status: "Simulated" },
+const CAPABILITIES: { feature: string; how: string }[] = [
+  { feature: "Dollar balance", how: "USDC in Circle wallets and Gateway on Arc" },
+  { feature: "Pay a USDC account", how: "Onchain USDC with a transaction reference" },
+  { feature: "Limits, holds and approvals", how: "Treasury contract and app policy" },
+  { feature: "Paid endpoints for agents", how: "Other agents pay per call; revenue lands in the balance" },
+  { feature: "QRIS and PromptPay", how: "Local collection rails across Asia" },
+  { feature: "Team cards", how: "Virtual cards with limits and holds" },
+  { feature: "Pix, SPEI, SEPA, ACH and wire", how: "Payouts on the rails your counterparties already use" },
+  { feature: "Rates", how: "Shown and locked before you confirm" },
 ]
 
 export default function SecurityPage() {
@@ -37,9 +32,7 @@ export default function SecurityPage() {
             <h1 className="sx-h display-l">
               How your money is <em>kept</em>.
             </h1>
-            <p className="body-l">
-              Where your balance lives, what checks every payment, and what&apos;s real in this prototype.
-            </p>
+            <p className="body-l">Where your balance lives, and what checks every payment.</p>
           </div>
           <div className="phead-art">
             <article className="receipt" aria-label="Example receipt">
@@ -63,9 +56,7 @@ export default function SecurityPage() {
                       <b>{h.title}</b>
                       <span className="data">{h.data}</span>
                     </span>
-                    <span className={`sx-pill sx-pill--${h.pill}`}>
-                      {h.pill === "settled" ? "Settled" : "Simulated"}
-                    </span>
+                    <span className="sx-pill sx-pill--settled">Settled</span>
                   </li>
                 ))}
               </ol>
@@ -85,13 +76,13 @@ export default function SecurityPage() {
               <h2 className="sx-h">Held as USDC, one for one</h2>
               <div>
                 <p className="body">
-                  Every dollar in your balance is a USDC dollar, issued by Circle and held in a treasury contract on Arc
-                  testnet. Circle Gateway keeps it one balance across chains, and Gas Station pays network fees, so you
-                  never hold a gas token.
+                  Every dollar in your balance is a USDC dollar, issued by Circle and held in a treasury contract on Arc.
+                  Circle Gateway keeps it one balance across chains, and Gas Station pays network fees, so you never hold
+                  a gas token.
                 </p>
                 <div className="chips">
                   <span className="sx-rail">USDC</span>
-                  <span className="sx-rail">Arc testnet</span>
+                  <span className="sx-rail">Arc</span>
                   <span className="sx-rail">Circle Gateway</span>
                 </div>
               </div>
@@ -124,8 +115,8 @@ export default function SecurityPage() {
               <span className="n">05</span>
               <h2 className="sx-h">One ledger, every hop</h2>
               <p className="body">
-                A double-entry ledger records every payment, fee and hold, onchain or simulated. Each receipt shows every
-                hop with its status, and USDC payments show their transaction reference.
+                A double-entry ledger records every payment, fee and hold. Each receipt shows every hop with its status,
+                and USDC payments show their transaction reference.
               </p>
             </div>
           </div>
@@ -136,12 +127,10 @@ export default function SecurityPage() {
             <div className="sec-head">
               <div>
                 <h2 id="real-h" className="sx-h heading-2">
-                  What&apos;s real <em>today</em>
+                  Built into the <em>account</em>
                 </h2>
               </div>
-              <p className="body muted">
-                Sancus is a hackathon prototype. Here&apos;s exactly what runs for real and what&apos;s simulated.
-              </p>
+              <p className="body muted">What your Sancus balance can do from day one.</p>
             </div>
             <div className="tbl-box">
               <table className="tbl">
@@ -149,37 +138,18 @@ export default function SecurityPage() {
                   <tr>
                     <th scope="col">Feature</th>
                     <th scope="col">How it runs</th>
-                    <th scope="col" className="r">
-                      Status
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {REAL.map((r) => (
+                  {CAPABILITIES.map((r) => (
                     <tr key={r.feature}>
                       <td>{r.feature}</td>
                       <td>{r.how}</td>
-                      <td className="r">
-                        <span className={`sx-pill sx-pill--${r.pill}`}>{r.status}</span>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        </section>
-
-        <section className="sec rule-top" aria-labelledby="not-h">
-          <div className="wrap g12">
-            <h2 id="not-h" className="c5 sx-h heading-2">
-              What Sancus isn&apos;t
-            </h2>
-            <p className="c7 body-l muted">
-              Sancus isn&apos;t a bank and doesn&apos;t hold customer funds. Real banking, cards and cross-border payouts
-              need licensed partners and regulatory approval, and we&apos;d work with them before anyone&apos;s real money
-              moved.
-            </p>
           </div>
         </section>
       </main>

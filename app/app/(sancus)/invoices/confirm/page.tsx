@@ -156,7 +156,7 @@ function ConfirmInner() {
           </div>
           <div className="tile-foot">
             <span className="body-s muted">
-              {checks > 0 ? `${checks} fields to check · simulated extract` : "Simulated extract · check before you pay"}
+              {checks > 0 ? `${checks} fields to check` : "Check the details before you pay"}
             </span>
             <button type="button" className="sx-btn sx-btn--quiet" onClick={() => router.push("/invoices")}>
               Upload a different file
@@ -193,7 +193,6 @@ function ConfirmInner() {
             <span>Rail</span>
             <span className="pills">
               <span className="sx-rail">{rail}</span>
-              <span className="sx-pill sx-pill--simulated">Simulated</span>
             </span>
           </div>
           <div className="kv">

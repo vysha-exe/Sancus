@@ -13,6 +13,7 @@ import {
   isDemoLoginEnabled,
   safeNextPath,
 } from "@/lib/sancus/demo-login"
+import { DEMO_HOME, ensureDemoAccount, parseDemoAs } from "@/lib/sancus/demo-accounts"
 // Do NOT statically import provision-circle / Circle SDKs here. On Vercel those
 // packages can fail to load as ESM and take down this whole route (Open demo → 500).
 
@@ -29,17 +30,30 @@ function enterAsGuest(request: NextRequest, next: string, reason: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const next = safeNextPath(request.nextUrl.searchParams.get("next"))
+  // ?as=admin|branch|employee|individual picks which demo account to open (default admin).
+  const as = parseDemoAs(request.nextUrl.searchParams.get("as"))
+  const next = safeNextPath(request.nextUrl.searchParams.get("next"), DEMO_HOME[as])
 
   if (!isDemoLoginEnabled()) {
     return enterAsGuest(request, next, "demo-disabled")
   }
-  const creds = demoCredentials()
-  if (!creds) {
+  const baseCreds = demoCredentials()
+  if (!baseCreds) {
     return enterAsGuest(request, next, "demo-misconfigured")
   }
+  let creds = baseCreds
 
   try {
+    // Non-admin demo accounts are created and wired into the demo company on first use.
+    if (as !== "admin") {
+      const secret = process.env.SUPABASE_SECRET_KEY?.trim()
+      if (!secret) return enterAsGuest(request, next, "demo-missing-secret")
+      const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, secret, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+      creds = await ensureDemoAccount(admin, baseCreds, as)
+    }
+
     const supabase = await createClient()
     let { error } = await supabase.auth.signInWithPassword(creds)
 
@@ -80,7 +94,8 @@ export async function GET(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    if (user) {
+    // Only accounts that hold money get treasury wallets (not branch admins or employees).
+    if (user && (as === "admin" || as === "individual")) {
       try {
         const { provisionTreasury } = await import("@/lib/sancus/provision-circle")
         const provisioned = await provisionTreasury(supabase, user.id)

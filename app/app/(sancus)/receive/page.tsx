@@ -60,7 +60,7 @@ const deposits: {
     id: "usdc",
     rail: "USDC",
     title: "From another USDC account",
-    detail: "USDC · seconds · testnet",
+    detail: "USDC · seconds",
     simulated: false,
     arrival: "in seconds",
   },
@@ -124,10 +124,9 @@ export default function ReceivePage() {
                     <span className="sx-rail">{r.rail}</span>
                     <b id={`r-${r.id}`}>{r.country}</b>
                   </span>
-                  <span className="sx-pill sx-pill--simulated">Simulated</span>
                 </div>
                 <div className="rail-body">
-                  <div className="qr" role="img" aria-label={`${r.rail} QR code placeholder`}>
+                  <div className="qr" role="img" aria-label={`${r.rail} QR code`}>
                     <span className="sx-label">QR</span>
                   </div>
                   <div className="rail-kv">
@@ -185,7 +184,6 @@ export default function ReceivePage() {
                     </span>
                     <span className="body-s">{s.detail}</span>
                   </span>
-                  {s.simulated ? <span className="sx-pill sx-pill--simulated">Simulated</span> : null}
                 </button>
               )
             })}
@@ -226,7 +224,7 @@ export default function ReceivePage() {
               className="sx-btn sx-btn--primary"
               disabled={value <= 0}
               onClick={() =>
-                setAdded(`${label} is on its way by ${current.rail}${current.simulated ? " (simulated)" : ""}.`)
+                setAdded(`${label} is on its way by ${current.rail}.`)
               }
             >
               Add {label}
@@ -247,7 +245,7 @@ export default function ReceivePage() {
             </div>
             <div className="rail-kv">
               <span className="sx-label">Network</span>
-              <span className="data">Arc testnet</span>
+              <span className="data">Arc</span>
               <span className="sx-label">Address</span>
               <span className="data" style={{ wordBreak: "break-all" }}>
                 {usdcAddress}

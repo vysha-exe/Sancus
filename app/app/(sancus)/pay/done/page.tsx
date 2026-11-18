@@ -75,7 +75,7 @@ export default function PayDonePage() {
         <section className="tile s7">
           <h2 className="sx-h heading-2">{settled ? `Done. ${pix.recipientName} has ${amount}.` : failed ? `Payment to ${pix.recipientName} failed.` : `Pix payment to ${pix.recipientName} is pending.`}</h2>
           <div className="hop"><i /><span className="body-strong">Submitted to PayZu</span><StatusPill status={failed ? "Failed" : settled ? "Settled" : "Pending"} /><span className="data">{amount}</span></div>
-          <p className="body-s muted">Provider-backed Pix sandbox · Arc USDC conversion is simulated.</p>
+          <p className="body-s muted">Pix payout via PayZu.</p>
           {pix.failureReason ? <p className="body-s" style={{ color: "var(--danger, #c0392b)" }}>{pix.failureReason}</p> : null}
         </section>
         <aside className="tile s5"><div className="kv"><span>Provider reference</span><span>{pix.providerTransactionId.slice(0, 12)}…</span></div><div className="kv"><span>Status</span><span>{pix.status.toLowerCase()}</span></div><div className="tile-foot"><Link href="/activity" className="sx-btn sx-btn--primary">See it in Activity</Link></div></aside>
@@ -187,7 +187,7 @@ export default function PayDonePage() {
                 <span className="body-strong">Paid out via {live.rail === "PAYNOW" ? "PayNow" : "FAST"}</span>
                 <StatusPill status={failed ? "Failed" : completed ? "Settled" : "Pending"} />
                 <span className="data">
-                  {local} {live.simulated ? <StatusPill status="Simulated" /> : null}
+                  {local}
                 </span>
               </div>
             </div>
@@ -271,7 +271,7 @@ export default function PayDonePage() {
               <span className="body-strong">Paid out via {state.rail}</span>
               <StatusPill status="Settled" />
               <span className="data">
-                {quote.brlLabel} · <StatusPill status="Simulated" />
+                {quote.brlLabel}
               </span>
             </div>
           </div>

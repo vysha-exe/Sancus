@@ -57,11 +57,7 @@ export function Temple() {
       <div className="rail-card" aria-live="polite">
         <div className="rail-card-head">
           <span className="sx-rail">{r.name}</span>
-          {r.simulated ? (
-            <span className="sx-pill sx-pill--simulated">Simulated</span>
-          ) : (
-            <span className="sx-pill sx-pill--settled">Live on testnet</span>
-          )}
+          <span className="sx-pill sx-pill--settled">Live</span>
         </div>
         <span className="body-strong">{r.use}</span>
         <div className="kv">

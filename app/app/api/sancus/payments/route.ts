@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
+import { requirePermission } from "@/lib/sancus/accounts-server"
 import { quoteInputSchema, toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
 import { prepareAch, settlementWallets } from "@/lib/sancus/ach-api"
 import { ACH_PROVIDER, executeAch, refreshAchPayments, syncAchLedger } from "@/lib/sancus/ach-server"
@@ -32,6 +33,8 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
 })
 
 export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "money.send")
+  if (denied) return denied
   const idempotencyKey = req.headers.get("idempotency-key")?.trim()
   if (!idempotencyKey || idempotencyKey.length > 100) {
     return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 })

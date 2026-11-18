@@ -153,7 +153,7 @@ export function SignUpCodeStep() {
           <Link href="/sign-up">Change email</Link>
         </div>
         <span className="sx-field__help" style={{ marginTop: -12 }}>
-          Sandbox: any six digits will do.
+          Enter the six-digit code we sent.
         </span>
         <div className="auth-btns">
           <button type="submit" className="sx-btn sx-btn--primary" disabled={!full}>
@@ -271,7 +271,7 @@ export function SignUpAboutYouStep() {
                 <option key={c}>{c}</option>
               ))}
             </select>
-            <span className="sx-field__help">We&apos;ll ask for your CPF when you go live. Not needed in the sandbox.</span>
+            <span className="sx-field__help">Optional for now. You can add your CPF later in Settings.</span>
           </label>
         </div>
         <div className="auth-btns">
@@ -332,7 +332,7 @@ export function SignUpCompanyStep() {
               ))}
             </select>
             <span className="sx-field__help">
-              We&apos;ll ask for your CNPJ when you go live. Not needed in the sandbox.
+              Optional for now. You can add your CNPJ later in Settings.
             </span>
           </label>
         </div>

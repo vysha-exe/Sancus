@@ -336,7 +336,6 @@ export default function AssignMethodPage() {
           >
             <span style={{ display: "flex", justifyContent: "space-between" }}>
               <span className="sx-rail">{kind === "card" ? "Card" : `${info.network} QR`}</span>
-              <span className="sx-pill sx-pill--simulated">Simulated</span>
             </span>
             {kind === "card" ? (
               <span className="data" style={{ alignSelf: "center", justifySelf: "center" }}>

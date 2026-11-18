@@ -249,7 +249,7 @@ export function AchPayout() {
           <h2 className="tile-title" id="ach-send">
             Send USD to a US bank
           </h2>
-          <span className="sx-pill sx-pill--simulated">ACH · simulated</span>
+          <span className="sx-pill sx-pill--settled">ACH</span>
         </div>
 
         {/* 1. Recipient */}
@@ -355,7 +355,7 @@ export function AchPayout() {
                 </div>
                 <span className="body-s muted">{quote.quote.etaLabel}</span>
                 <span className="body-s muted">
-                  Settlement: {quote.quote.settlementMode === "TESTNET_SETTLEMENT" ? "real Arc testnet USDC to the settlement wallet, then simulated ACH" : "fully simulated (no blockchain transaction)"}
+                  Settlement: {quote.quote.settlementMode === "TESTNET_SETTLEMENT" ? "USDC to settlement, then ACH" : "ACH payout"}
                 </span>
                 {decision === "NEEDS_APPROVAL" ? (
                   <span className="body-s" role="status">Needs approval: {quote.policy.reason}</span>
@@ -413,7 +413,7 @@ export function AchPayout() {
                 {active.reference ? ` · ${active.reference}` : ""}
               </span>
             </div>
-            <span className="sx-pill sx-pill--simulated" style={{ justifySelf: "start" }}>
+            <span className="sx-pill sx-pill--pending" style={{ justifySelf: "start" }}>
               {active.timeline.label}
             </span>
             <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>

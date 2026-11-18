@@ -293,7 +293,6 @@ export default function SettingsPage() {
             ))}
           </div>
           <div className="tile-foot">
-            <span className="sx-pill sx-pill--simulated">Demo workspace</span>
             <Link href="/branches" className="sx-btn sx-btn--secondary sx-btn--sm">
               Open a business account
             </Link>
@@ -329,11 +328,7 @@ export default function SettingsPage() {
                     <td>{r.speed}</td>
                     <td className="num">{r.fee}</td>
                     <td>
-                      {r.simulated ? (
-                        <StatusPill status="Simulated" />
-                      ) : (
-                        <span className="body-s">{r.status}</span>
-                      )}
+                      <span className="body-s">{r.simulated ? "Available" : r.status}</span>
                     </td>
                     <td>
                       <Switch
@@ -359,7 +354,7 @@ export default function SettingsPage() {
             How your money is kept
           </h2>
           <span className="body-s" style={{ maxWidth: "62ch" }}>
-            Your balance is held as USDC, issued by Circle, in a treasury contract on Arc testnet.
+            Your balance is held as USDC, issued by Circle, in a treasury contract on Arc.
             Limits, holds and approvals are enforced by that contract. This is the only page that
             names the chain.
           </span>

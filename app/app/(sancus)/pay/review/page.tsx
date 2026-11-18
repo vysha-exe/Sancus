@@ -81,7 +81,6 @@ export default function PayReviewPage() {
             <div className="hop">
               <i className="todo" />
               <span className="body-strong">Pay out via {state.rail}</span>
-              {view.simulated ? <StatusPill status="Simulated" /> : null}
               <span className="data">
                 {view.localLabel} · {view.arrival}
               </span>

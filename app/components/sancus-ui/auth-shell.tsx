@@ -61,10 +61,7 @@ export function AuthShell({
             <RisingColumn />
             SANCUS
           </Link>
-          <div className="auth-head-end">
-            {headEnd}
-            <span className="sx-pill sx-pill--simulated">Sandbox · testnet</span>
-          </div>
+          <div className="auth-head-end">{headEnd}</div>
         </header>
         <div className="auth-body">{children}</div>
       </div>

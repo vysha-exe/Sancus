@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
+import { requirePermission } from "@/lib/sancus/accounts-server"
 import {
   createXenditPayout,
   isXenditConfigured,
@@ -45,6 +46,8 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
 })
 
 export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "money.send")
+  if (denied) return denied
   const idempotencyKey = req.headers.get("idempotency-key")?.trim()
   if (!idempotencyKey || idempotencyKey.length > 100) {
     return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 })

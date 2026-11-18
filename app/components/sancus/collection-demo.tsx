@@ -79,8 +79,7 @@ export function CollectionDemo() {
   return (
     <section className="tile s12" aria-labelledby="local-collections">
       <div className="tile-head">
-        <div><h2 className="tile-title" id="local-collections">Create a local QR collection</h2><p className="body-s muted" style={{ margin: "4px 0 0" }}>Provider-backed sandbox charges for customers paying your company.</p></div>
-        <span className="sx-pill sx-pill--simulated">Sandbox collection</span>
+        <div><h2 className="tile-title" id="local-collections">Create a local QR collection</h2><p className="body-s muted" style={{ margin: "4px 0 0" }}>Customers pay in their currency. You get dollars.</p></div>
       </div>
       <div className="grid" style={{ alignItems: "start" }}>
         <div className="s7" style={{ display: "grid", gap: 12 }}>

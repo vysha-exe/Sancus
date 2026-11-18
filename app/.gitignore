@@ -48,3 +48,5 @@ circle-recovery/
 
 # Circle SDK writes recovery files here too
 recovery_file_*.dat
+
+.env*

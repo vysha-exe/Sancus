@@ -36,7 +36,7 @@ const extras: Record<string, Extra> = {
 
 const fallback: Extra = { when: "—", by: "—", theyGot: "—", fee: "$0.00" }
 
-const statusOptions = ["Status", "Settled", "Pending", "Held", "Failed", "Simulated only"] as const
+const statusOptions = ["Status", "Settled", "Pending", "Held", "Failed"] as const
 
 function Chevron() {
   return (
@@ -90,7 +90,6 @@ export default function ActivityPage() {
         if (q && !`${p.who} ${p.amount} ${p.meta}`.toLowerCase().includes(q)) return false
         if (by !== "By" && !x.by.startsWith(by)) return false
         if (rail !== "Rail" && railLabel !== rail) return false
-        if (status === "Simulated only") return Boolean(p.simulated)
         if (status !== "Status" && p.status !== status) return false
         return true
       })
@@ -103,11 +102,7 @@ export default function ActivityPage() {
           <h1 className="sx-h heading-2">Activity</h1>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          {live.source === "live" ? (
-            <span className="sx-pill sx-pill--settled">Live activity</span>
-          ) : (
-            <span className="sx-pill sx-pill--simulated">Demo ledger</span>
-          )}
+          {live.source === "live" ? <span className="sx-pill sx-pill--settled">Live</span> : null}
           <button type="button" className="sx-btn sx-btn--secondary">
             Export CSV
           </button>
@@ -243,7 +238,6 @@ export default function ActivityPage() {
                     <td>
                       <span className="pills" style={{ justifyContent: "flex-start" }}>
                         <StatusPill status={p.status} />
-                        {p.simulated ? <StatusPill status="Simulated" /> : null}
                       </span>
                     </td>
                   </tr>

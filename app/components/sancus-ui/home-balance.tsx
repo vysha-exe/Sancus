@@ -13,13 +13,7 @@ export function HomeBalance() {
           Available balance
         </span>
         <div className="filters" role="group" aria-label="Chart range">
-          {live.source === "live" ? (
-            <span className="sx-pill sx-pill--settled">Live</span>
-          ) : (
-            <span className="sx-pill sx-pill--simulated" title="Showing Café Paulista demo numbers until you sign in">
-              Demo
-            </span>
-          )}
+          {live.source === "live" ? <span className="sx-pill sx-pill--settled">Live</span> : null}
           <button type="button" className="chip" aria-pressed="true">
             This month
           </button>

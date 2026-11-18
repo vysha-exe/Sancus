@@ -85,14 +85,14 @@ export function TreasurySetup({ onChange }: { onChange?: () => void }) {
     >
       {!status.circleConfigured ? (
         <span className="body-s">
-          <b>Connect Circle first.</b> Add your testnet <code>CIRCLE_API_KEY</code> to <code>app/.env.local</code>, run{" "}
+          <b>Connect Circle first.</b> Add your <code>CIRCLE_API_KEY</code> to <code>app/.env.local</code>, run{" "}
           <code>node scripts/circle-entity-secret.mjs</code>, restart the app, then come back here.
         </span>
       ) : !ready ? (
         <>
           <span className="body-s">
-            <b>Create your treasury on Arc testnet.</b> Sancus makes two Circle wallets: a <b>Treasury</b> that holds your
-            USDC (and receives what agents pay you), and a <b>Settlement</b> wallet that stands in for the payout partner.
+            <b>Create your treasury on Arc.</b> Sancus makes two Circle wallets: a <b>Treasury</b> that holds your USDC
+            (and receives what agents pay you), and a <b>Settlement</b> wallet for payout partners.
           </span>
           <div>
             <button type="button" className="sx-btn sx-btn--primary" onClick={setup} disabled={busy}>
@@ -118,12 +118,12 @@ export function TreasurySetup({ onChange }: { onChange?: () => void }) {
             </div>
           ))}
           <span className="body-s">
-            <b>Fund it:</b> copy the Treasury address, open the faucet, pick <b>Arc Testnet</b> and <b>USDC</b>, and paste it.
-            The balance shows up here and on Home within a minute.
+            <b>Fund it:</b> copy the Treasury address and send USDC on Arc. The balance shows up here and on Home within a
+            minute.
           </span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <a href={status.faucet} target="_blank" rel="noreferrer" className="sx-btn sx-btn--primary">
-              Get test USDC
+              Add USDC
             </a>
             <button type="button" className="sx-btn sx-btn--secondary" onClick={() => copy(status.treasury!.address)}>
               {copied === status.treasury!.address ? "Copied" : "Copy Treasury address"}
