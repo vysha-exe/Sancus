@@ -35,7 +35,7 @@ describe("simulated spend", () => {
     expect(r).toEqual({ spentMinor: 0n, heldMinor: 0n })
   })
 
-  it("takes it off the available balance", () => {
+  it("does not take settled simulated spend off Available (USDC is still onchain)", () => {
     const s = summarizeTreasury({
       wallets: [{ walletId: "w", name: "Global treasury", address: "0x1", blockchain: "ARC-TESTNET", usdcMinor: 10_000_000n }],
       gatewayMinor: 0n,
@@ -43,6 +43,18 @@ describe("simulated spend", () => {
       ledgerRows: [],
       simulated: { spentMinor: 2_500_000n, heldMinor: 0n },
     })
-    expect([s.totalMinor, s.availableMinor, s.simulatedSpentMinor]).toEqual(["10000000", "7500000", "2500000"])
+    expect([s.totalMinor, s.availableMinor, s.simulatedSpentMinor]).toEqual(["10000000", "10000000", "2500000"])
+  })
+
+  it("holds in-progress simulated ACH against Available", () => {
+    const s = summarizeTreasury({
+      wallets: [{ walletId: "w", name: "Global treasury", address: "0x1", blockchain: "ARC-TESTNET", usdcMinor: 10_000_000n }],
+      gatewayMinor: 0n,
+      payouts: [],
+      ledgerRows: [],
+      simulated: { spentMinor: 2_500_000n, heldMinor: 4_000_000n },
+    })
+    expect(s.availableMinor).toBe("6000000")
+    expect(s.reservedMinor).toBe("4000000")
   })
 })
