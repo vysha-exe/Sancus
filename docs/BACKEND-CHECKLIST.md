@@ -15,13 +15,13 @@
 
 1. ⬜ Circle keys + entity secret in `.env.local`; create Arc testnet wallets; fund from faucet (§2)
 2. ✅ Treasury summary endpoint (§2.3)
-3. 🟡 Ledger entries for every money movement (§9): payouts done; cards, deposits, x402 still to add
-4. ⬜ Policy engine + approvals (§3, §4)
+3. 🟡 Ledger entries for every money movement (§9): payouts, approvals and x402 done; cards and deposits still to add
+4. ✅ Policy engine + approvals (§3, §4)
 5. ✅ Singapore PayNow payout, simulated (§6.1) → ⬜ StraitsX sandbox if access arrives
-6. ⬜ Real USDC leg on Arc (`SANCUS_SETTLEMENT_ADDRESS`) (§6.1)
+6. 🟡 Real USDC leg on Arc (`SANCUS_SETTLEMENT_ADDRESS`) (§6.1): code done, needs step 1 keys + funded wallet
 7. ⬜ Cards: issue + simulated purchase with hold (§8)
-8. ⬜ x402 earning endpoint (§13)
-9. ⬜ Seed / reset script for the demo company (§18)
+8. 🟡 x402 earning endpoint (§13): built and tested up to Circle's facilitator; first real paid call needs the buyer wallet funded
+9. ⬜ Seed / reset script for the demo company (§16)
 
 ---
 
@@ -38,7 +38,13 @@
 | Activity | `GET /api/sancus/payouts` incl. when / they got / fee | ✅ |
 | Receive › USDC address | Arc wallet from treasury summary | ✅ (shows once a wallet exists) |
 | Settings › how money is kept | wallets, Gateway, ledger sync + CSV | ✅ |
-| Approvals, Team, Spending/Cards, Invoices, Agents | no backend yet (§3–4, §8, §10–11, §13–14) | ⬜ demo data |
+| Activity › Approvals | `GET /api/sancus/approvals`, `POST /api/sancus/approvals/:id` (approve / decline / approve all) | ✅ |
+| Sidebar badge + Home › Needs you | live waiting-approval count (`useLiveApprovals`) | ✅ |
+| Activity › summary tiles | treasury + approvals (available, on its way out, waiting for approval) | ✅ |
+| Pay › done (over the approval rule) | "Sent for approval" → approved / declined | ✅ |
+| Agents › Paid by other agents | `GET /api/sancus/x402/earnings` (live, refreshes every 5 s) | ✅ |
+| Settings › approval rules toggles | `PUT /api/sancus/policies` exists; toggles not wired yet | ⬜ |
+| Team, Spending/Cards, Invoices, Agents › assistant & budget | no backend yet (§8, §10–11, §14) | ⬜ demo data |
 | Demo-only recipients (Brazil, US, EU, Mexico) | simulated in the UI only | ⬜ |
 
 ## 1. Cross-cutting foundations
@@ -77,9 +83,10 @@
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ☐ | Policy model: per-user daily limit, per-payment limit, approval threshold, blocked recipients | `sancus_policies` table + `lib/sancus/policy.ts` | ⬜ | **P0** | | Unit tests: over-limit blocked, over-threshold → `PENDING_APPROVAL` |
-| ☐ | Read / update policies (admins only) | `GET/PUT /api/sancus/policies` | ⬜ | P0 | | Non-admin gets 403 |
-| ☐ | Enforce policy in payouts, cards, agent | called from §5, §8, §14 | ⬜ | P0 | | A payout over threshold waits for approval instead of sending |
+| ☐ | Policy model: daily limit, per-payment limit, approval threshold ($1,000 default), blocked recipients | `sancus_policies` table + `lib/sancus/policy.ts` | ✅ | **P0** | | 6 unit tests: over-limit blocked, over-threshold → `PENDING_APPROVAL` |
+| ☐ | Read / update policies | `GET/PUT /api/sancus/policies` | ✅ (no role check yet, §10) | P0 | | Validates amounts; per-payment ≤ daily |
+| ☐ | Enforce policy in payouts | `POST /api/sancus/payouts` | ✅ | P0 | | Tested: blocked → 403, $1,497 → approval queue |
+| ☐ | Enforce policy in cards and agent | §8, §14 | ⬜ | P1 | | Same engine decides card auths and agent spends |
 | ☐ | `SancusTreasury.sol`: daily limits, threshold approvals, holds, pause | `contracts/` (Foundry) | ⬜ | P1 | | `forge test` passes: limit, approval, idempotent paymentId, hold/settle/release |
 | ☐ | Deploy to Arc testnet + record address | `contracts/deployments/5042002.json` | ⬜ | P1 | | Address in `.env`; verified on explorer.testnet.arc.io |
 | ☐ | Call contract via Circle contract-execution API (operator wallet) | `lib/sancus/treasury-contract.ts` | ⬜ | P1 | | Onchain pay/hold/settle from backend with no private key in code |
@@ -88,8 +95,9 @@
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ☐ | Approval queue | `GET /api/sancus/approvals` | ⬜ | **P0** | | Lists payments in `PENDING_APPROVAL` for admins |
-| ☐ | Approve / reject | `POST /api/sancus/approvals/:id/approve`, `/reject` | ⬜ | P0 | | Approve resumes the payout; reject → `REJECTED`, no money moves |
+| ☐ | Approval queue (waiting + decided) | `GET /api/sancus/approvals` | ✅ | **P0** | | Lists `PENDING_APPROVAL` oldest first, plus recent decisions |
+| ☐ | Approve / decline (with note) | `POST /api/sancus/approvals/:id` `{action}` | ✅ | P0 | | Tested: approve → completed; decline → `REJECTED`, reserved funds released; second decision → 409 |
+| ☐ | Approver must differ from requester | needs roles (§10) | ⬜ | P1 | | Requester can't approve their own payment |
 | ☐ | Passkey (Face ID / Touch ID) approval via Circle modular wallet | `lib/sancus/passkey.ts` | ⬜ | P1 | | Approval requires a WebAuthn signature from the admin's passkey |
 | ☐ | Voice approval prompt (ElevenLabs) | `POST /api/sancus/approvals/:id/voice` | ⬜ | P2 | | Reads out "Approve S$5,000 to Lim Trading?" (ElevenLabs bounty) |
 
@@ -101,7 +109,7 @@
 | ☐ | Multi-rail router: picks cheapest / fastest, explains why | `lib/sancus/router.ts` | 🟡 (PayNow vs FAST) | P1 | | Returns chosen rail + alternatives + one-line reason |
 | ☐ | Generic quote across rails | `POST /api/sancus/payments/quote` | ⬜ | P1 | | Same request returns quotes for each supported rail |
 | ☐ | Generic create / list / get / cancel | `POST/GET /api/sancus/payments`, `GET /api/sancus/payments/:id`, `POST /api/sancus/payments/:id/cancel` | ⬜ | P1 | | Cancel releases any hold; illegal transitions rejected |
-| ☐ | State machine incl. `PENDING_APPROVAL`, `REJECTED`, `CANCELLED`, `REFUNDED` | `lib/sancus/payout-provider.ts` | 🟡 | P0 | | Tests cover every legal and illegal transition |
+| ☐ | State machine incl. `PENDING_APPROVAL`, `REJECTED` (✅), `CANCELLED`, `REFUNDED` (⬜) | `lib/sancus/payout-provider.ts` | 🟡 | P0 | | Tests cover every legal and illegal transition |
 | ☐ | Recipients address book | `GET/POST /api/sancus/recipients` | ⬜ | P1 | | Saved suppliers prefill the Pay form |
 
 ## 6. Payout rails
@@ -117,7 +125,7 @@
 | ☐ | **Real USDC leg on Arc** | set `SANCUS_SETTLEMENT_ADDRESS`, pick wallet | 🟡 code done, untested | **P0** | | Payout shows a real Arc tx hash link |
 | ☐ | StraitsX sandbox adapter (PayNow proxy / FAST, mocked status) | `lib/sancus/rails/straitsx.ts` | ⬜ (blocked on access) | P1 | | Payout gets a StraitsX ref; status from their API |
 | ☐ | StraitsX callback | `POST /api/sancus/webhooks/straitsx` | ⬜ | P1 | | Signature verified; status updated; deduped |
-| ☐ | Policy check before payout (§3) | in `POST /api/sancus/payouts` | ⬜ | P0 | | Over-threshold payout → approval queue |
+| ☐ | Policy check before payout (§3) | in `POST /api/sancus/payouts` | ✅ | P0 | | Over-threshold payout → approval queue (tested) |
 | ☐ | Ledger entries on each step (§9) | in payout flow | ⬜ | P0 | | Debits/credits balance for every payout |
 
 ### 6.2 Onchain USDC
@@ -169,7 +177,8 @@
 |---|---|---|---|---|---|---|
 | ☐ | Double-entry ledger (journals + entries, posted atomically via `sancus_post_journal()`; balanced + idempotent) | `supabase/migrations/20261117130000_create_sancus_ledger.sql` | ✅ | **P0** | | DB rejects unbalanced journals; reposting an event is a no-op |
 | ☐ | Balanced entries for payouts | `lib/sancus/ledger.ts` → `syncPayoutLedger()` | ✅ | P0 | | created → completed/failed tested in browser |
-| ☐ | Balanced entries for cards, deposits, collections, x402 earnings | `lib/sancus/ledger.ts` | ⬜ | P0 | | Add a journal builder per flow + tests |
+| ☐ | Balanced entries for approvals (declined → funds released) and x402 earnings (`revenue:x402`) | `lib/sancus/ledger.ts`, `sancus_post_journal_for()` | ✅ | P0 | | Tested |
+| ☐ | Balanced entries for cards, deposits, collections | `lib/sancus/ledger.ts` | ⬜ | P0 | | Add a journal builder per flow + tests |
 | ☐ | Ledger API + CSV export | `GET /api/sancus/ledger`, `GET /api/sancus/ledger?format=csv` | ✅ | P1 | | CSV downloads with debit/credit columns |
 | ☐ | Reconciliation: ledger in-transit vs payouts in progress | in `GET /api/sancus/treasury` (`ledger.inSync`) | ✅ | P1 | | "Ledger in sync" badge; mismatch shows a warning |
 | ☐ | Reconciliation: ledger funding vs onchain deposits | needs deposit journals (QuickNode / Circle webhooks) | ⬜ | P1 | | Onchain inflows post `funding:external` journals |
@@ -198,16 +207,18 @@
 |---|---|---|---|---|---|---|
 | ☐ | Address screening (Circle Compliance Engine) | `POST /api/compliance/screen`, `GET /api/compliance/logs` | ✅ upstream (engine access gated) | P1 | | Confirm behavior without engine access |
 | ☐ | Screen recipient before every payout | in payments flow | ⬜ | P1 | | Blocked recipient → payout refused with reason |
-| ☐ | Simple blocklist (stand-in for sanctions screening) | `sancus_policies.blocked_recipients` | ⬜ | P0 | | Tested in policy engine |
+| ☐ | Simple blocklist (stand-in for sanctions screening) | `sancus_policies.blocked_recipients` | ✅ | P0 | | Tested: blocked recipient → 403 |
 
 ## 13. x402 earning treasury (agents pay us)
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ☐ | Paid "route quote" API (cheapest rail + FX for a corridor) | `GET /api/x402/route-quote?country=SG&amount=…` | ⬜ | **P1** | | Without payment → `402 Payment Required` with x402 terms |
-| ☐ | Settle via Circle Nanopayments (Gateway) on Arc | `lib/sancus/x402.ts` | ⬜ | P1 | | Paid request returns quote; revenue lands in Gateway balance |
-| ☐ | Earnings recorded in ledger + shown on dashboard | ledger account `revenue:x402` | ⬜ | P1 | | "Earned $X from N agent calls" |
-| ☐ | Test client (agent that pays the endpoint) | `scripts/x402-client.mjs` | ⬜ | P1 | | Demo: run script, watch treasury go up |
+| ☐ | Paid "route quote" API (SG live pricing; ID/TH indicative), $0.01/call | `GET /api/x402/route-quote?country=SG&amount=…` | ✅ | **P1** | | Tested: unpaid → `402` with x402 v2 terms |
+| ☐ | Verify + settle via Circle Gateway nanopayments on Arc | `lib/sancus/x402.ts` (`@circle-fin/x402-batching`) | 🟡 | P1 | | Tested: forged payment rejected by Circle (`invalid_signature`) → 402. ⬜ First real paid call (needs funded buyer) |
+| ☐ | Earnings recorded + ledger revenue + Agents tile | `sancus_x402_earnings`, `GET /api/sancus/x402/earnings` | ✅ | P1 | | Tested with a test record: tile shows "+$0.01 from agent 0x…" |
+| ☐ | Free discovery listing | `GET /api/x402` | ✅ | P1 | | Lists endpoints, price, network, payTo |
+| ☐ | Test client (agent that pays the endpoint) | `npm run x402:buyer` (`scripts/x402-buyer.mjs`) | ✅ | P1 | | `--generate` creates the wallet; run pays N times |
+| ☐ | Point earnings at the real treasury | `SANCUS_X402_PAY_TO` = Arc treasury wallet | ⬜ | P0 | | Currently a throwaway test address in local `.env.local` |
 | ☐ | List endpoint on x402 Bazaar | discovery metadata | ⬜ | P2 | | Appears in Bazaar discovery API |
 
 ## 14. AI accounts-payable agent
@@ -258,7 +269,7 @@
 - [ ] Signed-out visit → dashboard (demo login)
 - [ ] Treasury shows a real Arc USDC balance and a Gateway balance
 - [ ] Pay S$2,000 by PayNow → real Arc tx hash for the USDC leg → Delivered
-- [ ] A S$15,000 payout waits for admin approval, then completes after approval
+- [x] A payout over the $1,000 rule waits for approval, then completes after approval (or releases funds if declined)
 - [ ] Card with $500 limit: $100 approved (hold → settle), $600 declined
 - [ ] QRIS or PromptPay collection paid in sandbox → ledger credit
 - [ ] An agent pays the x402 route-quote endpoint → treasury earnings go up
