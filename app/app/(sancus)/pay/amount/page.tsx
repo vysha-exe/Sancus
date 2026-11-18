@@ -63,7 +63,7 @@ export default function PayAmountPage() {
               {!sourceAccounts.length ? <option value="">***</option> : null}
               {sourceAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.parentId === null ? `Parent treasury · ${account.name}` : account.name}
+                  {account.parentId === null ? `Parent treasury · ${account.name}` : `↳ ${account.name}`}
                   {` · $${displayMinor(BigInt(account.ownMinor || "0"), USDC_DECIMALS, "", 2)}`}
                 </option>
               ))}
