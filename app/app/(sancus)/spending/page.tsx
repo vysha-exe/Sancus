@@ -5,8 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { RisingColumn } from "@/components/sancus-ui/logo"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
-import { PixSpendDemo } from "@/components/sancus/pix-spend-demo"
-import { XenditPayoutDemo } from "@/components/sancus/xendit-payout-demo"
 import { DemoReadiness } from "@/components/sancus/demo-readiness"
 import type { Payment } from "@/lib/sancus/demo-data"
 import type { SancusCardDto } from "@/lib/sancus/cards"
@@ -599,9 +597,6 @@ export default function SpendingPage() {
           </div>
         </section>
       </div>
-      <PixSpendDemo />
-      <XenditPayoutDemo />
-
       {limitCard ? (
         <div
           className="card-delete-backdrop"

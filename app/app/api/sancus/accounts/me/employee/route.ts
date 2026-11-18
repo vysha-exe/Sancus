@@ -4,6 +4,7 @@ import { createAdminContext, withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { toEmployeeCardPurchaseDto, type EmployeeCardPurchaseRow } from "@/lib/sancus/employee-spending"
 import { toPixPaymentDto } from "@/lib/sancus/local-rails"
+import { toXenditPayoutDto, type XenditPayoutRow } from "@/lib/sancus/xendit-payouts"
 
 export const GET = withAuth(async (_req, { user, supabase }) => {
   const account = await loadAccount(supabase, user)
@@ -12,7 +13,7 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
   const start = new Date()
   start.setUTCDate(1)
   start.setUTCHours(0, 0, 0, 0)
-  const [{ data: memberships }, { data: methods }, { data: cards }, { data: cardPurchases }, { data: pixPayments }] = await Promise.all([
+  const [{ data: memberships }, { data: methods }, { data: cards }, { data: cardPurchases }, { data: pixPayments }, { data: localPayments }] = await Promise.all([
     admin
       .from("sancus_memberships")
       .select("id, company_id, role, per_payment_limit_minor, daily_limit_minor")
@@ -42,12 +43,21 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
       .eq("employee_id", user.id)
       .order("created_at", { ascending: false })
       .limit(30),
+    admin
+      .from("sancus_xendit_payouts")
+      .select("*")
+      .eq("employee_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(30),
   ])
   const activeCardPurchases = (cardPurchases ?? []).filter((purchase) =>
     ["HELD", "SETTLED"].includes(purchase.status) && new Date(purchase.created_at ?? purchase.authorized_at) >= start
   )
   const activePixPayments = (pixPayments ?? []).filter((payment) =>
     ["PENDING", "SETTLED"].includes(payment.status) && new Date(payment.created_at) >= start
+  )
+  const activeLocalPayments = (localPayments ?? []).filter((payment) =>
+    ["PENDING", "COMPLIANCE_REVIEW", "SETTLED"].includes(payment.status) && new Date(payment.created_at) >= start
   )
   const scope = account.scopes[0] ?? null
   const m = memberships?.[0]
@@ -81,7 +91,9 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
       monthlyLimitMinor: String(x.monthly_limit_minor),
       usedMinor: (x.method_type === "PIX"
         ? activePixPayments.filter((payment) => payment.spending_method_id === x.id).reduce((sum, payment) => sum + BigInt(payment.amount_brl_minor), 0n)
-        : activeCardPurchases.filter((purchase) => purchase.spending_method_id === x.id).reduce((sum, purchase) => sum + BigInt(purchase.amount_minor), 0n)
+        : x.method_type === "PROMPTPAY" || x.method_type === "QRIS"
+          ? activeLocalPayments.filter((payment) => payment.spending_method_id === x.id).reduce((sum, payment) => sum + BigInt(payment.amount_minor), 0n)
+          : activeCardPurchases.filter((purchase) => purchase.spending_method_id === x.id).reduce((sum, purchase) => sum + BigInt(purchase.amount_minor), 0n)
       ).toString(),
       status: x.status,
       source: "SPENDING_METHOD" as const,
@@ -90,5 +102,6 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
     ],
     cardPurchases: ((cardPurchases ?? []) as EmployeeCardPurchaseRow[]).map(toEmployeeCardPurchaseDto),
     pixPayments: (pixPayments ?? []).map(toPixPaymentDto),
+    localPayments: ((localPayments ?? []) as XenditPayoutRow[]).map(toXenditPayoutDto),
   })
 })

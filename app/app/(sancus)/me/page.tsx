@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import { VirtualCard } from "@/components/sancus-ui/virtual-card"
 import { countryByCode } from "@/lib/sancus/countries"
+import type { XenditPayoutDto } from "@/lib/sancus/xendit-payouts"
 
 type Method = {
   id: string
@@ -31,6 +32,7 @@ type Data = {
   methods: Method[]
   cardPurchases: CardPurchase[]
   pixPayments: PixPayment[]
+  localPayments: XenditPayoutDto[]
 }
 
 const SYMBOL: Record<string, string> = { USD: "$", THB: "฿", IDR: "Rp ", BRL: "R$ " }
@@ -42,6 +44,7 @@ const money = (minor: string, currency: string) => {
 const usd6 = (minor: string | null) => minor ? `$${(Number(minor) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "No limit"
 const fallbackLast4 = (id: string) => String(parseInt(id.replace(/-/g, "").slice(-6), 16) % 10000).padStart(4, "0")
 const DEMO_PIX_QR = "00020101021226850014BR.GOV.BCB.PIX2563sancus.demo/pix/churrascaria5204000053039865802BR5920CHURRASCARIA DEMO6009SAO PAULO62070503***6304BEEF"
+const DEMO_PROMPTPAY_QR = "00020101021229370016A0000006770101110113006691234567853037645406100.005802TH5913BANGKOK CAFE6007BANGKOK6304DEMO"
 
 export default function EmployeePage() {
   const [data, setData] = useState<Data | null>(null)
@@ -57,6 +60,13 @@ export default function EmployeePage() {
   const [pixAmount, setPixAmount] = useState("")
   const [pixBusy, setPixBusy] = useState(false)
   const [pixMessage, setPixMessage] = useState<string | null>(null)
+  const [promptPayId, setPromptPayId] = useState("")
+  const [promptPayQr, setPromptPayQr] = useState(DEMO_PROMPTPAY_QR)
+  const [promptPayRecipient, setPromptPayRecipient] = useState("")
+  const [promptPayAmount, setPromptPayAmount] = useState("")
+  const [promptPayBusy, setPromptPayBusy] = useState(false)
+  const [promptPayMessage, setPromptPayMessage] = useState<string | null>(null)
+  const [promptPayPayout, setPromptPayPayout] = useState<XenditPayoutDto | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +90,8 @@ export default function EmployeePage() {
   const cards = useMemo(() => data?.methods.filter((method) => method.type === "CARD") ?? [], [data])
   const pixMethods = useMemo(() => data?.methods.filter((method) => method.type === "PIX") ?? [], [data])
   const otherQr = useMemo(() => data?.methods.filter((method) => method.type === "QRIS" || method.type === "PROMPTPAY") ?? [], [data])
+  const promptPayMethods = useMemo(() => data?.methods.filter((method) => method.type === "PROMPTPAY") ?? [], [data])
+  const selectedPromptPay = promptPayMethods[0] ?? null
   const selectedCard = cards.find((card) => card.id === cardId) ?? cards[0] ?? null
   const selectedPix = pixMethods.find((method) => method.id === pixId) ?? pixMethods[0] ?? null
   const where = data?.company ? `${countryByCode(data.company.country)?.flag ?? ""} ${data.company.name}` : ""
@@ -159,6 +171,44 @@ export default function EmployeePage() {
     }
   }
 
+  function readPromptPayQr() {
+    setPromptPayMessage(null)
+    if (promptPayQr.trim().length < 20) {
+      setPromptPayMessage("Paste the merchant's PromptPay QR payload first.")
+      return
+    }
+    // Hackathon decoder: exposes the review step without pretending that Xendit resolves merchant QRs.
+    setPromptPayRecipient("Bangkok Cafe")
+    setPromptPayId("66912345678")
+    setPromptPayAmount("100")
+    setPromptPayMessage("QR read for the demo. Review the merchant and PromptPay destination before paying.")
+  }
+
+  async function spendPromptPay(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedPromptPay) return
+    setPromptPayBusy(true)
+    setPromptPayMessage(null)
+    try {
+      const response = await fetch("/api/sancus/employee/local-payments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spendingMethodId: selectedPromptPay.id, recipientName: promptPayRecipient,
+          promptPayId, amountThb: Number(promptPayAmount), qrPayload: promptPayQr,
+        }),
+      })
+      const body = await response.json() as { payout?: XenditPayoutDto; error?: string }
+      if (!response.ok || !body.payout) throw new Error(body.error || "The PromptPay payment was declined")
+      setPromptPayPayout(body.payout)
+      setPromptPayMessage(body.payout.status === "SETTLED" ? "PromptPay payment settled." : "PromptPay payment submitted.")
+      await load()
+    } catch (error) {
+      setPromptPayMessage(error instanceof Error ? error.message : "The PromptPay payment was declined")
+    } finally {
+      setPromptPayBusy(false)
+    }
+  }
+
   if (state === "error") return <div className="page"><div className="tile"><div className="empty">Couldn&apos;t load your employee portal. Refresh to try again.</div></div></div>
 
   return (
@@ -201,8 +251,36 @@ export default function EmployeePage() {
               {pixMessage ? <div className="empty" role="status">{pixMessage}</div> : null}
             </form>
           ) : <div className="empty">No Pix access is assigned to this login yet. Your admin can issue it from your team profile.</div>}
-          {otherQr.length ? <p className="body-s muted">Your {otherQr.map((method) => method.type === "PROMPTPAY" ? "PromptPay" : "QRIS").join(" and ")} access is shown for reference; outbound employee payments in this demo use Pix.</p> : null}
+          {otherQr.some((method) => method.type === "QRIS") ? <p className="body-s muted">QRIS access is assigned for Indonesia. Outbound QRIS merchant scanning remains simulated in this hackathon build.</p> : null}
         </section>
+
+        {selectedPromptPay ? (
+          <section className="tile s12" aria-labelledby="employee-promptpay">
+            <div className="tile-head">
+              <div>
+                <h2 className="tile-title" id="employee-promptpay">Pay a Thai merchant</h2>
+                <p className="body-s muted" style={{ margin: "4px 0 0" }}>Your admin issued PromptPay access. The QR identifies the merchant; Sancus applies your company limits and Xendit sends the THB payout.</p>
+              </div>
+              <span className={`sx-pill ${selectedPromptPay.status === "ACTIVE" ? "sx-pill--settled" : ""}`}>{selectedPromptPay.status}</span>
+            </div>
+            <form onSubmit={spendPromptPay} className="grid" style={{ gap: 12 }}>
+              <div className="s7" style={{ display: "grid", gap: 12 }}>
+                <div className="kv"><span>Used this month</span><span>{money(selectedPromptPay.usedMinor, "THB")} of {money(selectedPromptPay.monthlyLimitMinor, "THB")}</span></div>
+                <label className="field"><span>Scan or paste merchant PromptPay QR</span><textarea rows={4} value={promptPayQr} onChange={(event) => { setPromptPayQr(event.target.value); setPromptPayRecipient(""); setPromptPayPayout(null) }} required minLength={20} /></label>
+                <button type="button" className="sx-btn sx-btn--secondary" onClick={readPromptPayQr} disabled={promptPayBusy}>Read QR</button>
+              </div>
+              <div className="s5" style={{ display: "grid", gap: 12, alignContent: "start" }}>
+                {promptPayRecipient ? <>
+                  <label className="field"><span>Merchant</span><input value={promptPayRecipient} onChange={(event) => setPromptPayRecipient(event.target.value)} required /></label>
+                  <label className="field"><span>PromptPay destination</span><input value={promptPayId} onChange={(event) => setPromptPayId(event.target.value)} required /></label>
+                  <label className="field"><span>Amount (THB)</span><input type="number" min="1" step="0.01" value={promptPayAmount} onChange={(event) => setPromptPayAmount(event.target.value)} required /></label>
+                  <button type="submit" className="sx-btn sx-btn--primary" disabled={promptPayBusy || selectedPromptPay.status !== "ACTIVE"}>{promptPayBusy ? "Sending…" : `Pay ${promptPayAmount ? `฿${promptPayAmount}` : "with PromptPay"}`}</button>
+                </> : <div className="empty">Read the merchant QR to review who will be paid.</div>}
+              </div>
+            </form>
+            {promptPayMessage ? <div className="empty" role="status" style={{ marginTop: 12 }}>{promptPayMessage}{promptPayPayout ? ` · ${promptPayPayout.simulated ? "Simulated fallback" : "Xendit test mode"}` : ""}</div> : null}
+          </section>
+        ) : null}
 
         <section className="tile s4" aria-labelledby="employee-limits">
           <div className="tile-head"><h2 className="tile-title" id="employee-limits">Your limits</h2><span className="body-s muted">Set by admin</span></div>
@@ -212,9 +290,10 @@ export default function EmployeePage() {
 
         <section className="tile s8" aria-labelledby="employee-activity">
           <div className="tile-head"><h2 className="tile-title" id="employee-activity">Recent spending</h2><span className="body-s muted">Authorizations and settled debits</span></div>
-          {data && (data.cardPurchases.length || data.pixPayments.length) ? [
+          {data && (data.cardPurchases.length || data.pixPayments.length || data.localPayments.length) ? [
             ...data.cardPurchases.map((purchase) => ({ id: `card-${purchase.id}`, name: purchase.merchantName, amount: money(purchase.amountMinor, purchase.currency), method: "Card", status: purchase.status, at: purchase.authorizedAt })),
             ...data.pixPayments.map((payment) => ({ id: `pix-${payment.id}`, name: payment.recipientName, amount: money(payment.amountBrlMinor, "BRL"), method: "Pix", status: payment.status, at: payment.createdAt })),
+            ...data.localPayments.map((payment) => ({ id: `local-${payment.id}`, name: payment.recipientName, amount: money(payment.amountMinor, payment.currency), method: payment.rail === "PROMPTPAY" ? "PromptPay" : payment.rail, status: payment.status, at: payment.createdAt })),
           ].sort((a, b) => +new Date(b.at) - +new Date(a.at)).slice(0, 8).map((row) => <div className="kv" key={row.id}><span><span className="sx-rail">{row.method}</span> {row.name}<span className="body-s muted" style={{ display: "block" }}>{new Date(row.at).toLocaleString()}</span></span><span style={{ textAlign: "right" }}>−{row.amount}<span className="body-s muted" style={{ display: "block" }}>{row.status}</span></span></div>) : <div className="empty">No employee purchases yet.</div>}
         </section>
       </div>
