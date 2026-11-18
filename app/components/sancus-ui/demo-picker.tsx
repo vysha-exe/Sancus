@@ -16,7 +16,6 @@ const COPY: Record<DemoAs, { title: string; detail: string }> = {
 export function DemoPicker() {
   return (
     <AuthShell
-      done={5}
       headEnd={
         <>
           Have an account? <Link href="/sign-in">Sign in</Link>
@@ -45,9 +44,6 @@ function PortalLink({ as }: { as: DemoAs }) {
       <span className="pick__copy">
         <span className="body-strong">{COPY[as].title}</span>
         <span className="body-s">{COPY[as].detail}</span>
-      </span>
-      <span className="pick__chev" aria-hidden>
-        →
       </span>
     </a>
   )

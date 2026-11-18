@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from "react"
 import { useSignUp, validInviteCount } from "@/lib/sancus/sign-up-state"
-import { AuthShell } from "./auth-shell"
+import { AuthShell, BUSINESS_SIGN_UP_STEPS, PERSONAL_SIGN_UP_STEPS } from "./auth-shell"
 
 function SignInLink() {
   return (
@@ -26,7 +26,7 @@ export function SignUpEmailStep() {
   }
 
   return (
-    <AuthShell done={0} headEnd={<SignInLink />}>
+    <AuthShell step={0} headEnd={<SignInLink />}>
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
           <span className="sx-label">Step 1 of 6</span>
@@ -114,7 +114,7 @@ export function SignUpCodeStep() {
   }
 
   return (
-    <AuthShell done={1}>
+    <AuthShell step={1}>
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
           <span className="sx-label">Step 2 of 6</span>
@@ -181,47 +181,71 @@ export function SignUpAccountTypeStep() {
   }
 
   return (
-    <AuthShell done={2}>
-      <div aria-labelledby="q">
+    <AuthShell step={2}>
+      <form
+        aria-labelledby="q"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (data.accountType) choose(data.accountType)
+        }}
+      >
         <div className="auth-q">
           <span className="sx-label">Step 3 of 6</span>
           <h1 id="q" className="sx-h heading-1">
             What kind of account?
           </h1>
-          <p className="body-l lead">You can open a business later from Settings if you start personal.</p>
+          <p className="body-l lead">Start personal and you can open a business later.</p>
         </div>
-        <div style={{ display: "grid", gap: 10 }}>
+        <div
+          className="opts"
+          role="radiogroup"
+          aria-label="Account type"
+          style={{ gridTemplateColumns: "minmax(0, 1fr)" }}
+        >
           <button
             type="button"
-            className={`pick${data.accountType === "personal" ? " pick--on" : ""}`}
-            onClick={() => choose("personal")}
-            style={{ width: "100%", textAlign: "left" }}
+            role="radio"
+            aria-checked={data.accountType === "personal"}
+            className={data.accountType === "personal" ? "opt opt--on" : "opt"}
+            onClick={() => update({ accountType: "personal" })}
           >
-            <span className="radio" />
-            <span style={{ display: "grid", gap: 2 }}>
-              <span className="body-strong">Personal</span>
-              <span className="body-s muted">Just me. Pay and receive from one account.</span>
+            <span className="code3" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+              </svg>
             </span>
+            <b>Personal</b>
+            <small>Just you. One account to pay and get paid. 5 steps.</small>
           </button>
           <button
             type="button"
-            className={`pick${data.accountType === "business" ? " pick--on" : ""}`}
-            onClick={() => choose("business")}
-            style={{ width: "100%", textAlign: "left" }}
+            role="radio"
+            aria-checked={data.accountType === "business"}
+            className={data.accountType === "business" ? "opt opt--on" : "opt"}
+            onClick={() => update({ accountType: "business" })}
           >
-            <span className="radio" />
-            <span style={{ display: "grid", gap: 2 }}>
-              <span className="body-strong">Business</span>
-              <span className="body-s muted">A company with people and branches.</span>
+            <span className="code3" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="3" width="6" height="5" rx="1" />
+                <rect x="3" y="16" width="6" height="5" rx="1" />
+                <rect x="15" y="16" width="6" height="5" rx="1" />
+                <path d="M12 8v4M6 16v-4h12v4" />
+              </svg>
             </span>
+            <b>Business</b>
+            <small>A company with a team, branches and approvals. 6 steps.</small>
           </button>
         </div>
         <div className="auth-btns">
+          <button type="submit" className="sx-btn sx-btn--primary" disabled={!data.accountType}>
+            Continue
+          </button>
           <Link href="/sign-up/code" className="sx-btn sx-btn--secondary">
             Back
           </Link>
         </div>
-      </div>
+      </form>
     </AuthShell>
   )
 }
@@ -241,7 +265,7 @@ export function SignUpAboutYouStep() {
   }
 
   return (
-    <AuthShell done={3}>
+    <AuthShell step={3} steps={PERSONAL_SIGN_UP_STEPS}>
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
           <span className="sx-label">Step 4 of 5</span>
@@ -299,7 +323,7 @@ export function SignUpCompanyStep() {
   }
 
   return (
-    <AuthShell done={3}>
+    <AuthShell step={3} steps={BUSINESS_SIGN_UP_STEPS}>
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
           <span className="sx-label">Step 4 of 6</span>
@@ -367,7 +391,10 @@ export function SignUpCurrencyStep() {
   }
 
   return (
-    <AuthShell done={data.accountType === "personal" ? 4 : 4}>
+    <AuthShell
+      step={4}
+      steps={data.accountType === "personal" ? PERSONAL_SIGN_UP_STEPS : BUSINESS_SIGN_UP_STEPS}
+    >
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
           <span className="sx-label">{data.accountType === "personal" ? "Step 5 of 5" : "Step 5 of 6"}</span>
@@ -429,7 +456,7 @@ export function SignUpTeamStep() {
   }
 
   return (
-    <AuthShell done={5}>
+    <AuthShell step={5} steps={BUSINESS_SIGN_UP_STEPS}>
       <form aria-labelledby="q" onSubmit={send}>
         <div className="auth-q">
           <span className="sx-label">Step 6 of 6</span>
@@ -574,7 +601,10 @@ export function SignUpDoneStep() {
   }, [personal])
 
   return (
-    <AuthShell done={personal ? 5 : 6}>
+    <AuthShell
+      step={personal ? PERSONAL_SIGN_UP_STEPS.length : BUSINESS_SIGN_UP_STEPS.length}
+      steps={personal ? PERSONAL_SIGN_UP_STEPS : BUSINESS_SIGN_UP_STEPS}
+    >
       <div className="panel-col">
         <div className="auth-q">
           <h1 id="q" className="sx-h heading-1">

@@ -72,7 +72,7 @@ const SUGGESTIONS = [
   "What did we pay out recently?",
 ]
 
-function useAgentStatus() {
+export function useAgentStatus() {
   const [status, setStatus] = useState<Status | null>(null)
   const load = useCallback(async () => {
     try {
@@ -127,7 +127,9 @@ async function runAgentStream(messages: { role: string; content: string }[], voi
   return done
 }
 
-export function AgentConsole() {
+type AgentConsoleProps = { paused?: boolean }
+
+export function AgentConsole({ paused = false }: AgentConsoleProps) {
   const status = useAgentStatus()
   const [turns, setTurns] = useState<Turn[]>([])
   const [draft, setDraft] = useState("")
@@ -242,7 +244,7 @@ export function AgentConsole() {
   const ask = useCallback(
     async (text: string, spoken = false) => {
       const content = text.trim()
-      if (!content) return
+      if (!content || paused) return
       const next: Turn[] = [...turnsRef.current, { role: "user", content, spoken }]
       turnsRef.current = next
       setTurns(next)
@@ -297,7 +299,7 @@ export function AgentConsole() {
         setLiveSteps([])
       }
     },
-    [say]
+    [paused, say]
   )
 
   const confirm = useCallback(async (p: Proposal): Promise<string> => {
@@ -348,6 +350,7 @@ export function AgentConsole() {
   const handleUtterance = useCallback(
     async (text: string) => {
       setInterim("")
+      if (paused) return
       if (EXIT_RE.test(text)) return exitVoice()
       const waiting = waitingProposal()
       if (waiting && CONFIRM_RE.test(text.trim())) {
@@ -369,7 +372,7 @@ export function AgentConsole() {
       }
       await ask(text, true)
     },
-    [ask, confirm, exitVoice, say, waitingProposal]
+    [ask, confirm, exitVoice, paused, say, waitingProposal]
   )
 
   const listen = useCallback(() => {
@@ -417,8 +420,14 @@ export function AgentConsole() {
   }, [listen])
 
   useEffect(() => () => exitVoice(), [exitVoice])
+  useEffect(() => {
+    if (!paused) return
+    const timer = window.setTimeout(() => exitVoice(), 0)
+    return () => window.clearTimeout(timer)
+  }, [paused, exitVoice])
 
   async function enterVoice() {
+    if (paused) return
     setVoiceNote(recognitionCtor() ? null : "This browser can't listen (use Chrome or Edge). You can still type, and replies will be spoken.")
     setPhaseBoth("speaking")
     await say(turnsRef.current.length ? "I'm listening." : "Hi, I'm listening. What should I do?")
@@ -469,7 +478,7 @@ export function AgentConsole() {
             className={`sx-btn sx-btn--sm ${voiceOn ? "sx-btn--primary" : "sx-btn--secondary"}`}
             aria-pressed={voiceOn}
             onClick={() => (voiceOn ? exitVoice() : void enterVoice())}
-            disabled={status?.aiConfigured === false}
+            disabled={status?.aiConfigured === false || paused}
           >
             {voiceOn ? "Exit voice mode" : "🎙 Voice mode"}
           </button>
@@ -533,7 +542,7 @@ export function AgentConsole() {
             </span>
             <div className="filters" role="group" aria-label="Try one">
               {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" className="chip" onClick={() => void ask(s)} disabled={busy || status?.aiConfigured === false}>
+                <button key={s} type="button" className="chip" onClick={() => void ask(s)} disabled={busy || paused || status?.aiConfigured === false}>
                   {s}
                 </button>
               ))}
@@ -570,7 +579,7 @@ export function AgentConsole() {
                       </span>
                     ) : (
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <button type="button" className="sx-btn sx-btn--primary sx-btn--sm" onClick={() => void confirm(p)} disabled={o?.state === "running"}>
+                        <button type="button" className="sx-btn sx-btn--primary sx-btn--sm" onClick={() => void confirm(p)} disabled={paused || o?.state === "running"}>
                           {o?.state === "running" ? "Working…" : "Confirm"}
                         </button>
                         <span className="body-s muted">Nothing happens until you confirm.</span>
@@ -595,6 +604,11 @@ export function AgentConsole() {
         ) : null}
       </div>
 
+      {paused ? (
+        <span className="body-s" role="status">
+          Agent is paused. Resume from the Payments agent card below to send messages or use voice.
+        </span>
+      ) : null}
       {status?.aiConfigured === false ? (
         <span className="body-s" role="alert">
           The agent needs an Anthropic API key: add <code>ANTHROPIC_API_KEY</code> to <code>.env.local</code> and restart the app.
@@ -615,10 +629,10 @@ export function AgentConsole() {
             placeholder={voiceOn ? "Or type here" : "e.g. Pay Tan Logistics S$120 by PayNow"}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            disabled={busy}
+            disabled={busy || paused}
           />
         </label>
-        <button type="submit" className="sx-btn sx-btn--primary" disabled={busy || !draft.trim()}>
+        <button type="submit" className="sx-btn sx-btn--primary" disabled={busy || paused || !draft.trim()}>
           {busy ? "Working…" : "Go"}
         </button>
       </form>

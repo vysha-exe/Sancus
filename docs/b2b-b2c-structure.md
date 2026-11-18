@@ -84,22 +84,22 @@ Rule: if an API exists and a screen exists, **wire**. If UX is missing or wrong 
 | Treasury summary + setup | ✅ | Live (Home/Settings/Receive) | **done** |
 | SG PayNow payouts + quote | ✅ | Live Pay flow | **done** |
 | Approvals queue + decide | ✅ | Live Activity/Approvals + badge | **done** (add self-approve block when roles live) |
-| Policies `GET/PUT` | ✅ | Settings toggles are **local state only** | **wire** → Settings |
+| Policies `GET/PUT` | ✅ | Settings rules (threshold + toggles) live; `newRecipients` enforced | **done** |
 | Ledger CSV | ✅ | Settings | **done**; journals for collections/cards still backlog |
 | x402 earnings | ✅ | Agents tile live | **done** |
 | Companies / branches | ✅ | Branches live | **done** |
-| Memberships schema | ✅ table | Team **demo** | **wire** after invite APIs |
-| Invite / role APIs | ⬜ | Invite button dead | **build API** + **handoff** invite sheet / inherited badges |
-| Pix payments + spending-methods | ✅ | Juliana path + demo panels; Spending cards mostly fake | **wire** methods into Spending; **handoff** if card grid must change |
+| Memberships schema | ✅ table | Team live when company exists | **done** |
+| Invite / role APIs | ✅ | Invite sheet + role/disable on person page | **done** (email still stubbed) |
+| Pix payments + spending-methods | ✅ | Spending lists live methods; freeze/limit wired | **done** |
 | Collections / local rails | ✅ (dual stacks) | Receive demo panels | **wire** into primary Receive (not only bolted demos) |
 | Xendit payouts | ✅ | Spending demo panel | **wire** into Pay or Spending primary flow |
 | Demo-login | ✅ | Shell / proxy | **done** |
 | B2C vs B2B chrome | Partial (personal wallets) | Always show Team/Branches | **handoff** + implement gate/switcher |
 | Workspace switcher | ⬜ | Demo chip | **handoff** + implement |
-| Cards / Marqeta | ⬜ | Spending + Team methods **demo** | **handoff** then backend (BUILD cards) |
-| Invoices | ⬜ | Demo screen | **handoff** then backend (BUILD invoices) |
-| Agents chat / budget / voice | ⬜ | Demo | **handoff** (prize path); earnings already live |
-| Multi-corridor Pay (ACH/SEPA/SPEI) | ⬜ / sim | Demo recipients | **handoff** or keep labeled Simulated until adapters exist |
+| Cards / Marqeta | 🟡 | Spending: issue/list/freeze + simulate hold→settle | **done** for demo path; JIT/webhook still open |
+| Invoices | 🟡 | Upload → extract → confirm → Pay | **done** slice; apply invoices migration |
+| Agents chat / budget / voice | 🟡 | `AgentConsole` mounted; budget from agent status | **done** for typed path; voice needs keys |
+| Multi-corridor Pay (ACH/SEPA/SPEI) | ⬜ / sim | Demo recipients labeled **Simulated** on Pay › Who | **done** labeling; adapters later |
 | Recipients address book API | ⬜ | Hardcoded `demo-data` | **build** with `company_id` (BUILD) + wire Pay › Who |
 
 ### Cheap wire wins (do early)

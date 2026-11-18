@@ -36,7 +36,6 @@ export function SignInForm() {
 
   return (
     <AuthShell
-      done={5}
       headEnd={
         <>
           New to Sancus? <Link href="/sign-up">Open an account</Link>

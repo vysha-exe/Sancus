@@ -105,7 +105,13 @@ export default function SettingsPage() {
       }
       const minor = BigInt(body.policy.approvalThresholdMinor)
       const off = minor >= 999_999_999_000_000n
-      setRules((prev) => ({ ...prev, threshold: !off }))
+      const saved = body.policy.rules ?? body.policy
+      setRules((prev) => ({
+        threshold: !off,
+        twoSignoffs: typeof saved.twoSignoffs === "boolean" ? saved.twoSignoffs : prev.twoSignoffs,
+        newRecipients: typeof saved.newRecipients === "boolean" ? saved.newRecipients : prev.newRecipients,
+        afterHours: typeof saved.afterHours === "boolean" ? saved.afterHours : prev.afterHours,
+      }))
       setThreshold(usdLabel(off ? 1_000_000_000n : minor))
       setStatus("idle")
       setError(null)
@@ -115,7 +121,8 @@ export default function SettingsPage() {
   }, [policyUrl, ws.ready])
 
   useEffect(() => {
-    void loadPolicy()
+    const timer = window.setTimeout(() => void loadPolicy(), 0)
+    return () => window.clearTimeout(timer)
   }, [loadPolicy])
 
   function setRule(id: RuleId, value: boolean) {
@@ -136,7 +143,12 @@ export default function SettingsPage() {
       const res = await fetch(policyUrl, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approvalThreshold: formatMinor(amount, USDC_DECIMALS) }),
+        body: JSON.stringify({
+          approvalThreshold: formatMinor(amount, USDC_DECIMALS),
+          twoSignoffs: rules.twoSignoffs,
+          newRecipients: rules.newRecipients,
+          afterHours: rules.afterHours,
+        }),
       })
       const body = await res.json()
       if (!res.ok) {
@@ -234,7 +246,7 @@ export default function SettingsPage() {
                     ? "Saved. Rules apply to requests made from now on."
                     : error && error !== "save-failed"
                       ? error
-                      : "The approval amount is saved to your account. Other toggles are still local for the demo."}
+                      : "Your rules are saved to this account."}
             </span>
             <button
               type="button"

@@ -2,7 +2,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { evmAddressSchema } from "@/lib/api/validate"
 import { type AchQuote, type AchRecipientRow, quoteAch, settlementModeFromEnv } from "./ach"
-import { evaluatePayout, loadPolicy, spentToday, type Evaluation } from "./policy"
+import { evaluatePayout, isNewAchRecipient, loadPolicy, spentToday, type Evaluation } from "./policy"
 import { type AchSpeed, demoModeFromEnv } from "./rails/ach-sim"
 
 export async function getRecipient(db: SupabaseClient, userId: string, id: string): Promise<AchRecipientRow | null> {
@@ -41,11 +41,13 @@ export async function prepareAch(db: SupabaseClient, userId: string, input: { re
   if (!recipient) return { ok: false, status: 404, body: { error: "Recipient not found" } }
   const q = quoteAch(input.usdAmount, input.speed, { settlementMode: settlementModeFromEnv(), demoMode: demoModeFromEnv() })
   if (!q.ok) return { ok: false, status: 400, body: { error: q.issues[0]!.message, issues: q.issues } }
+  const policy = await loadPolicy(db, userId)
   const evaluation = evaluatePayout({
-    policy: await loadPolicy(db, userId),
+    policy,
     amountMinor: q.quote.usdcAmountMinor,
     recipient: { name: recipient.name, proxyValue: `${recipient.routing_number}:${recipient.account_last4}` },
     spentTodayMinor: await spentToday(db, userId),
+    isNewRecipient: policy.rules.newRecipients ? await isNewAchRecipient(db, userId, recipient.id) : false,
   })
   return { ok: true, recipient, quote: q.quote, evaluation }
 }

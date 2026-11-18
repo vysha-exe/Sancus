@@ -17,6 +17,9 @@ const bodySchema = z.object({
   perPaymentLimit: z.string().max(20).optional(),
   dailyLimit: z.string().max(20).optional(),
   blockedRecipients: z.array(z.string().min(1).max(140)).max(200).optional(),
+  twoSignoffs: z.boolean().optional(),
+  newRecipients: z.boolean().optional(),
+  afterHours: z.boolean().optional(),
 })
 
 export const PUT = withAuth(async (req, { user, supabase }) => {
@@ -52,6 +55,11 @@ export const PUT = withAuth(async (req, { user, supabase }) => {
     per_payment_limit_minor: perPayment.value.toString(),
     daily_limit_minor: daily.value.toString(),
     blocked_recipients: parsed.data.blockedRecipients ?? current.blockedRecipients,
+    rules: {
+      twoSignoffs: parsed.data.twoSignoffs ?? current.rules.twoSignoffs,
+      newRecipients: parsed.data.newRecipients ?? current.rules.newRecipients,
+      afterHours: parsed.data.afterHours ?? current.rules.afterHours,
+    },
   })
   if (error) {
     console.error("Failed to save policy", error)
