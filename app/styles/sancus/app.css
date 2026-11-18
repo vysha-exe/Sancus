@@ -236,7 +236,8 @@ body:has(.frame) {
 .search-pill { flex: 1 1 280px; max-width: 460px; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--surface-100); color: var(--ink-muted); }
 .search-pill input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 400 14px var(--font-sans); outline: none; }
 .search-pill:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
-.hdr-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
+.hdr .push { margin-left: auto; }
+.hdr-end { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .hdr .icon-btn { background: var(--surface-100); border-color: var(--line); }
 .me { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 3px 14px 3px 3px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--surface-100); color: var(--ink); cursor: pointer; text-align: left; }
 .me .av { width: 36px; height: 36px; }

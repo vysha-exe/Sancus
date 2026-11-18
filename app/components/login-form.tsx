@@ -19,6 +19,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,34 +30,47 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+const DEMO_ERRORS: Record<string, string> = {
+  "demo-disabled": "Demo login is turned off. Use Enter the demo on the landing page, or set SANCUS_DEMO_LOGIN=true.",
+  "demo-misconfigured": "Demo login needs SANCUS_DEMO_EMAIL and an 8+ character SANCUS_DEMO_PASSWORD.",
+  "demo-missing-secret": "Demo user does not exist yet and SUPABASE_SECRET_KEY is missing, so it cannot be created.",
+  "demo-create-failed": "Could not create the demo user. Paste SUPABASE_SECRET_KEY in .env.local, or use Enter the demo for guest UI.",
+  "demo-login-failed": "Demo login failed. Check SANCUS_DEMO_PASSWORD, or use Enter the demo for guest UI.",
+};
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
-  const [email, setEmail] = useState("admin@gmail.com");
-  const [password, setPassword] = useState("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const demoError = useMemo(() => {
+    const code = searchParams.get("error");
+    return code ? DEMO_ERRORS[code] ?? null : null;
+  }, [searchParams]);
+  const displayError = error ?? demoError;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/sancus/simple-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Login failed");
-      router.push(body.role === "employee" ? "/me" : "/home");
-      router.refresh();
+      if (error) throw error;
+      // Update this route to redirect to an authenticated route. The user already has an active session.
+      router.push("/home");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
@@ -70,7 +84,7 @@ export function LoginForm({
         <CardHeader>
           <CardTitle className="text-2xl">Login</CardTitle>
           <CardDescription>
-            Admin or employee access for the hackathon demo
+            Enter your email below to login to your account
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -81,14 +95,22 @@ export function LoginForm({
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@gmail.com"
+                  placeholder="m@example.com"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    href="/auth/forgot-password"
+                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                  >
+                    Forgot your password?
+                  </Link>
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -97,16 +119,23 @@ export function LoginForm({
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {displayError && <p className="text-sm text-red-500">{displayError}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
             </div>
-            <div className="mt-4 grid gap-1 text-center text-sm text-muted-foreground">
-              <span>Admin: admin@gmail.com / password</span>
-              <button type="button" className="underline" onClick={() => { setEmail("employee@gmail.com"); setPassword("password"); setError(null); }}>
-                Use employee login
-              </button>
+            <div className="mt-4 text-center text-sm">
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/auth/sign-up"
+                className="underline underline-offset-4"
+              >
+                Sign up
+              </Link>
+              {" · "}
+              <Link href="/demo" className="underline underline-offset-4">
+                Enter the demo
+              </Link>
             </div>
           </form>
         </CardContent>
