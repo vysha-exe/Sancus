@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
 import { getPerson, people } from "@/lib/sancus/demo-data"
 
@@ -69,11 +69,34 @@ export default function AssignMethodPage() {
   const router = useRouter()
   const initialId = params?.personId ?? "ana"
   const initialPerson = getPerson(initialId)
-
+  const [liveName, setLiveName] = useState<string | null>(null)
+  const [liveOk, setLiveOk] = useState(false)
   const spenders = people.filter((p) => p.role === "Employee" || p.role === "Finance")
-  const [personId, setPersonId] = useState(initialPerson ? initialPerson.id : "ana")
-  const person = getPerson(personId) ?? spenders[0]
-  const first = person.name.split(" ")[0]
+  const [personId, setPersonId] = useState(
+    initialPerson ? initialPerson.id : /^[0-9a-f-]{36}$/i.test(initialId) ? initialId : "ana"
+  )
+
+  useEffect(() => {
+    if (!/^[0-9a-f-]{36}$/i.test(initialId)) return
+    void fetch(`/api/sancus/companies/members/${initialId}`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return
+        const body = await res.json()
+        setLiveName(body.member?.email ?? body.member?.userId ?? "Teammate")
+        setLiveOk(true)
+        setPersonId(initialId)
+      })
+      .catch(() => undefined)
+  }, [initialId])
+  const demoPerson = getPerson(personId)
+  const person = demoPerson ?? {
+    id: personId,
+    name: liveName ?? "Teammate",
+    role: "Employee",
+    country: "Brazil",
+    initials: "T",
+  }
+  const first = person.name.split(" ")[0]?.split("@")[0] ?? "them"
 
   const [kind, setKind] = useState<Kind>("qr")
   const [country, setCountry] = useState<Country>(countryFor(initialPerson?.country ?? "Brazil"))
@@ -84,7 +107,7 @@ export default function AssignMethodPage() {
   const [issuing, setIssuing] = useState(false)
   const [issueError, setIssueError] = useState<string | null>(null)
 
-  if (!initialPerson) {
+  if (!initialPerson && !liveOk && !/^[0-9a-f-]{36}$/i.test(initialId)) {
     return (
       <div className="page">
         <header className="page-head">
@@ -116,14 +139,8 @@ export default function AssignMethodPage() {
 
   function changeKind(next: Kind) {
     setKind(next)
-    if (next === "qr" && country !== "Brazil") {
-      setCountry("Brazil")
-      setLimitRaw(formatLocal(countryInfo.Brazil.code, countryInfo.Brazil.defaultQr))
-    }
     setName(next === "card" ? "Office and supplies" : "Market runs")
-    if (next === "card" || country === "Brazil") {
-      setLimitRaw(formatLocal(info.code, next === "card" ? info.defaultCard : info.defaultQr))
-    }
+    setLimitRaw(formatLocal(info.code, next === "card" ? info.defaultCard : info.defaultQr))
   }
 
   function changePerson(id: string) {
@@ -132,20 +149,29 @@ export default function AssignMethodPage() {
     if (p) changeCountry(countryFor(p.country))
   }
 
-  async function issuePixAccess() {
+  async function issueAccess() {
     setIssuing(true)
     setIssueError(null)
+    const methodType = kind === "card" ? "CARD" : info.network === "QRIS" ? "QRIS" : info.network === "PromptPay" ? "PROMPTPAY" : "PIX"
     try {
       const response = await fetch("/api/sancus/spending-methods", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId: person.id, employeeName: person.name, label: name, monthlyLimitBrl: limit }),
+        body: JSON.stringify({
+          employeeId: person.id,
+          employeeName: person.name,
+          label: name,
+          methodType,
+          currency: info.code,
+          monthlyLimit: limit,
+          ...(methodType === "PIX" ? { monthlyLimitBrl: limit } : {}),
+        }),
       })
       const body = await response.json()
-      if (!response.ok) throw new Error(body.error || "Could not issue Pix access")
+      if (!response.ok) throw new Error(body.error || "Could not issue spending access")
       router.push("/spending")
     } catch (caught) {
-      setIssueError(caught instanceof Error ? caught.message : "Could not issue Pix access")
+      setIssueError(caught instanceof Error ? caught.message : "Could not issue spending access")
     } finally {
       setIssuing(false)
     }
@@ -167,17 +193,21 @@ export default function AssignMethodPage() {
         <section className="tile s7" aria-label="Details">
           <label className="sx-field">
             <span className="sx-label">Who</span>
-            <select
-              className="sx-field__input"
-              value={person.id}
-              onChange={(e) => changePerson(e.target.value)}
-            >
-              {spenders.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} · {p.role} · {p.country}
-                </option>
-              ))}
-            </select>
+            {liveOk ? (
+              <input className="sx-field__input" value={person.name} readOnly />
+            ) : (
+              <select
+                className="sx-field__input"
+                value={person.id}
+                onChange={(e) => changePerson(e.target.value)}
+              >
+                {spenders.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} · {p.role} · {p.country}
+                  </option>
+                ))}
+              </select>
+            )}
           </label>
 
           <div style={{ display: "grid", gap: 8 }} role="radiogroup" aria-label="What kind">
@@ -207,7 +237,7 @@ export default function AssignMethodPage() {
                 <span className="body-strong">
                   <span className="sx-rail">QR</span> Local QR
                 </span>
-                <span className="body-s muted">Pay Brazilian merchants through Pix.</span>
+                <span className="body-s muted">Pix, QRIS or PromptPay for local merchants.</span>
               </button>
             </div>
           </div>
@@ -219,11 +249,10 @@ export default function AssignMethodPage() {
                 className="sx-field__input"
                 value={country}
                 onChange={(e) => changeCountry(e.target.value as Country)}
-                disabled={kind === "qr"}
               >
                 <option>Brazil</option>
-                {kind === "card" ? <option>Indonesia</option> : null}
-                {kind === "card" ? <option>Thailand</option> : null}
+                <option>Indonesia</option>
+                <option>Thailand</option>
               </select>
             </label>
             <label className="sx-field s6">
@@ -279,7 +308,13 @@ export default function AssignMethodPage() {
             <Link href={`/team/${person.id}`} className="sx-btn sx-btn--secondary">
               Cancel
             </Link>
-            {kind === "card" ? <Link href={`/team/${person.id}`} className="sx-btn sx-btn--primary">Give {first} a card</Link> : <button type="button" className="sx-btn sx-btn--primary" onClick={issuePixAccess} disabled={issuing || limit <= 0}>{issuing ? "Issuing…" : `Give ${first} Pix access`}</button>}
+            <button type="button" className="sx-btn sx-btn--primary" onClick={() => void issueAccess()} disabled={issuing || limit <= 0}>
+              {issuing
+                ? "Issuing…"
+                : kind === "card"
+                  ? `Give ${first} a card`
+                  : `Give ${first} ${info.network} access`}
+            </button>
           </div>
           {issueError ? <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>{issueError}</span> : null}
         </section>
@@ -321,7 +356,7 @@ export default function AssignMethodPage() {
             <li>
               {kind === "card"
                 ? `${first} gets a virtual card to use online or in shops.`
-                : `${first} scans Pix merchant QR codes in Brazil from the Sancus app.`}
+                : `${first} pays merchants with ${info.network} in ${country} from the Sancus app.`}
             </li>
             <li>Each payment converts from dollars at the live rate, and the receipt shows it.</li>
             <li>

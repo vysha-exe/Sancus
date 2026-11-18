@@ -1,178 +1,197 @@
-# Business Accounts, Branches & B2C
+# Business Accounts, Branches, B2C & wiring plan
 
-Research / implementation plan for B2B company trees and B2C personal wallets.
+**Audited at:** `3e8d6ad`  
+**Sources:** this doc, [`BUILD.md`](../BUILD.md) (repo root), [`BACKEND-CHECKLIST.md`](BACKEND-CHECKLIST.md), live `app/app/api/sancus/**` vs `app/app/(sancus)/**`.
 
-**Overview:** Add B2B company trees (branch nodes with independent wallets + ancestor permission inheritance) and a lean B2C personal wallet path, then ship schema, APIs, Team/onboarding wiring, and a Claude wireframe handoff.
+**Goal:** Finish business-account tenancy + Team/B2C, and for every backend feature that isn’t in the primary UI yet either **wire it into existing screens** or **hand it to Claude wireframes** (then implement). Pull still-relevant BUILD.md requirements into the same plan (ignore Privy / Prisma / Solidity-factory as superseded by Supabase + Circle).
 
 ## Decisions locked
 
-- **Pipeline:** plan → Claude handoff → wireframes → implement.
-- **B2C:** one personal wallet; strip Team / branches / company chrome from that mode.
-- **B2B:** company is a **tree**; each node owns its own wallet; access = membership on that node **or any ancestor**; node-local memberships can override/add people; children never manage parents.
-- **Roles:** `OWNER | ADMIN | FINANCE | EMPLOYEE | VIEWER` (Viewer kept for demo accountant).
-
-## What exists today (and must change)
-
-- No `sancus_companies` / memberships. Tenancy is `user_id` only on [`wallets`](../app/supabase/migrations/20251210161755_create_wallets_table.sql), payouts, policies, ledger.
-- Team + business sign-up are mock ([`demo-data.ts`](../app/lib/sancus/demo-data.ts), [`sign-up-state.tsx`](../app/lib/sancus/sign-up-state.tsx)).
-- Checklist §10 is flat “one company per user” — we expand it for tree + B2C + Viewer.
+- **Pipeline:** plan → Claude handoff → wireframes → implement / wire.
+- **B2C:** one personal wallet; strip Team / Branches / company chrome.
+- **B2B:** company **tree**; one wallet per node; access inherits down; node-local membership overrides; children never manage parents.
+- **Roles:** `OWNER | ADMIN | FINANCE | EMPLOYEE | VIEWER` (Viewer for demo accountant). BUILD’s 4-role model is extended with VIEWER.
+- **EMPLOYEE pay (overrides BUILD 4.4):** Employee **can pay within limits** (matches [`companies.ts`](../app/lib/sancus/companies.ts) + Team demo). Card/QR is additional spend, not the only path.
+- **Depth:** max 6. **One wallet per node** (no extra-wallet API).
+- **Stack override (from BUILD “Decision update”):** Circle developer-controlled wallets + Supabase — not Privy/Prisma/factory-deploy on create.
 
 ```mermaid
 flowchart TD
-  subgraph b2c [B2C Personal]
-    U1[User] --> W1[Single wallet]
+  subgraph done [Done]
+    Schema[Company tree + memberships]
+    Apis[Create root/branch + me]
+    BranchesUI[Branches page]
+    Personal[Personal treasury setup]
+    MoneyCore[SG pay + approvals + treasury]
   end
-  subgraph b2b [B2B Tree]
-    Root[Root company] --> BrA[Branch A]
-    Root --> BrB[Branch B]
-    BrA --> BrA1[Sub-branch A1]
-    Root --> WR[Root wallet]
-    BrA --> WA[Branch A wallet]
-    BrB --> WB[Branch B wallet]
-    BrA1 --> WA1[A1 wallet]
+  subgraph wire [Wire to existing UI]
+    Policies[Settings policies PUT]
+    SpendMethods[Spending methods list]
+    RailsUI[Fold Pix/Xendit/collections into primary UI]
+    SignUpBiz[Business sign-up to POST companies]
   end
-  MemRoot["Membership on Root OWNER"] -->|"inherits down"| BrA
-  MemRoot -->|"inherits down"| BrA1
-  MemLocal["Membership on A1 FINANCE"] -->|"node-local only"| BrA1
+  subgraph handoff [Handoff then build]
+    TeamInvites[Team + invites + person limits]
+    B2CChrome[B2C gate + workspace switcher]
+    Cards[Cards issue/hold]
+    Invoices[Invoices]
+    AgentsUX[Agents chat/voice]
+  end
+  Schema --> Apis --> BranchesUI
+  Schema --> TeamInvites
+  Personal --> B2CChrome
+  MoneyCore --> Policies
 ```
 
-## DB changes (required)
+---
 
-New migration under [`app/supabase/migrations/`](../app/supabase/migrations/):
+## Status: business accounts core
 
-### 1. `sancus_companies` (tree nodes)
+### Done — do not rebuild
 
-- `id`, `parent_id` (null = root), `root_id` (denormalized, = self for roots)
-- `name`, `country`, `base_currency`
-- `created_by`, `created_at`, `updated_at`
-- Index `(root_id)`, `(parent_id)`; check `parent_id` and child share same `root_id`
+| Area | Where |
+|---|---|
+| Company tree, memberships, VIEWER, SQL inheritance, `wallets.company_id` | [`20261118100000_sancus_companies_branches.sql`](../app/supabase/migrations/20261118100000_sancus_companies_branches.sql) |
+| Capabilities + tree helpers | [`lib/sancus/companies.ts`](../app/lib/sancus/companies.ts) |
+| `POST /companies`, `POST …/branches`, `GET …/me`, `POST/GET /treasury/setup` | `app/app/api/sancus/companies/**`, `treasury/setup` |
+| Branches UI | [`branches/page.tsx`](../app/app/(sancus)/branches/page.tsx) |
+| Local rails mint into branch wallet by country | [`rail-collections.ts`](../app/lib/sancus/rail-collections.ts) |
 
-### 2. `sancus_memberships`
+### Still open (business accounts)
 
-- `company_id` (node), `user_id`, `role` enum including **VIEWER**
-- `status`: `ACTIVE | INVITED | DISABLED`
-- Unique `(company_id, user_id)`
-- Invite metadata: `invited_by`, `invited_email`, `invite_token`, `expires_at`, `accepted_at`
+| Gap | Notes |
+|---|---|
+| Invite tokens + member APIs | P2: invite / role change / accept |
+| `sancus_notifications` | Invites, role changes, branch created |
+| `company_id` on payouts + company policies | Workspace header/cookie; role checks on pay/approve |
+| Team UI live | Still `demo-data`; person + methods screens exist as mocks |
+| Per-member limits | BUILD + wireframes; not only company `sancus_policies` |
+| B2C onboarding + nav gating | Hide Team/Branches for personal |
+| Business sign-up → live APIs | Mock funnel exists; must call company create + invites |
+| Circle wallet types | BUILD/checklist: treasury / operator / agent (+ passkey approver) — at least on root |
+| Recipients `company_id` + idempotency per company | BUILD Phase 3 |
+| Rich seed | Café and/or Lion City + recipients + policies + sample payouts |
+| Checklist §10 | Still flat + all ⬜ — stale |
 
-### 3. Wallets
+---
 
-- Add nullable `company_id → sancus_companies`
-- **B2C:** `company_id IS NULL`, still `user_id` = owner
-- **B2B:** each node gets one primary treasury wallet; `user_id` remains Circle operator (creator/service), access enforced via membership tree — not raw `user_id` RLS alone
-- Add helper SQL `sancus_user_company_ids(uid)` / `sancus_can_access_company(uid, company_id)` (ancestor walk) and rewrite wallet RLS to allow personal owner **or** membership access
+## Backend ↔ frontend: wire or handoff
 
-### 4. Tenancy follow-on (same or immediate next migration)
+Rule: if an API exists and a screen exists, **wire**. If UX is missing or wrong shape, **handoff** first. If both backend and UX are missing, handoff then build.
 
-- Add nullable `company_id` to `sancus_policies`, `sancus_payouts`, journals/ledger
-- Policies: one row per **company node** (inherit from nearest ancestor with a policy if child has none — app-layer resolve)
-- Existing user-scoped demo rows: backfill optional; new flows always set `company_id` in B2B
+| Feature | Backend | Frontend today | Action |
+|---|---|---|---|
+| Treasury summary + setup | ✅ | Live (Home/Settings/Receive) | **done** |
+| SG PayNow payouts + quote | ✅ | Live Pay flow | **done** |
+| Approvals queue + decide | ✅ | Live Activity/Approvals + badge | **done** (add self-approve block when roles live) |
+| Policies `GET/PUT` | ✅ | Settings toggles are **local state only** | **wire** → Settings |
+| Ledger CSV | ✅ | Settings | **done**; journals for collections/cards still backlog |
+| x402 earnings | ✅ | Agents tile live | **done** |
+| Companies / branches | ✅ | Branches live | **done** |
+| Memberships schema | ✅ table | Team **demo** | **wire** after invite APIs |
+| Invite / role APIs | ⬜ | Invite button dead | **build API** + **handoff** invite sheet / inherited badges |
+| Pix payments + spending-methods | ✅ | Juliana path + demo panels; Spending cards mostly fake | **wire** methods into Spending; **handoff** if card grid must change |
+| Collections / local rails | ✅ (dual stacks) | Receive demo panels | **wire** into primary Receive (not only bolted demos) |
+| Xendit payouts | ✅ | Spending demo panel | **wire** into Pay or Spending primary flow |
+| Demo-login | ✅ | Shell / proxy | **done** |
+| B2C vs B2B chrome | Partial (personal wallets) | Always show Team/Branches | **handoff** + implement gate/switcher |
+| Workspace switcher | ⬜ | Demo chip | **handoff** + implement |
+| Cards / Marqeta | ⬜ | Spending + Team methods **demo** | **handoff** then backend (BUILD cards) |
+| Invoices | ⬜ | Demo screen | **handoff** then backend (BUILD invoices) |
+| Agents chat / budget / voice | ⬜ | Demo | **handoff** (prize path); earnings already live |
+| Multi-corridor Pay (ACH/SEPA/SPEI) | ⬜ / sim | Demo recipients | **handoff** or keep labeled Simulated until adapters exist |
+| Recipients address book API | ⬜ | Hardcoded `demo-data` | **build** with `company_id` (BUILD) + wire Pay › Who |
 
-### 5. Lightweight notifications (for invites / role / branch)
+### Cheap wire wins (do early)
 
-- `sancus_notifications` (`user_id`, `type`, `payload jsonb`, `read_at`, `created_at`) — in-app first; email can stub “sent” for demo
+1. Settings approval rules → `PUT /api/sancus/policies`
+2. Spending → list `GET /spending-methods`; freeze via PATCH where supported
+3. Receive → promote collections UI from demo panel to primary “Get paid locally”
+4. Activity → ensure Pix / Xendit / collections already in `use-live-activity` stay first-class (not empty-state fallback to fake rows when live data exists)
 
-No separate `branches` table — a branch **is** a company row with `parent_id`.
+### Handoff package (Claude) — must include
 
-## Permission model
+Path: [`docs/handoffs/business-accounts-wireframes.md`](handoffs/business-accounts-wireframes.md) (create).
 
-Effective membership at node N for user U:
+- Account type gate (Personal vs Business) + B2C stripped shell
+- Workspace / branch switcher
+- Team list (inherited role), invite sheet, person detail, change role, per-person limits
+- Assign card / local QR against a member (even if backend starts simulated)
+- Settings policies as live controls (wireframe can show loading/error)
+- Receive local-rails as primary, not a side demo
+- Invoices upload → confirm → pay (BUILD)
+- Agents chat / voice (BUILD/checklist §14) as stretch screens
+- Cards hold/settle story (BUILD DoD)
 
-1. If ACTIVE membership on N → use that role (node-local wins).
-2. Else walk ancestors toward root; first ACTIVE membership wins (inheritance).
-3. Else no access.
+Brand: [`docs/brand/guidelines.md`](brand/guidelines.md), [`patterns.md`](brand/patterns.md). Extend existing `docs/wireframes/*.dc.html` where possible.
 
-Capability matrix (enforce in [`lib/sancus/policy.ts`](../app/lib/sancus/policy.ts) + new `lib/sancus/permissions.ts`):
+---
 
-| Role | Pay | Approve | Edit policies | Invite / change roles | Create child branch | Manage descendant nodes |
-|---|---|---|---|---|---|---|
-| OWNER | yes unlimited* | yes | yes | yes | yes | yes |
-| ADMIN | yes in limits | yes | yes | yes (not OWNER) | yes | yes |
-| FINANCE | yes in limits | yes (within approve cap) | no | no | no | no |
-| EMPLOYEE | yes in limits | no | no | no | no | no |
-| VIEWER | no | no | no | no | no | read-only |
+## From BUILD.md — add to this slice
 
-\*Still respect optional org kill-switch later; demo can match current UI “no limit”.
+Still relevant (map to Supabase + Circle, not Privy/Prisma/Solidity factory):
 
-Rule: **descendant never gains rights on ancestor**. Creating a child branch requires ADMIN+ on parent. Assigning someone OWNER on a child does not grant rights on parent.
+| BUILD item | Plan action |
+|---|---|
+| Membership role authZ on money APIs | Widen beyond pay/approve → policies, recipients, cards, ledger |
+| Per-user daily / per-payment limits | Schema + Team person UI (`/settings/team` → our `/team/[id]`) |
+| Onboarding: company + country + invites → wallets | Wire existing sign-up steps to `POST /companies` + invites |
+| Recipients with `companyId` | New table/API; Pay › Who |
+| Idempotency unique per company | When payouts gain `company_id` |
+| Cards on membership | Handoff + API when ready; Team methods screen in scope |
+| Invoices upload → prefill pay | Handoff then §11 backend |
+| Seed: company + roles + multi-rail recipients | Expand seed (Café and/or Lion City) + sample payouts/policies |
+| Passkey admin approvals | Checklist P1; link to OWNER/ADMIN after memberships live |
+| Treasury / operator / agent wallet types | Provision on root (checklist §2); branch keeps one primary wallet |
+| Golden rules | SIMULATED labels, integer minor units, idempotent POSTs on company paths |
 
-## APIs ([`app/app/api/sancus/`](../app/app/api/sancus/))
+**Explicitly ignore from BUILD for this work:** Privy, Prisma monorepo, `SancusTreasuryFactory` on every create, on-chain role mapping, Brazil-first as default corridor (SG-first stays).
 
-### P1
+---
 
-- `POST /api/sancus/companies` — create root (+ treasury wallet); body: name, country, currency
-- `POST /api/sancus/companies/:id/branches` — create child node + its wallet
-- `GET /api/sancus/companies/me` — list memberships + tree summary for active workspace
-- `GET /api/sancus/companies/:id` — node detail + children + wallet + effective role
-- `POST /api/sancus/accounts/personal` — B2C: ensure personal wallet, no company
+## Permission matrix (current code)
 
-### P2
+| Role | Pay | Approve | Policies | Invite / roles | Create branch |
+|---|---|---|---|---|---|
+| OWNER | yes | yes | yes | yes | yes |
+| ADMIN | in limits | yes | yes | yes (not OWNER) | yes |
+| FINANCE | in limits | yes | no | no | no |
+| EMPLOYEE | in limits | no | no | no | no |
+| VIEWER | no | no | no | no | read-only |
 
-- `POST /api/sancus/companies/:id/members` — invite (email + role)
-- `PATCH /api/sancus/companies/members/:id` — role / disable
-- `POST /api/sancus/invites/:token/accept` — attach user to membership
-
-Active workspace: cookie or header `X-Sancus-Company-Id` (null = personal). Treasury / payouts / policies resolve against that node’s wallet + inherited policy.
-
-## User flows
-
-**B2C onboarding:** email → code → name/country → currency → done → single wallet. No company/team steps. App shell hides Team, branch switcher, company settings.
-
-**B2B onboarding:** email → code → company → currency → optional invites → create root company + wallet → home. Later: Settings / Team → add branches, invite, change roles.
-
-**Branch switcher:** Owner/Admin of root picks node; balances/pay/approvals scoped to that node’s wallet (independent balances).
-
-**Notifications (minimal):** invite received, role changed, approval needed (reuse existing badge), branch created — write `sancus_notifications` + toast.
-
-## UI work
-
-- Fork sign-up: account-type choice (Personal vs Business) early; Personal skips company/team ([`sign-up-steps.tsx`](../app/components/sancus-ui/sign-up-steps.tsx)).
-- Team page: replace demo-only table with API data; show branch context; keep Viewer.
-- Settings: real workspace name; “Switch workspace” → personal vs companies/branches.
-- Hide Team nav for personal accounts ([`app-shell.tsx`](../app/components/sancus-ui/app-shell.tsx)).
-
-## Claude wireframe handoff (deliverable before/with build)
-
-Create [`docs/handoffs/business-accounts-wireframes.md`](handoffs/business-accounts-wireframes.md) pasteable to Claude, covering:
-
-- Account-type gate + B2C vs B2B sign-up maps
-- Branch tree manager (create child, see wallet per node)
-- Team list filtered by node + “inherited from parent” badges
-- Invite / change-role sheets; Viewer read-only states
-- Workspace / branch switcher in shell
-- Notification moments
-- Permission matrix + empty/error states
-- Brand constraints from [`docs/brand/patterns.md`](brand/patterns.md) / guidelines
-- Existing wireframes to extend: `SignUp*.dc.html`, `Team.dc.html`, `Employee.dc.html`, `Settings.dc.html`
-
-Generate HTML wireframes in Claude from that handoff; align implementation to those screens.
+---
 
 ## Implementation order
 
-1. Handoff doc (so wireframes can proceed in parallel)
-2. Migrations + SQL access helpers
-3. `lib/sancus/companies.ts` + `permissions.ts` + tests
-4. P1 company/personal/branch APIs
-5. Hook treasury/payouts/policies/approvals to company context + role checks (closes checklist “approver ≠ requester”)
-6. Onboarding + shell account-type gating
-7. Team + branch UI wiring
-8. P2 invites / role PATCH + notification rows
-9. Demo seed: root + 1–2 branches, Maya Owner, Rafael Finance, Ana Employee, João Viewer
-10. Update [`docs/BACKEND-CHECKLIST.md`](BACKEND-CHECKLIST.md) §10
+1. **Handoff doc** (business + backend-not-frontend screens above) so wireframes can run in parallel  
+2. **Wire cheap wins:** Settings policies; Spending methods; Receive/Pay fold-in for Pix/Xendit/collections  
+3. **Invite schema + P2 member APIs** + notifications stub  
+4. **Wire Team** (list + person + methods) to memberships; per-member limits  
+5. **Company tenancy:** `company_id` on payouts + company policies; workspace context; role enforcement + approver ≠ requester  
+6. **B2C/B2B onboarding** + shell nav gating + business sign-up → `POST /companies`  
+7. **Recipients API** (company-scoped) + Pay › Who live list  
+8. **Root wallet types** (treasury/operator/agent) as capacity allows  
+9. **Seed + checklist §10 refresh** (+ frontend wiring table for policies/rails/branches/Team)  
+10. **Cards / invoices / agents voice** — after handoff; don’t block Team/tenancy
 
 ## Implementation todos
 
-- [ ] Write Claude wireframe handoff (flows, screens, perms matrix, branch tree UX) under docs/
-- [ ] Add companies tree, memberships (+VIEWER), invitations; attach wallets.company_id; helpers for ancestor access
-- [ ] Implement lib/sancus/companies.ts + permissions (effective role, canManage, canApprove, canPay)
-- [ ] P1 company onboarding APIs + P2 invites/role/branch create endpoints
-- [ ] Scope policies/payouts/approvals/treasury by active company context; enforce roles
-- [ ] Split onboarding: personal (single wallet) vs business (company+team); hide Team/branches for B2C
-- [ ] Wire Team screen + branch switcher/tree to live APIs; keep Viewer for demo
-- [ ] Seed demo root company, 1–2 branches, Owner/Finance/Employee/Viewer memberships + wallets
-- [ ] Update BACKEND-CHECKLIST §10 for tree, VIEWER, B2C, and new endpoints
+- [x] Company tree, memberships, VIEWER, wallet `company_id`, P1 APIs, Branches UI, personal treasury  
+- [x] Claude handoff → [`handoffs/business-accounts-wireframes.md`](handoffs/business-accounts-wireframes.md)  
+- [x] Wire Settings → policies (threshold); Spending → spending-methods; Receive local rails primary  
+- [x] Invite APIs + notifications table + accept RPC (migration `20261118200000_…`)  
+- [x] Wire Team list + invite sheet (person limits UI still thin)  
+- [x] B2C nav gate (hide Team/Branches when no company) + sign-up account-type step  
+- [x] Checklist §10 / frontend wiring table refreshed  
+- [ ] Company-scoped payouts/policies wired into money routes + workspace switcher UI  
+- [ ] Business sign-up calling `POST /companies` + invite persistence  
+- [ ] Recipients `company_id` + Pay › Who  
+- [ ] Seed demo company + roles  
+- [ ] Cards / invoices / agent voice (post-handoff)
 
-## Out of scope for this slice
+## Out of scope (first pass)
 
-- On-chain `SancusTreasury.sol` roles
-- Real invite email provider (stub + in-app notification)
-- Moving every legacy Circle sample route off `user_id` (only Sancus product paths + wallet RLS)
+- On-chain treasury factory / roles  
+- Real invite email provider  
+- Multi-wallet-per-node API  
+- Full `company_id` migration of every local-rail/Xendit row (payouts/policies first; don’t break `resolveDestination`)

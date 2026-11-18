@@ -40,14 +40,17 @@ export type PixPaymentDto = {
   simulated: true
 }
 
+export type SpendingMethodType = "PIX" | "QRIS" | "PROMPTPAY" | "CARD"
+export type SpendingMethodCurrency = "BRL" | "IDR" | "THB" | "USD"
+
 export type SpendingMethodDto = {
   id: string
   employeeId: string
   employeeName: string
-  type: "PIX"
-  provider: "PAYZU"
+  type: SpendingMethodType
+  provider: string
   label: string
-  currency: "BRL"
+  currency: SpendingMethodCurrency
   monthlyLimitMinor: string
   usedMinor: string
   status: "ACTIVE" | "PAUSED" | "REVOKED"
@@ -92,8 +95,8 @@ export function toPixPaymentDto(row: PixPaymentDbRow): PixPaymentDto {
 }
 
 export function toSpendingMethodDto(row: {
-  id: string; employee_id: string; employee_name: string; method_type: "PIX"; provider: "PAYZU";
-  label: string; currency: "BRL"; monthly_limit_minor: number | string;
+  id: string; employee_id: string; employee_name: string; method_type: SpendingMethodType; provider: string;
+  label: string; currency: SpendingMethodCurrency; monthly_limit_minor: number | string;
   status: SpendingMethodDto["status"]; created_at: string;
 }, usedMinor: bigint = 0n): SpendingMethodDto {
   return {

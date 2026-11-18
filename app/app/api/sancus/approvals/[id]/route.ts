@@ -44,6 +44,14 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     )
   }
 
+  // Company payouts: approver must differ from requester (solo/personal can still self-approve).
+  if (row.user_id === user.id && action === "approve" && (row as { company_id?: string | null }).company_id) {
+    return NextResponse.json(
+      { error: "You can't approve your own payment. Ask someone else on the team." },
+      { status: 403 }
+    )
+  }
+
   const now = new Date().toISOString()
 
   // Only move it out of PENDING_APPROVAL if it's still there (guards double clicks / two approvers).

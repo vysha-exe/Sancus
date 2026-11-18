@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { bills } from "@/lib/sancus/demo-data"
@@ -46,6 +47,7 @@ const rows: Row[] = [
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })
 
 export default function InvoicesPage() {
+  const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(rows.filter((r) => !r.paid).map((r) => r.id)),
   )
@@ -117,7 +119,9 @@ export default function InvoicesPage() {
             accept="application/pdf,image/*"
             onChange={(e) => {
               const f = e.target.files?.[0]
-              if (f) setFileName(f.name)
+              if (!f) return
+              setFileName(f.name)
+              router.push(`/invoices/confirm?file=${encodeURIComponent(f.name)}`)
             }}
           />
         </label>
@@ -137,53 +141,35 @@ export default function InvoicesPage() {
             }}
           >
             <span className="sx-label" id="inv">
-              Read from {fileName}
+              After upload
             </span>
-            <span className="sx-pill sx-pill--settled">Supplier matched</span>
+            <span className="sx-pill sx-pill--simulated">Simulated extract</span>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
-            <label className="sx-field">
-              <span className="sx-label">Supplier</span>
-              <input className="sx-field__input" defaultValue="Northwind Supply Co." />
-            </label>
-            <label className="sx-field">
-              <span className="sx-label">Invoice number</span>
-              <input className="sx-field__input" defaultValue="NW-2291" />
-            </label>
-            <label className="sx-field">
-              <span className="sx-label">Amount</span>
-              <input
-                className="sx-field__input"
-                defaultValue="$2,000.00 USD"
-                style={{ fontFamily: "var(--font-mono)" }}
-              />
-            </label>
-            <label className="sx-field">
-              <span className="sx-label">Due</span>
-              <input className="sx-field__input" defaultValue="November 30" />
-            </label>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              flexWrap: "wrap",
-              paddingTop: 14,
-              borderTop: "1px solid var(--line)",
-            }}
-          >
-            <span className="sx-rail">ACH</span>
-            <span className="body-s">To account ••• 8812 · arrives Wednesday · no fee</span>
-            <StatusPill status="Simulated" />
-          </div>
+          <p className="body-s muted" style={{ margin: 0 }}>
+            We read the supplier, amount and bank details, then send you to Confirm. Try{" "}
+            <button
+              type="button"
+              className="sx-btn sx-btn--quiet"
+              style={{ display: "inline", minHeight: 0, padding: 0 }}
+              onClick={() => router.push("/invoices/confirm?file=torrefacao-TL-118.pdf")}
+            >
+              Torrefação TL-118
+            </button>{" "}
+            or{" "}
+            <button
+              type="button"
+              className="sx-btn sx-btn--quiet"
+              style={{ display: "inline", minHeight: 0, padding: 0 }}
+              onClick={() => router.push(`/invoices/confirm?file=${encodeURIComponent(fileName)}`)}
+            >
+              {fileName}
+            </button>
+            .
+          </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <Link href="/pay/review" className="sx-btn sx-btn--primary">
-              Review payment to Northwind
+            <Link href={`/invoices/confirm?file=${encodeURIComponent(fileName)}`} className="sx-btn sx-btn--primary">
+              Confirm last file
             </Link>
-            <span className="body-s muted">
-              Bank details on the invoice match the ones you saved.
-            </span>
           </div>
         </section>
       </div>

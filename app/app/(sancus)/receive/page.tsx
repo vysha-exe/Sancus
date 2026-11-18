@@ -8,11 +8,40 @@ import { ledger } from "@/lib/sancus/demo-data"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { CollectionDemo } from "@/components/sancus/collection-demo"
 
-type Source = "ach" | "pix" | "usdc"
-type ShareTab = "bank" | "pix" | "usdc"
+type DepositSource = "ach" | "usdc"
 
-const sources: {
-  id: Source
+const localRails = [
+  {
+    id: "pix",
+    rail: "Pix",
+    country: "Brazil",
+    keyLabel: "Pix key",
+    keyValue: "pix@cafepaulista.com.br",
+    received: "R$ 0,00",
+    primary: "Copy key",
+  },
+  {
+    id: "qris",
+    rail: "QRIS",
+    country: "Indonesia",
+    keyLabel: "Merchant ID",
+    keyValue: "ID1024 3381 7720",
+    received: "Rp 0",
+    primary: "Download QR",
+  },
+  {
+    id: "promptpay",
+    rail: "PromptPay",
+    country: "Thailand",
+    keyLabel: "PromptPay ID",
+    keyValue: "0105 5671 2384 9",
+    received: "฿0.00",
+    primary: "Download QR",
+  },
+] as const
+
+const deposits: {
+  id: DepositSource
   rail: string
   title: string
   detail: string
@@ -23,63 +52,19 @@ const sources: {
     id: "ach",
     rail: "ACH",
     title: "From your US bank",
-    detail: "USD · arrives in 1–2 business days · no fee",
+    detail: "USD · 1–2 business days · no fee",
     simulated: true,
     arrival: "Wednesday",
-  },
-  {
-    id: "pix",
-    rail: "Pix",
-    title: "From your Brazilian bank",
-    detail: "BRL · arrives in seconds · we show the rate first",
-    simulated: true,
-    arrival: "in seconds",
   },
   {
     id: "usdc",
     rail: "USDC",
     title: "From another USDC account",
-    detail: "USDC · arrives in seconds · testnet",
+    detail: "USDC · seconds · testnet",
     simulated: false,
     arrival: "in seconds",
   },
 ]
-
-const shareTabs: { id: ShareTab; label: string }[] = [
-  { id: "bank", label: "US bank" },
-  { id: "pix", label: "Pix" },
-  { id: "usdc", label: "USDC" },
-]
-
-const shareDetails: Record<
-  ShareTab,
-  { label: string; value: string; simulated: boolean; note: string; copy: string; extra: string }
-> = {
-  bank: {
-    label: "Account details",
-    value: "Routing 0000 0000 · Account 0000 0000 00",
-    simulated: true,
-    note: "Dollars arrive in 1–2 business days and land in your balance as they are.",
-    copy: "Copy details",
-    extra: "Create an invoice link",
-  },
-  pix: {
-    label: "Pix key",
-    value: "pix@cafepaulista.com.br",
-    simulated: true,
-    note: "Reais arrive in seconds and become dollars at the rate on the receipt.",
-    copy: "Copy key",
-    extra: "Create a Pix charge",
-  },
-  usdc: {
-    label: "USDC address",
-    value: "0x4F2a…c81E",
-    simulated: false,
-    note: "Testnet USDC only. Check you are sending USDC on testnet, so nothing goes astray.",
-    copy: "Copy address",
-    extra: "Show full address",
-  },
-}
 
 function parseAmount(raw: string): number {
   const n = Number.parseFloat(raw.replace(/[^0-9.]/g, ""))
@@ -89,28 +74,25 @@ function parseAmount(raw: string): number {
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })
 
 export default function ReceivePage() {
-  const [source, setSource] = useState<Source>("ach")
+  const [source, setSource] = useState<DepositSource>("ach")
   const [amount, setAmount] = useState("1,000.00")
-  const [shareTab, setShareTab] = useState<ShareTab>("pix")
   const [added, setAdded] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
 
-  const current = sources.find((s) => s.id === source) ?? sources[0]
+  const current = deposits.find((s) => s.id === source) ?? deposits[0]
   const value = parseAmount(amount)
   const label = money.format(value)
-  // Live: show the real Arc treasury wallet address for USDC deposits.
   const treasury = useLiveTreasury()
   const arcWallet = treasury.summary?.wallets.find((w) => w.blockchain === "ARC-TESTNET")
-  const share =
-    shareTab === "usdc" && arcWallet
-      ? {
-          ...shareDetails.usdc,
-          value: arcWallet.address,
-          note: "Your Arc testnet treasury wallet. Send testnet USDC only (free from faucet.circle.com).",
-        }
-      : shareDetails[shareTab]
-
+  const usdcAddress = arcWallet?.address ?? "0x4F2a9b1e…77d0c81E"
   const mercado = ledger.find((p) => p.id === "mercado")
+
+  function copy(text: string, id: string) {
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(id)
+      setTimeout(() => setCopied(null), 1500)
+    })
+  }
 
   return (
     <div className="page">
@@ -121,19 +103,67 @@ export default function ReceivePage() {
           </Link>
           <h1 className="sx-h heading-2">Add money</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            Move money in yourself, or share details with whoever&apos;s paying you. Everything
-            lands as US dollars in one balance.
+            Everything lands as US dollars in one balance.
           </p>
         </div>
       </header>
 
       <div className="grid">
+        <section className="tile s12" aria-labelledby="local">
+          <div className="tile-head">
+            <h2 className="tile-title" id="local">
+              Get paid locally
+            </h2>
+            <span className="body-s muted">Customers pay in their currency. You get dollars.</span>
+          </div>
+          <div className="grid" style={{ gap: 16 }}>
+            {localRails.map((r) => (
+              <article key={r.id} className="rail-tile s4" aria-labelledby={`r-${r.id}`}>
+                <div className="tile-head">
+                  <span className="rail-name">
+                    <span className="sx-rail">{r.rail}</span>
+                    <b id={`r-${r.id}`}>{r.country}</b>
+                  </span>
+                  <span className="sx-pill sx-pill--simulated">Simulated</span>
+                </div>
+                <div className="rail-body">
+                  <div className="qr" role="img" aria-label={`${r.rail} QR code placeholder`}>
+                    <span className="sx-label">QR</span>
+                  </div>
+                  <div className="rail-kv">
+                    <span className="sx-label">{r.keyLabel}</span>
+                    <span className="data trunc">{r.keyValue}</span>
+                    <span className="sx-label">Received</span>
+                    <span className="data">{r.received}</span>
+                  </div>
+                </div>
+                <div className="tile-foot">
+                  <button
+                    type="button"
+                    className="sx-btn sx-btn--secondary sx-btn--sm"
+                    onClick={() => copy(r.keyValue, r.id)}
+                  >
+                    {copied === r.id ? "Copied" : r.primary}
+                  </button>
+                  <button type="button" className="sx-btn sx-btn--quiet">
+                    New charge
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <LocalCollectCard />
+            <CollectionDemo />
+          </div>
+        </section>
+
         <section className="tile s7" aria-labelledby="in">
           <h2 className="tile-title" id="in">
             Move money in
           </h2>
           <div role="radiogroup" aria-label="From" style={{ display: "grid", gap: 8 }}>
-            {sources.map((s) => {
+            {deposits.map((s) => {
               const on = s.id === source
               return (
                 <button
@@ -175,7 +205,7 @@ export default function ReceivePage() {
             </label>
             <label className="sx-field s5">
               <span className="sx-label">From account</span>
-              <select className="sx-field__input" defaultValue="checking">
+              <select className="sx-field__input" defaultValue="checking" disabled={source === "usdc"}>
                 <option value="checking">Checking ••• 4417</option>
                 <option value="link">Link another account</option>
               </select>
@@ -187,7 +217,7 @@ export default function ReceivePage() {
                 added
               ) : (
                 <>
-                  {label} lands in your balance <b>{current.arrival}</b>.
+                  Lands by <b>{current.arrival}</b>
                 </>
               )}
             </span>
@@ -204,70 +234,39 @@ export default function ReceivePage() {
           </div>
         </section>
 
-        <aside className="tile s5" aria-labelledby="share">
-          <h2 className="tile-title" id="share">
-            Get paid by someone else
-          </h2>
-          <div className="filters" role="group" aria-label="Payment details">
-            {shareTabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className="chip"
-                aria-pressed={shareTab === t.id}
-                onClick={() => {
-                  setShareTab(t.id)
-                  setCopied(false)
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
+        <aside className="tile s5" aria-labelledby="usdc">
+          <div className="tile-head">
+            <h2 className="tile-title" id="usdc">
+              Your USDC address
+            </h2>
+            <span className="sx-rail">USDC</span>
           </div>
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <div
-              role="img"
-              aria-label={`${share.label} QR code placeholder`}
-              style={{
-                width: 112,
-                height: 112,
-                flex: "none",
-                border: "1px dashed var(--line-strong)",
-                borderRadius: "var(--radius-sm)",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              <span className="sx-label">QR code</span>
+          <div className="rail-body">
+            <div className="qr" role="img" aria-label="USDC address QR code placeholder">
+              <span className="sx-label">QR</span>
             </div>
-            <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
-              <span className="sx-label">{share.label}</span>
+            <div className="rail-kv">
+              <span className="sx-label">Network</span>
+              <span className="data">Arc testnet</span>
+              <span className="sx-label">Address</span>
               <span className="data" style={{ wordBreak: "break-all" }}>
-                {share.value}
+                {usdcAddress}
               </span>
-              {share.simulated ? (
-                <span className="sx-pill sx-pill--simulated" style={{ justifySelf: "start" }}>
-                  Simulated
-                </span>
-              ) : null}
             </div>
           </div>
-          <span className="body-s muted">{share.note}</span>
           <div className="tile-foot" style={{ justifyContent: "flex-start" }}>
             <button
               type="button"
               className="sx-btn sx-btn--secondary sx-btn--sm"
-              onClick={() => setCopied(true)}
+              onClick={() => copy(usdcAddress, "usdc")}
             >
-              {copied ? "Copied" : share.copy}
+              {copied === "usdc" ? "Copied" : "Copy address"}
             </button>
-            <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm">
-              {share.extra}
+            <button type="button" className="sx-btn sx-btn--quiet" onClick={() => setSource("ach")}>
+              US bank details
             </button>
           </div>
         </aside>
-
-        <LocalCollectCard />
 
         <section className="tile s12" aria-labelledby="recent">
           <div className="tile-head">
@@ -293,7 +292,6 @@ export default function ReceivePage() {
             )}
           </div>
         </section>
-        <CollectionDemo />
       </div>
     </div>
   )

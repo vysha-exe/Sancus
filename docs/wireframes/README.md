@@ -14,21 +14,29 @@ This folder is the canvas source: one `.dc.html` file per screen, the canvas lay
 | Site | `Pricing.dc.html` | Rails and fees: live quote calculator (sandbox rates) and every rail's speed, fee and status |
 | Site | `Security.dc.html` | How your money is kept, and what's real versus simulated (the only public page that names the chain) |
 | Auth | `SignIn.dc.html` | Sign in by emailed code, or use the demo account |
-| 01 | `SignUp.dc.html` → `SignUpCode` → `Onboarding` → `SignUpCurrency` → `SignUpTeam` → `SignUpDone` | Open a business account: name and email, code, company, home currency, invite team, then "You're all set, Maya." into Home day one (03) |
+| 01 | `SignUp.dc.html` → `SignUpCode` → `SignUpAccountType` | Name and email, code, then Personal or Business |
+| 01b | `Onboarding` → `SignUpCurrency` → `SignUpTeam` → `SignUpDone` | Business (6 steps): company, home currency, invite team (Admin, Finance, Employee, Viewer), then into Home day one (03) |
+| 01c | `SignUpPersonal` → `SignUpPersonalCurrency` → `SignUpPersonalDone` | Personal (5 steps): name and country, home currency, then into personal Home |
 | 02 | `Main.dc.html` | Home: balance, approvals, latest payments, spending, bills, agents |
+| 02b | `Notifications.dc.html` | Home with the bell open: Needs you pinned, then alerts and info; every screen's bell opens the same list |
+| 24 | `NotificationsAll`, `NotificationsEmployee`, `SettingsNotifications` | All notifications by category and branch; what an Employee sees; channels per category, branches, amounts, digest and quiet hours. Catalog: [`docs/notifications.md`](../notifications.md) |
 | 03 | `HomeEmpty.dc.html` | Home on day one: every tile's empty state |
-| 04 | `Receive.dc.html` | Add money: move money in (ACH, Pix, USDC) or share your details |
+| 04 | `Receive.dc.html` | Add money: get paid locally (Pix, QRIS, PromptPay) first, then ACH and the USDC address |
 | 05–08 | `PayWho`, `PayAmount`, `PayReview`, `PayDone` | Pay flow: recipient → amount and route → review (rate, fee, what they get) → done and receipt |
 | 09 | `Activity.dc.html` | Ledger, with filters in the table header |
 | 10 | `Approvals.dc.html` | Approval queue with a detail panel |
-| 11 | `Invoices.dc.html` | Upload an invoice, pay bills (nice to have) |
-| 12 | `Card.dc.html` | Spending: team cards and local QR (Pix, QRIS, PromptPay) |
-| 13 | `Team.dc.html` | People, roles, limits, with filters in the table header |
-| 14 | `Employee.dc.html` | One person: limits, cards and QR, activity, access |
+| 11 | `Invoices.dc.html` → `InvoiceConfirm` | Upload an invoice, confirm the extracted fields, pay |
+| 12 | `Card.dc.html` | Spending methods with freeze, Xendit payout, card holds (held → settled or released) |
+| 13 | `Team.dc.html`, `TeamInvite` | People on a branch (Inherited badge), role matrix, invite sheet with access scope and limits |
+| 14 | `Employee.dc.html` | One person: limits, cards and QR, activity, change role or disable |
 | 15 | `AssignMethod.dc.html` | Give someone a card or local QR |
-| 16 | `Agents.dc.html` | Assistant chat, payments agent budget, x402 paid endpoints |
-| 17 | `Settings.dc.html` | Approval rules, workspace, rails, how money is kept |
+| 16 | `Agents.dc.html` | Assistant chat, voice session, payments agent budget, x402 earnings |
+| 17 | `Settings.dc.html` | Live approval rules (save and error states), workspace, rails, how money is kept |
 | 18–19 | `PhoneHome`, `PhonePay` | Phone: Home and Pay review |
+| 20 | `Branches.dc.html` | Company tree (up to 6 levels), one account per branch, how access flows |
+| 21 | `WorkspaceSwitcher.dc.html` | Home with the switcher open: Personal, company tree, a second company; picking a branch scopes balances |
+| 22 | `PersonalHome.dc.html` | Personal Home: no Team, Branches or approvals |
+| 23 | `BusinessStates.dc.html` | No business yet, depth limit, already a member, Admin can't grant Owner, rules didn't save, parent branch, Viewer read only |
 
 Demo data follows the README demo script for Café Paulista Ltda (Brazil). The numbers add up across screens: $10,000 in, $1,000 to Lumen Labs, $2,000 to Northwind (pending), $100.80 to Juliana, Ana's $100 card purchase and R$ 54,12 Pix QR payment, $398.86 held for Ana's card, $6,390.34 available, 3 approvals waiting ($2,620.05).
 

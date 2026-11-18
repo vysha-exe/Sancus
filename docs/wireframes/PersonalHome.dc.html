@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sancus · Home (personal)</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="sancus/tokens.css">
+<link rel="stylesheet" href="sancus/components.css">
+<link rel="stylesheet" href="sancus/app.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>body{margin:0} a{color:var(--accent)} a:hover{color:var(--ink)} .tbl a{color:var(--ink);text-decoration:none} .frame{position:relative}</style>
+</helmet>
+<div class="frame">
+<input type="checkbox" id="rail" class="rail-toggle" aria-label="Collapse sidebar to icons">
+<div class="sx shell" data-theme="day">
+  <header class="hdr">
+    <a href="Main.dc.html" class="sx-lockup sx-wordmark brand" aria-label="Sancus home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="9" width="50" height="8.5" rx="1.5" fill="currentColor"></rect><rect x="12" y="20" width="40" height="3.6" rx=".6" fill="currentColor"></rect><rect x="13.2" y="27.5" width="4.6" height="12.5" rx="1" fill="currentColor"></rect><rect x="21.45" y="27.5" width="4.6" height="18.5" rx="1" fill="currentColor"></rect><path d="M32 27.5 C 26.5 31.5 37.5 35.5 32 39.5 L32 50" stroke="currentColor" stroke-width="4.6" fill="none"></path><rect x="37.95" y="27.5" width="4.6" height="26.5" rx="1" fill="currentColor"></rect><rect x="46.2" y="27.5" width="4.6" height="31.5" rx="1" fill="currentColor"></rect></svg><span class="lbl">SANCUS</span></a>
+    <div class="bar">
+      <details class="ws-menu"><summary class="ws-chip" aria-label="Switch workspace">Personal<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-muted);"><path d="m6 9 6 6 6-6"></path></svg></summary><div class="menu" role="menu" aria-label="Workspaces"><span class="sx-label">Personal</span><a href="PersonalHome.dc.html" class="node node--on" role="menuitem" aria-current="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"></path></svg><span class="trunc">Maya Oliveira</span><span class="amt">$412.00</span></a><hr><a href="Onboarding.dc.html" class="sx-btn sx-btn--quiet" role="menuitem" style="justify-content: flex-start;">Open a business</a></div></details>
+      <label class="search-pill"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="vh">Search</span><input placeholder="Search payments, people, invoices"></label>
+      <span class="sx-pill sx-pill--simulated push" title="Testnet USDC. Bank, local and card rails are simulated.">Sandbox</span>
+      <details class="bell"><summary class="icon-btn" aria-label="Notifications, 2 new"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg><b></b></summary><div class="menu menu--end ntf-menu" role="menu" aria-label="Notifications"><div class="ntf-head"><b>Notifications</b><button type="button" class="sx-btn sx-btn--quiet">Mark all read</button></div><div class="filters" role="group" aria-label="Show"><button type="button" class="chip" aria-pressed="true">All</button><button type="button" class="chip" aria-pressed="false">Money</button><button type="button" class="chip" aria-pressed="false">Alerts</button></div><div class="ntf-list"><span class="sx-label">Today</span><a href="Activity.dc.html" class="ntf ntf--new" role="menuitem"><i aria-hidden="true"></i><span class="ntf-txt"><span class="ntf-m"><span class="ntf-kind">Money in</span></span><span class="ntf-t">Lucas Andrade paid you $83.85</span><span class="ntf-m">R$ 450,00 by Pix · Simulated</span></span><span class="ntf-side"><span class="ntf-time">9:20</span></span></a><a href="SettingsNotifications.dc.html" class="ntf ntf--new ntf--alert" role="menuitem"><i aria-hidden="true"></i><span class="ntf-txt"><span class="ntf-m"><span class="ntf-kind">Security</span></span><span class="ntf-t">New sign-in: Safari on iPhone</span><span class="ntf-m">Rio de Janeiro, Brazil · not you? End all sessions</span></span><span class="ntf-side"><span class="ntf-time">8:02</span></span></a><span class="sx-label">Earlier</span><a href="Activity.dc.html" class="ntf" role="menuitem"><i aria-hidden="true"></i><span class="ntf-txt"><span class="ntf-m"><span class="ntf-kind">Spending</span></span><span class="ntf-t">R$ 114,90 to Mercado Livre</span><span class="ntf-m">Pix QR · Simulated</span></span><span class="ntf-side"><span class="ntf-time">Nov 14</span></span></a><a href="Activity.dc.html" class="ntf" role="menuitem"><i aria-hidden="true"></i><span class="ntf-txt"><span class="ntf-m"><span class="ntf-kind">Money in</span></span><span class="ntf-t">$350.00 added from USDC</span><span class="ntf-m">Personal account</span></span><span class="ntf-side"><span class="ntf-time">Nov 13</span></span></a><a href="Receive.dc.html" class="ntf ntf--new ntf--act" role="menuitem"><i aria-hidden="true"></i><span class="ntf-txt"><span class="ntf-m"><span class="ntf-kind">Account</span></span><span class="ntf-t">Verify your CPF to go live</span><span class="ntf-m">Not needed in the sandbox</span></span><span class="ntf-side"><span class="ntf-time">Nov 13</span></span></a></div><div class="ntf-foot"><a href="NotificationsAll.dc.html" class="sx-btn sx-btn--quiet">See all</a><a href="SettingsNotifications.dc.html" class="sx-btn sx-btn--quiet">Settings</a></div></div></details>
+      <details class="me-menu"><summary class="me" aria-label="Account: Maya, Personal"><span class="av">M</span><span class="me-txt">Maya<small>Personal</small></span></summary><div class="menu menu--end" role="menu"><div class="me-id"><b>Maya Oliveira</b><span class="body-s muted">maya@cafepaulista.com.br</span></div><hr><a href="Settings.dc.html" class="node" role="menuitem"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg><span>Settings</span><span></span></a><a href="SignIn.dc.html" class="node" role="menuitem"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"></path><path d="M10 16l-4-4 4-4M6 12h10"></path></svg><span>Log out</span><span></span></a></div></details>
+    </div>
+  </header>
+  <nav aria-label="Main" class="side">
+    <div class="nav">
+      <a href="Main.dc.html" class="nav-item nav-item--on" aria-current="page" title="Home"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path></svg><span class="lbl">Home</span></a>
+      <a href="PayWho.dc.html" class="nav-item" title="Pay"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4z"></path></svg><span class="lbl">Pay</span></a>
+      <a href="Activity.dc.html" class="nav-item" title="Activity"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"></path></svg><span class="lbl">Activity</span><span class="count" aria-label="3 waiting for approval">3</span></a>
+      <a href="Card.dc.html" class="nav-item" title="Spending"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path></svg><span class="lbl">Spending</span></a>
+      <a href="Invoices.dc.html" class="nav-item" title="Invoices"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"></path><path d="M14 3v5h5M9 13h6M9 17h6"></path></svg><span class="lbl">Invoices</span></a>
+      <a href="Agents.dc.html" class="nav-item" title="Agents"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"></path></svg><span class="lbl">Agents</span></a>
+    </div>
+    <div class="side-foot">
+      <a href="Settings.dc.html" class="nav-item" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg><span class="lbl">Settings</span></a>
+      <label for="rail" class="nav-item collapse" title="Collapse sidebar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"></path></svg><span class="lbl">Collapse</span></label>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="page">
+      <header class="page-head">
+        <div>
+          <h1 class="sx-h heading-2">Good morning, Maya</h1>
+        </div>
+        <span class="body-s muted">Monday, November 16</span>
+      </header>
+
+      <div class="grid">
+        <section class="tile s8" aria-labelledby="bal">
+          <div class="tile-head"><span class="sx-label" id="bal">Available balance</span><span class="body-s muted">Personal</span></div>
+          <div class="sx-balance">
+            <span class="sx-balance__amount">$412.00 <small>USD</small></span>
+            <span class="sx-balance__meta">About R$ 2.211,94 · backed 1:1 by USDC</span>
+          </div>
+          <div class="tile-foot">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <a href="PayWho.dc.html" class="sx-btn sx-btn--primary">Pay someone</a>
+              <a href="Receive.dc.html" class="sx-btn sx-btn--secondary">Add money</a>
+            </div>
+          </div>
+        </section>
+
+        <section class="tile s4" aria-labelledby="local">
+          <div class="tile-head"><h2 class="tile-title" id="local">Get paid locally</h2><span class="sx-pill sx-pill--simulated">Simulated</span></div>
+          <div class="kv"><span>Pix key</span><span>maya@pix.sancus.app</span></div>
+          <div class="kv"><span>Received this month</span><span style="color: var(--settled);">+R$ 450,00</span></div>
+          <div class="tile-foot"><a href="Receive.dc.html" class="sx-btn sx-btn--quiet">Show QR</a><a href="Receive.dc.html" class="sx-btn sx-btn--quiet">QRIS, PromptPay</a></div>
+        </section>
+
+        <section class="tile s8" aria-labelledby="latest">
+          <div class="tile-head"><h2 class="tile-title" id="latest">Latest payments</h2><a href="Activity.dc.html" class="sx-btn sx-btn--quiet">See all</a></div>
+          <div class="sx-rows">
+            <a href="Activity.dc.html" class="sx-row"><span class="sx-row__who">Lucas Andrade</span><span class="sx-row__amount" style="color: var(--settled);">+$83.85</span><span class="sx-row__meta"><span class="sx-rail">Pix</span>R$ 450,00 · Yesterday</span><span class="sx-row__status pills"><span class="sx-pill sx-pill--simulated">Simulated</span><span class="sx-pill sx-pill--settled">Settled</span></span></a>
+            <a href="Activity.dc.html" class="sx-row"><span class="sx-row__who">Mercado Livre</span><span class="sx-row__amount">−$21.40</span><span class="sx-row__meta"><span class="sx-rail">Pix QR</span>R$ 114,90 · Nov 14</span><span class="sx-row__status pills"><span class="sx-pill sx-pill--simulated">Simulated</span><span class="sx-pill sx-pill--settled">Settled</span></span></a>
+            <a href="Activity.dc.html" class="sx-row"><span class="sx-row__who">Added from USDC</span><span class="sx-row__amount" style="color: var(--settled);">+$350.00</span><span class="sx-row__meta"><span class="sx-rail">USDC</span>Nov 13</span><span class="sx-row__status pills"><span class="sx-pill sx-pill--settled">Settled</span></span></a>
+          </div>
+          <div class="tile-foot"><span class="body-s muted">3 of 3 this month</span></div>
+        </section>
+
+        <section class="tile s4" aria-labelledby="biz">
+          <div class="tile-head"><h2 class="tile-title" id="biz">Run a business?</h2></div>
+          <span class="body-s">Open a company account with its own team, branches and approvals. Your personal account stays separate.</span>
+          <div class="tile-foot"><a href="Onboarding.dc.html" class="sx-btn sx-btn--secondary sx-btn--sm">Open a business</a></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

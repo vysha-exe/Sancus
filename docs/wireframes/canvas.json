@@ -11,11 +11,11 @@
   "pages": [],
   "boards": {
     "Onboarding.dc.html": {
-      "x": 4080,
+      "x": 5440,
       "y": -1240,
       "w": 1280,
       "h": 820,
-      "title": "Sign up 3 · Company",
+      "title": "Sign up 4 · Company (business)",
       "expand": "fill",
       "is_interactive": true
     },
@@ -41,8 +41,8 @@
       "x": 2720,
       "y": 0,
       "w": 1280,
-      "h": 900,
-      "title": "04 · Add money",
+      "h": 1080,
+      "title": "04 · Add money (get paid locally)",
       "expand": "fill",
       "is_interactive": true
     },
@@ -104,8 +104,8 @@
       "x": 2720,
       "y": 2760,
       "w": 1280,
-      "h": 1000,
-      "title": "11 · Invoices (nice to have)",
+      "h": 900,
+      "title": "11 · Invoices · upload",
       "expand": "fill",
       "is_interactive": true
     },
@@ -113,8 +113,8 @@
       "x": 0,
       "y": 4160,
       "w": 1280,
-      "h": 1180,
-      "title": "12 · Spending (cards + local QR)",
+      "h": 1100,
+      "title": "12 · Spending (methods, freeze, card holds)",
       "expand": "fill",
       "is_interactive": true
     },
@@ -122,8 +122,8 @@
       "x": 1360,
       "y": 4160,
       "w": 1280,
-      "h": 960,
-      "title": "13 · Team",
+      "h": 1000,
+      "title": "13 · Team (São Paulo, inherited roles)",
       "expand": "fill",
       "is_interactive": true
     },
@@ -149,8 +149,8 @@
       "x": 0,
       "y": 5740,
       "w": 1280,
-      "h": 1000,
-      "title": "16 · Agents (assistant + x402)",
+      "h": 1180,
+      "title": "16 · Agents (chat, voice, x402)",
       "expand": "fill",
       "is_interactive": true
     },
@@ -158,21 +158,21 @@
       "x": 1360,
       "y": 5740,
       "w": 1280,
-      "h": 1280,
-      "title": "17 · Settings (rules, rails, security)",
+      "h": 1400,
+      "title": "17 · Settings (live rules, workspace, rails)",
       "expand": "fill",
       "is_interactive": true
     },
     "PhoneHome.dc.html": {
       "x": 0,
-      "y": 7420,
+      "y": 7580,
       "w": 390,
       "h": 844,
       "title": "18 · Phone · Home"
     },
     "PhonePay.dc.html": {
       "x": 470,
-      "y": 7420,
+      "y": 7580,
       "w": 390,
       "h": 844,
       "title": "19 · Phone · Pay review"
@@ -205,29 +205,29 @@
       "is_interactive": true
     },
     "SignUpCurrency.dc.html": {
-      "x": 5440,
-      "y": -1240,
-      "w": 1280,
-      "h": 820,
-      "title": "Sign up 4 · Home currency",
-      "expand": "fill",
-      "is_interactive": true
-    },
-    "SignUpTeam.dc.html": {
       "x": 6800,
       "y": -1240,
       "w": 1280,
       "h": 820,
-      "title": "Sign up 5 · Invite your team",
+      "title": "Sign up 5 · Home currency (business)",
       "expand": "fill",
       "is_interactive": true
     },
-    "SignUpDone.dc.html": {
+    "SignUpTeam.dc.html": {
       "x": 8160,
       "y": -1240,
       "w": 1280,
       "h": 820,
-      "title": "Sign up · You're all set",
+      "title": "Sign up 6 · Invite your team (business)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpDone.dc.html": {
+      "x": 9520,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up · You're all set (business)",
       "expand": "fill",
       "is_interactive": true
     },
@@ -255,6 +255,132 @@
       "w": 1280,
       "h": 2500,
       "title": "Site · Security",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpAccountType.dc.html": {
+      "x": 4080,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up 3 · Personal or business",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpPersonal.dc.html": {
+      "x": 10880,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up 4 · About you (personal)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpPersonalCurrency.dc.html": {
+      "x": 12240,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up 5 · Home currency (personal)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SignUpPersonalDone.dc.html": {
+      "x": 13600,
+      "y": -1240,
+      "w": 1280,
+      "h": 820,
+      "title": "Sign up · You're all set (personal)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "InvoiceConfirm.dc.html": {
+      "x": 4080,
+      "y": 2760,
+      "w": 1280,
+      "h": 860,
+      "title": "11b · Invoices · confirm fields",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Branches.dc.html": {
+      "x": 0,
+      "y": 8840,
+      "w": 1280,
+      "h": 900,
+      "title": "Branches (company tree)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "WorkspaceSwitcher.dc.html": {
+      "x": 1360,
+      "y": 8840,
+      "w": 1280,
+      "h": 1060,
+      "title": "Home · workspace switcher open",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "TeamInvite.dc.html": {
+      "x": 2720,
+      "y": 8840,
+      "w": 1280,
+      "h": 1000,
+      "title": "Team · invite sheet",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "BusinessStates.dc.html": {
+      "x": 4080,
+      "y": 8840,
+      "w": 1280,
+      "h": 1100,
+      "title": "Business accounts · empty and error states",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "PersonalHome.dc.html": {
+      "x": 5440,
+      "y": 8840,
+      "w": 1280,
+      "h": 900,
+      "title": "Home · personal (no Team or Branches)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Notifications.dc.html": {
+      "x": 4080,
+      "y": 0,
+      "w": 1280,
+      "h": 1060,
+      "title": "02b · Home · notifications open",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "NotificationsAll.dc.html": {
+      "x": 0,
+      "y": 10340,
+      "w": 1280,
+      "h": 1500,
+      "title": "Notifications · all, by category and branch",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "NotificationsEmployee.dc.html": {
+      "x": 1360,
+      "y": 10340,
+      "w": 1280,
+      "h": 820,
+      "title": "Notifications · what an Employee sees (Ana)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SettingsNotifications.dc.html": {
+      "x": 2720,
+      "y": 10340,
+      "w": 1280,
+      "h": 1200,
+      "title": "Settings › Notifications",
       "expand": "fill",
       "is_interactive": true
     }
@@ -287,7 +413,21 @@
     "SignUpCode.dc.html",
     "SignUpCurrency.dc.html",
     "SignUpTeam.dc.html",
-    "SignUpDone.dc.html"
+    "SignUpDone.dc.html",
+    "SignUpAccountType.dc.html",
+    "SignUpPersonal.dc.html",
+    "SignUpPersonalCurrency.dc.html",
+    "SignUpPersonalDone.dc.html",
+    "InvoiceConfirm.dc.html",
+    "Branches.dc.html",
+    "WorkspaceSwitcher.dc.html",
+    "TeamInvite.dc.html",
+    "BusinessStates.dc.html",
+    "PersonalHome.dc.html",
+    "Notifications.dc.html",
+    "NotificationsAll.dc.html",
+    "NotificationsEmployee.dc.html",
+    "SettingsNotifications.dc.html"
   ],
   "notes": {
     "rowAccount": {
@@ -295,7 +435,7 @@
       "y": -280,
       "text": "Home and add money",
       "kind": "title1",
-      "maxW": 4000
+      "maxW": 5360
     },
     "rowPay": {
       "x": 0,
@@ -327,7 +467,7 @@
     },
     "rowPhone": {
       "x": 0,
-      "y": 7140,
+      "y": 7300,
       "text": "Phone (375–390px)",
       "kind": "title1",
       "maxW": 5360
@@ -350,7 +490,7 @@
     },
     "readme": {
       "x": 960,
-      "y": 7420,
+      "y": 7580,
       "w": 520,
       "size": "m",
       "fill": "teal",
@@ -368,7 +508,7 @@
       "y": -1520,
       "text": "Sign up and sign in",
       "kind": "title1",
-      "maxW": 9440
+      "maxW": 14880
     },
     "site": {
       "x": 4080,
@@ -377,6 +517,36 @@
       "size": "m",
       "fill": "teal",
       "text": "Public site rules (sancus/site.css)\n\n• Light first: white and limestone, so the jump into the Day app is seamless. Roots force the Day theme.\n• The motif is the temple: rails are columns in the hero (they cycle; click one to hold it), and sign-up builds the Rising column one flute per step.\n• brand-deep green, never black, is the only dark ground: the card band, one bento tile, the footer panel.\n• Only facts we can stand behind: product rules (9 rails, 60 s lock, 1:1, $0.00 to USDC), no customers, investors or volume.\n• Footer: a deep panel with CTA, links, and the SANCUS wordmark cut off by the panel's bottom edge.\n• Chain names only on Security."
+    },
+    "rowBiz": {
+      "x": 0,
+      "y": 8560,
+      "text": "Personal and business accounts",
+      "kind": "title1",
+      "maxW": 6720
+    },
+    "biz": {
+      "x": 6800,
+      "y": 8840,
+      "w": 480,
+      "size": "m",
+      "fill": "purple",
+      "text": "Business accounts\n\n• Personal: one account. Team, Branches and company chrome are hidden.\n• Business: a company tree up to 6 levels. Each branch has its own account.\n• Roles: Owner, Admin, Finance, Employee, Viewer. Employees pay within limits.\n• Access flows down; a role set on a branch replaces the inherited one; nobody manages the branches above them.\n• Picking a branch in the switcher scopes balances and Team to it.\n• Budgets in local currency; per-payment approval in USD."
+    },
+    "rowNtf": {
+      "x": 0,
+      "y": 10060,
+      "text": "Notifications",
+      "kind": "title1",
+      "maxW": 4000
+    },
+    "ntf": {
+      "x": 4080,
+      "y": 10340,
+      "w": 520,
+      "size": "m",
+      "fill": "orange",
+      "text": "Notifications (full catalog: docs/notifications.md)\n\n• Three priorities: Needs you (accent dot, pinned until someone acts; resolves for every approver at once), Alerts (red dot: security, failed, declined, budget reached), Info.\n• 10 categories: approvals, money in, payments, cards and QR, bills, agents, team, rules and rails, security, account.\n• You only get what your role and branch access cover. Employees see their own spending and requests; Viewers mostly statements and security.\n• Personal accounts: same catalog minus approvals, team, rules and branches.\n• Never notify the person who did it. Small card and QR payments group by the hour.\n• Security and failed payments can't be turned off."
     }
   },
   "designSystems": []
