@@ -4,6 +4,8 @@ import Link from "next/link"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
 import { formatUsdc, isPayRail, RAILS } from "@/lib/sancus/pay-quote"
+import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
+import { countryByCode } from "@/lib/sancus/countries"
 
 export default function PayAmountPage() {
   const {
@@ -17,6 +19,9 @@ export default function PayAmountPage() {
     liveQuote,
     quoteLoading,
     quoteError,
+    sourceAccounts,
+    sourceAccount,
+    setSourceCompanyId,
   } = usePayFlow()
 
   // Live Singapore recipients use PayNow; USDC is shown only when available.
@@ -47,6 +52,31 @@ export default function PayAmountPage() {
 
       <div className="grid">
         <section className="tile s7" aria-label="Amount and route">
+          <label className="sx-field">
+            <span className="sx-label">Paying from</span>
+            <select
+              className="sx-field__input"
+              value={sourceAccount?.id ?? ""}
+              onChange={(event) => setSourceCompanyId(event.target.value)}
+              disabled={!sourceAccounts.length}
+            >
+              {!sourceAccounts.length ? <option value="">***</option> : null}
+              {sourceAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.parentId === null ? `Parent treasury · ${account.name}` : account.name}
+                  {` · $${displayMinor(BigInt(account.ownMinor || "0"), USDC_DECIMALS, "", 2)}`}
+                </option>
+              ))}
+            </select>
+            <span className="sx-field__help">
+              {sourceAccount
+                ? sourceAccount.parentId === null
+                  ? "Global USDC treasury · available to fund any branch payment"
+                  : `${countryByCode(sourceAccount.country)?.name ?? sourceAccount.country} operating account · settled from its USDC treasury`
+                : "Loading payment accounts…"}
+            </span>
+          </label>
+
           <div className="grid" style={{ gap: 16 }}>
             <label className="sx-field s6" style={{ gridColumn: "span 6" }}>
               <span className="sx-label">You send (USDC)</span>
@@ -129,6 +159,10 @@ export default function PayAmountPage() {
           <div className="kv">
             <span>To</span>
             <span>{recipient.name}</span>
+          </div>
+          <div className="kv">
+            <span>Paying from</span>
+            <span>{sourceAccount?.parentId === null ? "Parent treasury" : sourceAccount?.name ?? "***"}</span>
           </div>
           <div className="kv">
             <span>Amount</span>

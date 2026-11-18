@@ -60,7 +60,8 @@ function usePixPaymentStatus(initial: PixPaymentDto | null) {
 }
 
 export default function PayDonePage() {
-  const { recipient, quote, state, view, payout, pixPayment } = usePayFlow()
+  const { recipient, quote, state, view, payout, pixPayment, sourceAccount } = usePayFlow()
+  const fundingSource = sourceAccount?.parentId === null ? "parent treasury" : sourceAccount?.name ?? "selected account"
   const live = usePayoutStatus(payout)
   const pix = usePixPaymentStatus(pixPayment)
   // Re-read the balance whenever the payout moves (reserved → released / delivered).
@@ -79,7 +80,7 @@ export default function PayDonePage() {
           <p className="body-s muted">{pix.providerTransactionId.startsWith("sim_") ? "No PayZu sandbox key is set, so the Pix leg was simulated." : "Pix payout via PayZu sandbox."}</p>
           {pix.failureReason ? <p className="body-s" style={{ color: "var(--danger, #c0392b)" }}>{pix.failureReason}</p> : null}
         </section>
-        <aside className="tile s5"><div className="kv"><span>Provider reference</span><span>{pix.providerTransactionId.slice(0, 12)}…</span></div><div className="kv"><span>Status</span><span>{pix.status.toLowerCase()}</span></div><div className="tile-foot"><Link href="/activity" className="sx-btn sx-btn--primary">See it in Activity</Link></div></aside>
+        <aside className="tile s5"><div className="kv"><span>Paying from</span><span>{fundingSource}</span></div><div className="kv"><span>Provider reference</span><span>{pix.providerTransactionId.slice(0, 12)}…</span></div><div className="kv"><span>Status</span><span>{pix.status.toLowerCase()}</span></div><div className="tile-foot"><Link href="/activity" className="sx-btn sx-btn--primary">See it in Activity</Link></div></aside>
       </div>
     </div>
   }
@@ -151,7 +152,7 @@ export default function PayDonePage() {
                 {title}
               </h2>
               <p className="body muted" style={{ margin: 0, maxWidth: "62ch" }}>
-                {total} from your balance · {live.rail === "PAYNOW" ? "PayNow" : "FAST"} · ref {live.providerRef ?? live.id.slice(0, 8)}
+                {total} from {fundingSource} · {live.rail === "PAYNOW" ? "PayNow" : "FAST"} · ref {live.providerRef ?? live.id.slice(0, 8)}
               </p>
               {failed && live.failureReason ? (
                 <p className="body-s" style={{ margin: 0, color: "var(--danger, #c0392b)" }}>
@@ -163,7 +164,7 @@ export default function PayDonePage() {
             <div style={{ display: "grid", gap: 0, marginTop: 8 }}>
               <div className="hop">
                 <i className={reached(status, "FUNDS_SENT") ? "" : "todo"} />
-                <span className="body-strong">Funded from balance</span>
+                <span className="body-strong">Funded from {fundingSource}</span>
                 <StatusPill status={step("FUNDS_SENT")} />
                 <span className="data">
                   {total}
@@ -257,7 +258,7 @@ export default function PayDonePage() {
           <div style={{ display: "grid", gap: 0, marginTop: 8 }}>
             <div className="hop">
               <i />
-              <span className="body-strong">Funded from balance</span>
+              <span className="body-strong">Funded from {fundingSource}</span>
               <StatusPill status="Settled" />
               <span className="data">{quote.totalLabel}</span>
             </div>

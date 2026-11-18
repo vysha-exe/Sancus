@@ -9,7 +9,7 @@ import { usePayFlow } from "@/lib/sancus/pay-flow"
 
 export default function PayReviewPage() {
   const router = useRouter()
-  const { recipient, state, view, liveQuote, quoteLoading, quoteError, submit, submitting, providerBacked } = usePayFlow()
+  const { recipient, state, view, liveQuote, quoteLoading, quoteError, submit, submitting, providerBacked, sourceAccount } = usePayFlow()
   const [error, setError] = useState<string | null>(null)
   const quoteReady = !view.live || Boolean(liveQuote)
 
@@ -39,7 +39,9 @@ export default function PayReviewPage() {
           <div style={{ display: "grid", gap: 0, marginTop: 8 }}>
             <div className="hop">
               <i />
-              <span className="body-strong">Fund from your balance</span>
+              <span className="body-strong">
+                Fund from {sourceAccount?.parentId === null ? "parent treasury" : sourceAccount?.name ?? "selected account"}
+              </span>
               <StatusPill status="Pending" />
               <span className="data">{view.totalLabel} including fee</span>
             </div>
@@ -75,6 +77,8 @@ export default function PayReviewPage() {
         <aside className="tile s5">
           <div className="sx-quote">
             <dl>
+              <dt>Paying from</dt>
+              <dd>{sourceAccount?.parentId === null ? "Parent treasury" : sourceAccount?.name ?? "***"}</dd>
               <dt>You send</dt>
               <dd>{view.usdLabel}</dd>
               <dt>Fee</dt>

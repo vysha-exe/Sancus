@@ -29,6 +29,8 @@ import type { PayoutDto } from "@/lib/sancus/payouts"
 import { notifyApprovalsChanged } from "@/lib/sancus/use-live-approvals"
 import type { PixPaymentDto } from "@/lib/sancus/local-rails"
 import { fixedUsdRateLabel } from "@/lib/sancus/fixed-rates"
+import type { CompanyNode } from "@/lib/sancus/companies"
+import { useWorkspace } from "@/lib/sancus/use-workspace"
 
 type PayState = {
   recipientId: string
@@ -81,6 +83,9 @@ type PayContextValue = {
   payout: PayoutDto | null
   pixPayment: PixPaymentDto | null
   providerBacked: boolean
+  sourceAccounts: CompanyNode[]
+  sourceAccount: CompanyNode | null
+  setSourceCompanyId: (id: string) => void
 }
 
 const PayContext = createContext<PayContextValue | null>(null)
@@ -105,6 +110,14 @@ function newKey() {
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+function flattenCompanies(nodes: CompanyNode[], out: CompanyNode[] = []) {
+  for (const node of nodes) {
+    out.push(node)
+    flattenCompanies(node.children, out)
+  }
+  return out
+}
+
 /** USDC share of the total that pays the partner fee (proportional to the SGD fee). */
 function feeUsdcMinor(q: SerializedQuote): bigint {
   const total = BigInt(q.usdcAmountMinor)
@@ -115,6 +128,7 @@ function feeUsdcMinor(q: SerializedQuote): bigint {
 }
 
 export function PayFlowProvider({ children }: { children: ReactNode }) {
+  const workspace = useWorkspace()
   const [state, setState] = useState<PayState>(defaultState)
   const [liveQuote, setLiveQuote] = useState<LiveQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
@@ -128,6 +142,20 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   const recipient = getRecipient(state.recipientId) ?? recipients[0]
   const isLive = Boolean(recipient.payout)
   const isPix = recipient.id === "juliana"
+  const sourceAccounts = useMemo(
+    () => flattenCompanies(workspace.tree).filter((company) => company.role !== null && company.can.pay),
+    [workspace.tree]
+  )
+  const sourceAccount = sourceAccounts.find((company) => company.id === workspace.companyId)
+    ?? sourceAccounts.find((company) => company.parentId === null)
+    ?? sourceAccounts[0]
+    ?? null
+
+  const setSourceCompanyId = useCallback((id: string) => {
+    if (!sourceAccounts.some((company) => company.id === id)) return
+    idempotencyKey.current = null
+    workspace.selectCompany(id)
+  }, [sourceAccounts, workspace])
 
   const setRecipientId = useCallback((id: string) => {
     const r = getRecipient(id) ?? recipients[0]
@@ -331,6 +359,9 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       payout,
       pixPayment,
       providerBacked: isLive || isPix,
+      sourceAccounts,
+      sourceAccount,
+      setSourceCompanyId,
     }),
     [
       state,
@@ -350,6 +381,9 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       payout,
       pixPayment,
       isPix,
+      sourceAccounts,
+      sourceAccount,
+      setSourceCompanyId,
     ]
   )
 
