@@ -45,3 +45,6 @@ AGENTS.md
 
 # Sancus: Circle entity secret recovery files (keep these safe, never commit)
 circle-recovery/
+
+# Circle SDK writes recovery files here too
+recovery_file_*.dat

@@ -7,6 +7,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
+import { provisionTreasury } from "@/lib/sancus/provision-circle"
 import {
   DEMO_GUEST_COOKIE,
   demoCredentials,
@@ -71,6 +72,17 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       return enterAsGuest(request, next, `signin-failed: ${error.message}`)
+    }
+
+    // Every account gets its Arc treasury wallets; no-op if they already exist or Circle isn't set up.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (user) {
+      const provisioned = await provisionTreasury(supabase, user.id)
+      if (!provisioned.ok && provisioned.reason === "circle-error") {
+        console.warn("Demo login: treasury provisioning failed", provisioned.message)
+      }
     }
 
     const response = NextResponse.redirect(new URL(next, request.url))

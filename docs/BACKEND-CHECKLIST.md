@@ -45,6 +45,7 @@
 | Agents › Paid by other agents | `GET /api/sancus/x402/earnings` (live, refreshes every 5 s) | ✅ |
 | Settings › approval rules toggles | `PUT /api/sancus/policies` exists; toggles not wired yet | ⬜ |
 | Team, Spending/Cards, Invoices, Agents › assistant & budget | no backend yet (§8, §10–11, §14) | ⬜ demo data |
+| Agents › voice mode (mic → talk → agent talks back) | §14.2 voice session + STT/TTS | ⬜ |
 | Demo-only recipients (Brazil, US, EU, Mexico) | simulated in the UI only | ⬜ |
 
 ## 1. Cross-cutting foundations
@@ -223,12 +224,30 @@
 
 ## 14. AI accounts-payable agent
 
+### 14.1 Typed agent (chat / run)
+
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
 | ☐ | Agent wallet (Circle dev wallet) with spending caps from policy | §2 + §3 | ⬜ | P1 | | Agent can't exceed its cap even if prompted |
 | ☐ | Run agent: read unpaid invoices → propose / execute payouts within policy | `POST /api/sancus/agent/run` | ⬜ | P1 | | Logs each decision with reasoning |
+| ☐ | Chat turn (typed): user message → tool calls (quote, pay, approve, balance) → reply | `POST /api/sancus/agent/chat` | ⬜ | P1 | | Same tools the voice path uses; text reply in Agents UI |
 | ☐ | Agent buys data over x402 (e.g. FX or verification) | `lib/sancus/agent-x402-client.ts` | ⬜ | P2 | | Paid call from agent wallet, capped |
 | ☐ | Agent activity feed | `GET /api/sancus/agent/log` | ⬜ | P2 | | Shown in dashboard |
+
+### 14.2 Voice mode (ChatGPT-style talk)
+
+Press a microphone on Agents, enter voice mode, speak what to do; the agent executes (within policy) and **talks back** with spoken audio — continuous conversation, not one-shot TTS.
+
+| ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
+|---|---|---|---|---|---|---|
+| ☐ | Voice session: start / stop voice mode from Agents mic | `POST /api/sancus/agent/voice/session` (start/end) | ⬜ | **P1** | | Mic enters voice mode; hang up ends session; UI shows listening / thinking / speaking |
+| ☐ | Speech-to-text (browser mic → transcript) | `POST /api/sancus/agent/voice/transcribe` or Web Speech / Whisper | ⬜ | P1 | | "Pay Lim Trading two thousand Singapore dollars" → clean text for the agent |
+| ☐ | Voice turn: transcript → same agent tools as §14.1 → spoken reply | `POST /api/sancus/agent/voice/turn` | ⬜ | **P1** | | Agent runs tools (quote/pay/balance/approvals), returns text + audio; respects spending caps |
+| ☐ | Text-to-speech reply (agent talks back) | ElevenLabs TTS (`lib/sancus/voice.ts`) | ⬜ | P1 | | Reply is heard as natural speech (**ElevenLabs bounty**); also show caption in UI |
+| ☐ | Duplex UX: barge-in / interrupt while speaking | Agents voice UI | ⬜ | P2 | | User can interrupt; agent stops talking and listens again |
+| ☐ | Confirm money moves by voice before execute | in voice turn + policy | ⬜ | P0 | | Over-threshold or pay intents: agent asks "Should I send S$2,000?"; only acts after yes |
+| ☐ | Voice session log (transcript + actions) | `sancus_agent_voice_turns` or agent log | ⬜ | P1 | | Each spoken turn stored; appears in Agents activity |
+| ☐ | Demo script: mic → "What's my balance?" → "Pay Lim Trading S$500" → spoken confirm → done | Agents page | ⬜ | P1 | | Judges hear a full ChatGPT-style loop without typing |
 
 ## 15. Stretch & pitch-only
 
@@ -262,7 +281,8 @@
 | Bridge sandbox key (`sk-test…`) | ACH + USD deposits | ⬜ email support@bridge.xyz |
 | `MARQETA_*`, `MIDTRANS_SERVER_KEY`, `OMISE_SECRET_KEY`, `PAYZU_SANDBOX_TOKEN` | Cards + collections | 🟡 RuoHan has some in `rails-demo/.env` |
 | QuickNode Streams account (Arc) | Live ledger (bounty) | ⬜ |
-| LLM API key | Invoice extraction, AP agent | ⬜ |
+| LLM API key | Invoice extraction, AP agent, voice turns | ⬜ |
+| `ELEVENLABS_API_KEY` (+ voice id) | Agent TTS talk-back + approval readouts (§4, §14.2) | ⬜ |
 
 ## Definition of done (demo-ready)
 
@@ -273,5 +293,6 @@
 - [ ] Card with $500 limit: $100 approved (hold → settle), $600 declined
 - [ ] QRIS or PromptPay collection paid in sandbox → ledger credit
 - [ ] An agent pays the x402 route-quote endpoint → treasury earnings go up
+- [ ] Agents voice mode: mic on → spoken ask → agent acts within policy → spoken reply (ChatGPT-style)
 - [ ] Ledger balances and matches the onchain balance
 - [ ] `npm test` green, `next build` passes, no secrets in git

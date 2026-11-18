@@ -70,12 +70,14 @@ export function SignUpForm({
       
       if (error) throw error;
       
-      // Step 2: Create Gateway EOA wallets automatically
-      if (data.user) {
+      // Step 2: Create the account's Arc treasury wallets automatically
+      // (Treasury + Settlement + Gateway signer). Modified by the Sancus team, 2026.
+      // If email confirmation is on there's no session yet; the app provisions on first visit instead.
+      if (data.user && data.session) {
         toast.loading("Setting up your account...", { id: "wallet-setup" });
-        
+
         try {
-          const response = await fetch("/api/wallet/create-gateway-signers", {
+          const response = await fetch("/api/sancus/treasury/setup", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -86,8 +88,8 @@ export function SignUpForm({
 
           if (response.ok) {
             toast.success(
-              `Account created! ${walletData.wallets?.length || 4} Gateway wallets ready for cross-chain transfers.`,
-              { 
+              "Account created! Your Treasury and Settlement wallets are ready on Arc.",
+              {
                 id: "wallet-setup",
                 duration: 5000,
               }

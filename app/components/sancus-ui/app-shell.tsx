@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
+import { useEnsureTreasury } from "@/lib/sancus/use-ensure-treasury"
 import { workspace } from "@/lib/sancus/demo-data"
 import {
   IconActivity,
@@ -19,6 +20,7 @@ import {
   IconSettings,
   IconSpending,
   IconTeam,
+  IconBranches,
 } from "./icons"
 import { SancusLockup } from "./logo"
 
@@ -33,6 +35,7 @@ const nav = [
     count: true,
   },
   { href: "/spending", label: "Spending", icon: IconSpending, match: (p: string) => p.startsWith("/spending") },
+  { href: "/branches", label: "Branches", icon: IconBranches, match: (p: string) => p.startsWith("/branches") },
   { href: "/team", label: "Team", icon: IconTeam, match: (p: string) => p.startsWith("/team") },
   { href: "/invoices", label: "Invoices", icon: IconInvoices, match: (p: string) => p.startsWith("/invoices") },
   { href: "/agents", label: "Agents", icon: IconAgents, match: (p: string) => p.startsWith("/agents") },
@@ -49,6 +52,8 @@ export function AppShell({
   const { collapsed, toggleCollapsed, theme } = useSancusPrefs()
   // Live count of payments waiting for approval (demo count when signed out).
   const approvalCount = useLiveApprovals().waiting.length
+  // New accounts get their Arc treasury wallets on first visit (no-op once they exist).
+  useEnsureTreasury()
 
   return (
     <div className="frame">
