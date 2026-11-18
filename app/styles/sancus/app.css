@@ -439,7 +439,15 @@ body:has(.frame) {
 .ag-orb::before, .ag-orb::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--accent); opacity: .35; }
 .ag-orb::before { inset: -16px; opacity: .2; }
 .ag-orb::after { inset: -32px; opacity: .1; }
-.ag-orb b { width: 132px; height: 132px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent) 65%); color: var(--on-accent); box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 35%, transparent); }
+.ag-orb > button { width: 132px; height: 132px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent) 65%); color: var(--on-accent); box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 35%, transparent); border: 0; cursor: pointer; padding: 0; }
+.ag-orb[data-phase="thinking"] > button { background: var(--surface-200); color: var(--ink-muted); box-shadow: none; cursor: default; }
+.ag-orb[data-phase="speaking"] > button { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--brand-bronze) 70%, #fff), var(--brand-bronze) 65%); box-shadow: 0 10px 30px color-mix(in srgb, var(--brand-bronze) 35%, transparent); }
+.ag-orb[data-phase="paused"] > button { background: var(--surface-200); color: var(--ink); box-shadow: none; }
+.ag-vturns { list-style: none; margin: 0; padding: 0 24px; display: grid; gap: 10px; max-width: 520px; width: 100%; }
+.ag-vturns li { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: baseline; font-size: 14px; line-height: 20px; }
+.ag-vturns .now span:last-child { color: var(--ink-muted); }
+.ag-card { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-000); max-width: 560px; }
+.ag-status { padding: 0 24px 8px; display: grid; gap: 6px; }
 .ag-vctl { display: flex; align-items: center; gap: 14px; }
 .ag-cb { width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface-000); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
 .ag-cb:hover { background: var(--surface-200); }
