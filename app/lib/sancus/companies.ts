@@ -99,7 +99,9 @@ export function buildCompanyTree(
   companies: CompanyRow[],
   memberships: MembershipRow[],
   wallets: CompanyWallet[],
-  userId: string
+  userId: string,
+  /** Per-node payments not yet reflected onchain (simulated legs), taken off that node's balance. */
+  deductions: Map<string, bigint> = new Map()
 ): CompanyNode[] {
   const childrenOf = new Map<string | null, CompanyRow[]>()
   for (const c of [...companies].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
@@ -119,7 +121,7 @@ export function buildCompanyTree(
       can.createWallet = false
     }
     const own = wallets.filter((w) => w.companyId === c.id)
-    const ownMinor = own.reduce((s, w) => s + (w.usdcMinor ? BigInt(w.usdcMinor) : 0n), 0n)
+    const ownMinor = own.reduce((s, w) => s + (w.usdcMinor ? BigInt(w.usdcMinor) : 0n), 0n) - (deductions.get(c.id) ?? 0n)
     const children = (childrenOf.get(c.id) ?? []).map((k) => build(k, depth + 1))
     const totalMinor = children.reduce((s, k) => s + BigInt(k.totalMinor), ownMinor)
     return {
