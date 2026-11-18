@@ -7,13 +7,14 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
-import { provisionTreasury } from "@/lib/sancus/provision-circle"
 import {
   DEMO_GUEST_COOKIE,
   demoCredentials,
   isDemoLoginEnabled,
   safeNextPath,
 } from "@/lib/sancus/demo-login"
+// Do NOT statically import provision-circle / Circle SDKs here. On Vercel those
+// packages can fail to load as ESM and take down this whole route (Open demo → 500).
 
 function enterAsGuest(request: NextRequest, next: string, reason: string) {
   console.warn(`Demo login falling back to guest UI (${reason})`)
@@ -74,14 +75,23 @@ export async function GET(request: NextRequest) {
       return enterAsGuest(request, next, `signin-failed: ${error.message}`)
     }
 
-    // Every account gets its Arc treasury wallets; no-op if they already exist or Circle isn't set up.
+    // Best-effort wallet setup after sign-in. Dynamic import so a Circle SDK
+    // load failure never blocks demo entry.
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (user) {
-      const provisioned = await provisionTreasury(supabase, user.id)
-      if (!provisioned.ok && provisioned.reason === "circle-error") {
-        console.warn("Demo login: treasury provisioning failed", provisioned.message)
+      try {
+        const { provisionTreasury } = await import("@/lib/sancus/provision-circle")
+        const provisioned = await provisionTreasury(supabase, user.id)
+        if (!provisioned.ok && provisioned.reason === "circle-error") {
+          console.warn("Demo login: treasury provisioning failed", provisioned.message)
+        }
+      } catch (provisionErr) {
+        console.warn(
+          "Demo login: skipped treasury provisioning",
+          provisionErr instanceof Error ? provisionErr.message : provisionErr
+        )
       }
     }
 
