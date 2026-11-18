@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import Link from "next/link"
+import { useCallback, useEffect, useState } from "react"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { rails, workspace } from "@/lib/sancus/demo-data"
 import { useSancusPrefs, type SancusTheme } from "@/lib/sancus/prefs"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { TreasurySetup } from "@/components/sancus-ui/treasury-setup"
-import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
+import { displayMinor, formatMinor, parseToMinor, USDC_DECIMALS } from "@/lib/sancus/money"
+import { useWorkspace } from "@/lib/sancus/use-workspace"
 
 type RuleId = "threshold" | "twoSignoffs" | "newRecipients" | "afterHours"
 
@@ -55,10 +57,19 @@ const themes: { id: SancusTheme; label: string }[] = [
   { id: "night", label: "Night" },
 ]
 
+function usdLabel(minor: bigint): string {
+  return `$${displayMinor(minor, USDC_DECIMALS, "", 2)}`
+}
+
+function parseUsdInput(raw: string): bigint | null {
+  return parseToMinor(raw.replace(/[$,\s]/g, ""), USDC_DECIMALS)
+}
+
 export default function SettingsPage() {
   const { theme, setTheme } = useSancusPrefs()
   const treasury = useLiveTreasury()
   const live = treasury.summary
+  const ws = useWorkspace()
 
   const [rules, setRules] = useState<Record<RuleId, boolean>>({
     threshold: true,
@@ -67,14 +78,79 @@ export default function SettingsPage() {
     afterHours: false,
   })
   const [threshold, setThreshold] = useState("$1,000.00")
-  const [saved, setSaved] = useState(false)
+  const [status, setStatus] = useState<"idle" | "loading" | "saving" | "saved" | "error">("loading")
+  const [error, setError] = useState<string | null>(null)
   const [railOn, setRailOn] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(rails.map((r) => [r.id, r.on])),
   )
 
+  const policyUrl =
+    !ws.isPersonal && ws.companyId
+      ? `/api/sancus/companies/${ws.companyId}/policies`
+      : "/api/sancus/policies"
+
+  const loadPolicy = useCallback(async () => {
+    if (!ws.ready) return
+    try {
+      const res = await fetch(policyUrl, { cache: "no-store" })
+      if (res.status === 401) {
+        setStatus("idle")
+        return
+      }
+      const body = await res.json()
+      if (!res.ok) {
+        setError(body.error ?? "Could not load rules")
+        setStatus("error")
+        return
+      }
+      const minor = BigInt(body.policy.approvalThresholdMinor)
+      const off = minor >= 999_999_999_000_000n
+      setRules((prev) => ({ ...prev, threshold: !off }))
+      setThreshold(usdLabel(off ? 1_000_000_000n : minor))
+      setStatus("idle")
+      setError(null)
+    } catch {
+      setStatus("idle")
+    }
+  }, [policyUrl, ws.ready])
+
+  useEffect(() => {
+    void loadPolicy()
+  }, [loadPolicy])
+
   function setRule(id: RuleId, value: boolean) {
     setRules((prev) => ({ ...prev, [id]: value }))
-    setSaved(false)
+    setStatus("idle")
+  }
+
+  async function saveRules() {
+    setStatus("saving")
+    setError(null)
+    const amount = rules.threshold ? parseUsdInput(threshold) : 999_999_999_000_000n
+    if (amount === null || amount <= 0n) {
+      setError("Enter a positive dollar amount for the approval rule")
+      setStatus("error")
+      return
+    }
+    try {
+      const res = await fetch(policyUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalThreshold: formatMinor(amount, USDC_DECIMALS) }),
+      })
+      const body = await res.json()
+      if (!res.ok) {
+        setError("save-failed")
+        setStatus("error")
+        return
+      }
+      const minor = BigInt(body.policy.approvalThresholdMinor)
+      setThreshold(usdLabel(minor >= 999_999_999_000_000n ? 1_000_000_000n : minor))
+      setStatus("saved")
+    } catch {
+      setError("save-failed")
+      setStatus("error")
+    }
   }
 
   const ruleRow = {
@@ -99,9 +175,29 @@ export default function SettingsPage() {
 
       <div className="grid">
         <section className="tile s7" aria-labelledby="rules">
-          <h2 className="tile-title" id="rules">
-            Approval rules
-          </h2>
+          <div className="tile-head">
+            <h2 className="tile-title" id="rules">
+              Approval rules
+            </h2>
+            <Link href="/settings/notifications" className="sx-btn sx-btn--quiet">
+              Notifications
+            </Link>
+          </div>
+          <p className="body-s muted" style={{ margin: "0 0 8px" }}>
+            {!ws.isPersonal && ws.activeNode
+              ? `Rules for ${ws.activeNode.name}.`
+              : "Rules for your personal account."}
+          </p>
+          {status === "error" && error === "save-failed" ? (
+            <div className="banner banner--err" role="alert">
+              <span>
+                <b>We couldn&apos;t save your rules.</b> That&apos;s on our side. Your last saved rules still apply.
+              </span>
+              <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={() => void saveRules()}>
+                Try again
+              </button>
+            </div>
+          ) : null}
           {ruleList.map((r) => (
             <div key={r.id} style={ruleRow}>
               <Switch checked={rules[r.id]} label={r.title} onChange={(v) => setRule(r.id, v)} />
@@ -114,7 +210,7 @@ export default function SettingsPage() {
                       value={threshold}
                       onChange={(e) => {
                         setThreshold(e.target.value)
-                        setSaved(false)
+                        setStatus("idle")
                       }}
                       aria-label="Threshold in USD"
                       disabled={!rules.threshold}
@@ -130,9 +226,22 @@ export default function SettingsPage() {
           ))}
           <div className="tile-foot">
             <span className="body-s muted" role="status">
-              {saved ? "Saved. Rules apply to requests made from now on." : "Rules apply to requests made after you save."}
+              {status === "loading"
+                ? "Loading your rules…"
+                : status === "saving"
+                  ? "Saving…"
+                  : status === "saved"
+                    ? "Saved. Rules apply to requests made from now on."
+                    : error && error !== "save-failed"
+                      ? error
+                      : "The approval amount is saved to your account. Other toggles are still local for the demo."}
             </span>
-            <button type="button" className="sx-btn sx-btn--primary" onClick={() => setSaved(true)}>
+            <button
+              type="button"
+              className="sx-btn sx-btn--primary"
+              disabled={status === "saving" || status === "loading"}
+              onClick={() => void saveRules()}
+            >
               Save rules
             </button>
           </div>
@@ -185,9 +294,9 @@ export default function SettingsPage() {
           </div>
           <div className="tile-foot">
             <span className="sx-pill sx-pill--simulated">Demo workspace</span>
-            <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm">
-              Switch workspace
-            </button>
+            <Link href="/branches" className="sx-btn sx-btn--secondary sx-btn--sm">
+              Open a business account
+            </Link>
           </div>
         </section>
 

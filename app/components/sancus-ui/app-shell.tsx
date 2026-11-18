@@ -6,12 +6,11 @@ import type { ReactNode } from "react"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
 import { useEnsureTreasury } from "@/lib/sancus/use-ensure-treasury"
+import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { workspace } from "@/lib/sancus/demo-data"
 import {
   IconActivity,
   IconAgents,
-  IconBell,
-  IconChevron,
   IconCollapse,
   IconHome,
   IconInvoices,
@@ -23,6 +22,8 @@ import {
   IconBranches,
 } from "./icons"
 import { SancusLockup } from "./logo"
+import { WorkspaceSwitcher } from "./workspace-switcher"
+import { NotificationBell } from "./notification-bell"
 
 const nav = [
   { href: "/home", label: "Home", icon: IconHome, match: (p: string) => p === "/home" || p.startsWith("/home/") },
@@ -54,20 +55,26 @@ export function AppShell({
   const approvalCount = useLiveApprovals().waiting.length
   // New accounts get their Arc treasury wallets on first visit (no-op once they exist).
   useEnsureTreasury()
+  const ws = useWorkspace()
+  // Personal mode (or no company yet): hide Team/Branches. Business selection shows them.
+  const showBusinessNav = ws.ready ? !ws.isPersonal && ws.hasBusiness : false
+  const navItems = showBusinessNav
+    ? nav
+    : nav.filter((item) => item.href !== "/team" && item.href !== "/branches")
+  const actorRole = ws.isPersonal ? "Personal" : workspace.actor.role
 
   return (
     <div className="frame">
       <div
         className={`sx shell${collapsed ? " shell--collapsed" : ""}`}
         data-theme={theme}
+        // Prefs hydrate from localStorage after mount; avoid a full tree redo.
+        suppressHydrationWarning
       >
         <header className="hdr">
           <SancusLockup />
           <div className="bar">
-            <button type="button" className="ws-chip" aria-label="Switch workspace">
-              {workspace.name}
-              <IconChevron />
-            </button>
+            <WorkspaceSwitcher />
             <label className="search-pill">
               <IconSearch />
               <span className="vh">Search</span>
@@ -80,19 +87,16 @@ export function AppShell({
             >
               Sandbox
             </span>
-            <button type="button" className="icon-btn" aria-label="Notifications, 3 new">
-              <IconBell />
-              <b />
-            </button>
+            <NotificationBell />
             <button
               type="button"
               className="me"
-              aria-label={`Account: ${workspace.actor.firstName}, ${workspace.actor.role}`}
+              aria-label={`Account: ${workspace.actor.firstName}, ${actorRole}`}
             >
               <span className="av">{workspace.actor.initial}</span>
               <span className="me-txt">
                 {workspace.actor.firstName}
-                <small>{workspace.actor.role}</small>
+                <small>{actorRole}</small>
               </span>
             </button>
           </div>
@@ -100,7 +104,7 @@ export function AppShell({
 
         <nav aria-label="Main" className="side">
           <div className="nav">
-            {nav.map((item) => {
+            {navItems.map((item) => {
               const on = item.match(pathname)
               const Icon = item.icon
               return (
