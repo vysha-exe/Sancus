@@ -40,6 +40,53 @@
 .s7 { grid-column: span 7; } .s8 { grid-column: span 8; } .s12 { grid-column: 1 / -1; }
 .r2 { grid-row: span 2; }
 .fill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+
+/* Home: a treasury-first dashboard. Keep real balances and branches above
+   secondary reporting so the first screen answers "what can I move?". */
+.home-page { gap: 24px; padding-top: 20px; }
+.home-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 4px 2px 0; }
+.home-head__copy { display: grid; gap: 5px; max-width: 62ch; }
+.home-head__copy p { margin: 0; }
+.home-date { flex: none; display: grid; justify-items: end; gap: 2px; padding: 9px 12px; border-left: 2px solid var(--accent); color: var(--ink-muted); font: 400 12px/16px var(--font-mono); }
+.home-date strong { color: var(--ink); font-weight: 500; }
+.home-dashboard { gap: 18px; }
+.home-balance { position: relative; overflow: hidden; gap: 18px; padding: 24px; background: linear-gradient(145deg, var(--surface-100) 0%, var(--surface-100) 70%, var(--accent-subtle) 160%); }
+.home-balance::after { content: ""; position: absolute; width: 180px; height: 180px; right: -98px; bottom: -112px; border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 50%; pointer-events: none; }
+.home-balance .tile-head > div { display: grid; gap: 3px; }
+.home-balance__body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, .55fr); align-items: end; gap: 24px; min-height: 120px; }
+.home-balance__scope { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--surface-100) 78%, transparent); }
+.home-balance__scope-mark { width: 9px; height: 9px; flex: none; margin-top: 5px; border-radius: 50%; background: var(--settled); box-shadow: 0 0 0 5px var(--settled-bg); }
+.home-balance__scope > div { display: grid; gap: 3px; }
+.home-balance__scope strong { font: 600 14px/18px var(--font-sans); }
+.home-balance__scope span:last-child { color: var(--ink-muted); font: 400 12px/17px var(--font-sans); }
+.home-balance__actions { justify-content: flex-start; }
+.home-balance__actions .sx-btn--quiet { margin-left: auto; }
+.home-needs-empty { min-height: 150px; background: transparent; border: 1px dashed var(--line); }
+.home-needs-empty__mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--settled-bg); color: var(--settled); font: 600 16px/1 var(--font-sans); }
+.home-needs-empty strong { color: var(--ink); font: 600 15px/20px var(--font-sans); }
+.home-needs-empty span:last-child { max-width: 28ch; font-size: 13px; line-height: 18px; }
+.home-branches { gap: 18px; }
+.home-branches .tile-head > div { display: grid; gap: 3px; }
+.home-branch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.home-branch-card { position: relative; display: grid; gap: 18px; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-000); color: inherit; text-decoration: none; transition: border-color .15s ease-out, transform .15s ease-out, background-color .15s ease-out; }
+.home-branch-card:hover { transform: translateY(-2px); border-color: var(--line-strong); background: var(--surface-100); color: inherit; }
+.home-branch-card--treasury { background: var(--accent-subtle); border-color: color-mix(in srgb, var(--accent) 38%, var(--line)); }
+.home-branch-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.home-branch-card__kind { font: 500 10px/14px var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-muted); }
+.home-branch-card__flag { min-width: 28px; height: 28px; display: grid; place-items: center; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--surface-100); font: 600 10px/1 var(--font-mono); }
+.home-branch-card__identity { display: grid; gap: 3px; }
+.home-branch-card__identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px/20px var(--font-sans); }
+.home-branch-card__identity span { color: var(--ink-muted); font-size: 12px; line-height: 17px; }
+.home-branch-card__balance { display: grid; gap: 3px; }
+.home-branch-card__balance > span { font: 400 32px/1.05 var(--font-serif); font-variant-numeric: tabular-nums; }
+.home-branch-card__balance small { min-height: 18px; color: var(--ink-muted); font: 400 12px/18px var(--font-mono); }
+.home-branch-card__open { color: var(--accent); font: 600 12px/16px var(--font-sans); }
+.home-network { gap: 18px; }
+.home-network .tile-head > div { display: grid; gap: 3px; }
+.home-network__metric { display: grid; gap: 2px; padding: 4px 0 14px; border-bottom: 1px solid var(--line); }
+.home-network__metric > span { font: 400 48px/1 var(--font-serif); font-variant-numeric: tabular-nums; }
+.home-network__metric small { color: var(--ink-muted); font-size: 13px; }
+.home-network__rows { display: grid; gap: 10px; }
 .spending-method-tile { position: relative; }
 .card-delete { position: absolute; top: 8px; right: 8px; z-index: 2; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(228, 234, 230, .28); border-radius: var(--radius-full); background: rgba(6, 20, 29, .76); color: #E4EAE6; font: 400 22px/1 var(--font-sans); cursor: pointer; backdrop-filter: blur(8px); transition: background-color .15s ease-out, transform .15s ease-out; }
 .card-delete:hover { background: var(--failed); transform: scale(1.04); }
@@ -68,6 +115,12 @@
   .page { padding: 20px 16px 48px; }
   .topbar { padding: 8px 16px; }
   .topbar .search { display: none; }
+  .home-head { align-items: flex-start; }
+  .home-date { display: none; }
+  .home-balance__body { grid-template-columns: 1fr; min-height: 0; }
+  .home-balance__actions .sx-btn { flex: 1 1 auto; }
+  .home-balance__actions .sx-btn--quiet { margin-left: 0; }
+  .home-branch-grid { grid-template-columns: 1fr; }
 }
 
 /* Tiles */
