@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, type ReactNode } from "react"
-import { ACCOUNT_TYPE_LABEL, type NavKey } from "@/lib/sancus/accounts"
+import { ACCOUNT_TYPE_LABEL, navWithDevQa, type NavKey } from "@/lib/sancus/accounts"
 import { accountDisplayName, can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
@@ -22,6 +22,7 @@ import {
   IconSpending,
   IconTeam,
   IconBranches,
+  IconDevQa,
 } from "./icons"
 import { SancusLockup } from "./logo"
 import { AccountMenu } from "./account-menu"
@@ -47,6 +48,8 @@ const nav = [
   { key: "team", href: "/team", label: "Team", icon: IconTeam, match: (p: string) => p.startsWith("/team") },
   { key: "invoices", href: "/invoices", label: "Invoices", icon: IconInvoices, match: (p: string) => p.startsWith("/invoices") },
   { key: "agents", href: "/agents", label: "Agents", icon: IconAgents, match: (p: string) => p.startsWith("/agents") },
+  // REMOVE BEFORE SUBMISSION
+  { key: "devqa", href: "/dev-qa", label: "Dev QA", icon: IconDevQa, match: (p: string) => p.startsWith("/dev-qa") },
 ] as const
 
 /** The admin's classic set, used for the guest demo before an account loads. */
@@ -71,7 +74,7 @@ export function AppShell({
   // Personal mode (or no company yet): hide Team/Branches. Business selection shows them.
   const showBusinessNav = ws.ready ? !ws.isPersonal && ws.hasBusiness : false
   // Each account type gets its own sections (see lib/sancus/accounts.ts).
-  const keys: NavKey[] = (account?.nav ?? DEFAULT_NAV).filter(
+  const keys: NavKey[] = navWithDevQa(account?.nav ?? DEFAULT_NAV).filter(
     (k) => k !== "settings" && (account?.type === "BRANCH" || showBusinessNav || (k !== "team" && k !== "branches"))
   )
   const navItems = keys.map((k) => nav.find((n) => n.key === k)).filter((n): n is (typeof nav)[number] => Boolean(n))

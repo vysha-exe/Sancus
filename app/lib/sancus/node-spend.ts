@@ -6,7 +6,7 @@ import { getLiveRates, toRateMicro } from "./live-fx"
 import { BALANCE_SINCE, simulatedSpend, type SimSpendInputs } from "./treasury"
 import { isTerminal, type PayoutStatus } from "./payout-provider"
 
-/** companyId → USDC minor units to take off that node's onchain balance (spent + held). */
+/** companyId → USDC minor units to take off that node's onchain balance (payments in progress). */
 export async function loadNodeDeductions(supabase: SupabaseClient, companyIds: string[]): Promise<Map<string, bigint>> {
   const out = new Map<string, bigint>()
   if (!companyIds.length) return out
@@ -29,7 +29,10 @@ export async function loadNodeDeductions(supabase: SupabaseClient, companyIds: s
     const reserved = p
       .filter((r) => !isTerminal(r.status as PayoutStatus) && !r.tx_hash)
       .reduce((s, r) => s + BigInt(r.usdc_amount_minor as string | number), 0n)
-    const total = spentMinor + heldMinor + reserved
+    // Same rule as Available on the dashboard: only payments still in progress are taken off.
+    // Settled simulated spends aren't (that USDC never left onchain).
+    void spentMinor
+    const total = heldMinor + reserved
     if (total > 0n) out.set(id, total)
   }
   return out

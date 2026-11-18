@@ -21,4 +21,3 @@ create policy "Users view own agent actions" on public.sancus_agent_actions for 
 create policy "Users add own agent actions" on public.sancus_agent_actions for insert with check (auth.uid() = user_id);
 grant select, insert on public.sancus_agent_actions to authenticated;
 grant all on public.sancus_agent_actions to service_role;
-;
