@@ -36,6 +36,9 @@ import { hasEnvVars } from "@/lib/utils";
 // hasEnvVars check below); without it the screens run as a mock UI with demo
 // data. With demo login on, signed-out visitors are signed in automatically, so
 // the screens load live data from the backend.
+//
+// Public marketing and mock auth routes (/, /pricing, /security, /sign-in,
+// /sign-up/*, /onboarding) are not listed here, so they stay open.
 const PROTECTED_PREFIXES: string[] = [
   "/home",
   "/pay",
@@ -100,7 +103,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Authenticated users hitting login/signup get bounced to the Sancus app.
-  // "/" stays the public marketing placeholder.
+  // Marketing site and mock /sign-in, /sign-up routes stay public.
   if (user && (pathname === "/auth/login" || pathname === "/auth/sign-up")) {
     const url = request.nextUrl.clone();
     url.pathname = "/home";
