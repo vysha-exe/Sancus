@@ -115,10 +115,13 @@ export function summarizeTreasury(input: TreasuryInputs) {
   }
 
   // Simulated legs: settled ones are spent, in-progress ones are held like any reserved payout.
+  // Floor available at 0 — demo/simulated spends can exceed faucet funds and would otherwise
+  // show a negative "Available" (e.g. Pix counted as spent while USDC never left the wallet).
   const simulatedSpentMinor = input.simulated?.spentMinor ?? 0n
   reservedMinor += input.simulated?.heldMinor ?? 0n
-  const availableMinor = totalMinor - reservedMinor - simulatedSpentMinor
-  if (availableMinor < 0n) warnings.push("Payments exceed the treasury balance.")
+  const rawAvailable = totalMinor - reservedMinor - simulatedSpentMinor
+  const availableMinor = rawAvailable < 0n ? 0n : rawAvailable
+  if (rawAvailable < 0n) warnings.push("Payments exceed the treasury balance.")
 
   const balances = accountBalances(input.ledgerRows)
   const ledgerInTransit = balances[ACCOUNTS.inTransit] ?? 0n
