@@ -21,9 +21,10 @@ The app in this folder is based on Circle's arc-fintech sample (see [UPSTREAM.md
 ```bash
 cd app
 npm install
-cp .env.example .env.local
+cp ../secrets/env.team .env.local
+# or start from placeholders: cp .env.example .env.local
 ```
-Fill in `.env.local`:
+Team keys live in [`secrets/env.team`](../secrets/env.team) (private repo). Fill in `.env.local` if anything is still blank:
 | Variable | Where it comes from |
 |---|---|
 | `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET` | Step 2 |
