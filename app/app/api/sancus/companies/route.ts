@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
-import { createError, getCompany, nodeSchema, resolveNodeInput } from "@/lib/sancus/company-api"
+import { createCompanyForUser, createError, getCompany, nodeSchema, resolveNodeInput } from "@/lib/sancus/company-api"
 import { createCompanyWallet } from "@/lib/sancus/company-wallets"
 
 export const POST = withAuth(async (req, { user, supabase }) => {
@@ -32,18 +32,13 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     }
   }
 
-  const { data: id, error } = await supabase.rpc("sancus_create_company", {
-    p_parent: null,
-    p_name: input.name,
-    p_country: input.country,
-    p_currency: input.currency,
-  })
-  if (error || !id) {
-    const e = createError(error?.message ?? "")
+  const created = await createCompanyForUser(supabase, user.id, { parentId: null, ...input })
+  if (created.error || !created.id) {
+    const e = createError(created.error ?? "")
     return NextResponse.json({ error: e.error }, { status: e.status })
   }
 
-  const company = await getCompany(supabase, id as string)
+  const company = await getCompany(supabase, created.id)
   if (!company) return NextResponse.json({ error: "Created, but couldn't read it back" }, { status: 500 })
 
   // Every node gets exactly one wallet, created automatically and named after it.

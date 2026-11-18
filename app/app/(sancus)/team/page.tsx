@@ -3,11 +3,12 @@
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { people } from "@/lib/sancus/demo-data"
-import { ROLE_LABEL, type Role } from "@/lib/sancus/companies"
+import { ROLE_LABEL, type CompanyNode, type Role } from "@/lib/sancus/companies"
 import type { MemberDto } from "@/lib/sancus/members"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { TeamInviteSheet } from "@/components/sancus-ui/team-invite-sheet"
 import { AccountsManager } from "@/components/sancus-ui/accounts-manager"
+import { useAccount } from "@/lib/sancus/use-account"
 
 type MembersResponse = {
   companyId: string
@@ -17,12 +18,7 @@ type MembersResponse = {
   inviteRoles: Role[]
 }
 
-type CompanyMe = {
-  tree: { id: string; name: string; children: CompanyMe["tree"] }[]
-  nodeCount: number
-}
-
-function flatten(nodes: CompanyMe["tree"], out: { id: string; name: string }[] = []) {
+function flatten(nodes: { id: string; name: string; children: CompanyNode[] }[], out: { id: string; name: string }[] = []) {
   for (const n of nodes) {
     out.push({ id: n.id, name: n.name })
     flatten(n.children, out)
@@ -46,34 +42,16 @@ function Chevron() {
 
 export default function TeamPage() {
   const ws = useWorkspace()
+  const accountState = useAccount()
   const [mode, setMode] = useState<"loading" | "live" | "demo">("loading")
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const companies = useMemo(() => flatten(ws.tree), [ws.tree])
   const [data, setData] = useState<MembersResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState("Role")
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteMsg, setInviteMsg] = useState<string | null>(null)
-
-  const loadCompanies = useCallback(async () => {
-    const res = await fetch("/api/sancus/companies/me", { cache: "no-store" })
-    if (res.status === 401) {
-      setMode("demo")
-      return null
-    }
-    if (!res.ok) {
-      setMode("demo")
-      return null
-    }
-    const body = (await res.json()) as CompanyMe
-    const list = flatten(body.tree ?? [])
-    setCompanies(list)
-    const preferred = ws.companyId
-    const id = (preferred && list.some((c) => c.id === preferred) ? preferred : list[0]?.id) ?? null
-    setCompanyId(id)
-    return id
-  }, [ws.companyId])
 
   const loadMembers = useCallback(async (id: string) => {
     const res = await fetch(`/api/sancus/companies/${id}/members`, { cache: "no-store" })
@@ -90,12 +68,21 @@ export default function TeamPage() {
   }, [])
 
   useEffect(() => {
+    if (!ws.ready || !accountState.ready) return
     let cancelled = false
     ;(async () => {
+      if (accountState.signedOut) {
+        if (!cancelled) setMode("demo")
+        return
+      }
       try {
-        const id = await loadCompanies()
+        const id = (ws.companyId && companies.some((company) => company.id === ws.companyId) ? ws.companyId : companies[0]?.id) ?? null
         if (cancelled) return
-        if (!id) return
+        setCompanyId(id)
+        if (!id) {
+          setMode("live")
+          return
+        }
         await loadMembers(id)
       } catch {
         if (!cancelled) setMode("demo")
@@ -104,7 +91,7 @@ export default function TeamPage() {
     return () => {
       cancelled = true
     }
-  }, [loadCompanies, loadMembers])
+  }, [accountState.ready, accountState.signedOut, companies, loadMembers, ws.companyId, ws.ready])
 
   async function onSelectCompany(id: string) {
     setCompanyId(id)

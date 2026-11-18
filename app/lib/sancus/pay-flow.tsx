@@ -95,6 +95,7 @@ type PayContextValue = {
   providerBacked: boolean
   sourceAccounts: CompanyNode[]
   sourceAccount: CompanyNode | null
+  sourceBalancesReady: boolean
   setSourceCompanyId: (id: string) => void
 }
 
@@ -463,6 +464,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       providerBacked: isLive || isPix,
       sourceAccounts,
       sourceAccount,
+      sourceBalancesReady: workspace.balancesReady,
       setSourceCompanyId,
     }),
     [
@@ -490,6 +492,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       isPix,
       sourceAccounts,
       sourceAccount,
+      workspace.balancesReady,
       setSourceCompanyId,
     ]
   )

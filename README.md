@@ -123,6 +123,10 @@ pnpm dev                      # http://localhost:3000
 
 Get testnet USDC from the [Circle faucet](https://faucet.circle.com).
 
+## Engineering reports
+
+- [Admin route performance investigation](docs/ADMIN-ROUTE-PERFORMANCE-REPORT.md): repeated workspace requests, the client cache fix, verification evidence, and remaining first-load work.
+
 ## Demo script
 
 1. **Create an account:** register *Lion City Trading Pte Ltd* (Singapore); Sancus creates its Circle wallets.

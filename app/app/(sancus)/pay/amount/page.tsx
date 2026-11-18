@@ -21,6 +21,7 @@ export default function PayAmountPage() {
     quoteError,
     sourceAccounts,
     sourceAccount,
+    sourceBalancesReady,
     setSourceCompanyId,
   } = usePayFlow()
 
@@ -64,7 +65,9 @@ export default function PayAmountPage() {
               {sourceAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.parentId === null ? `Parent treasury · ${account.name}` : `↳ ${account.name}`}
-                  {` · $${displayMinor(BigInt(account.ownMinor || "0"), USDC_DECIMALS, "", 2)}`}
+                  {sourceBalancesReady
+                    ? ` · $${displayMinor(BigInt(account.ownMinor || "0"), USDC_DECIMALS, "", 2)}`
+                    : " · ***"}
                 </option>
               ))}
             </select>

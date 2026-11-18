@@ -18,7 +18,7 @@ export function HomeBalance() {
     if (n.ownMinor !== "0") nodes.push({ id: n.id, name: n.parentId ? n.name : `${n.name} (HQ)`, ownMinor: n.ownMinor })
     n.children.forEach(walk)
   }
-  if (scope && ws.activeNode) walk(ws.activeNode)
+  if (scope && ws.activeNode && ws.balancesReady) walk(ws.activeNode)
 
   return (
     <section className="tile s8" aria-labelledby="bal" aria-busy={live.loading}>
