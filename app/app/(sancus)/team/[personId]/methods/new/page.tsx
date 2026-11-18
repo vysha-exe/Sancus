@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
 import { getPerson, people } from "@/lib/sancus/demo-data"
@@ -66,6 +66,7 @@ const countryFor = (c: string): Country =>
 
 export default function AssignMethodPage() {
   const params = useParams<{ personId: string }>()
+  const router = useRouter()
   const initialId = params?.personId ?? "ana"
   const initialPerson = getPerson(initialId)
 
@@ -80,6 +81,8 @@ export default function AssignMethodPage() {
   const [name, setName] = useState("Market runs")
   const [limitRaw, setLimitRaw] = useState(formatLocal(info.code, info.defaultQr))
   const [hold, setHold] = useState(false)
+  const [issuing, setIssuing] = useState(false)
+  const [issueError, setIssueError] = useState<string | null>(null)
 
   if (!initialPerson) {
     return (
@@ -113,14 +116,39 @@ export default function AssignMethodPage() {
 
   function changeKind(next: Kind) {
     setKind(next)
+    if (next === "qr" && country !== "Brazil") {
+      setCountry("Brazil")
+      setLimitRaw(formatLocal(countryInfo.Brazil.code, countryInfo.Brazil.defaultQr))
+    }
     setName(next === "card" ? "Office and supplies" : "Market runs")
-    setLimitRaw(formatLocal(info.code, next === "card" ? info.defaultCard : info.defaultQr))
+    if (next === "card" || country === "Brazil") {
+      setLimitRaw(formatLocal(info.code, next === "card" ? info.defaultCard : info.defaultQr))
+    }
   }
 
   function changePerson(id: string) {
     const p = getPerson(id)
     setPersonId(id)
     if (p) changeCountry(countryFor(p.country))
+  }
+
+  async function issuePixAccess() {
+    setIssuing(true)
+    setIssueError(null)
+    try {
+      const response = await fetch("/api/sancus/spending-methods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: person.id, employeeName: person.name, label: name, monthlyLimitBrl: limit }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || "Could not issue Pix access")
+      router.push("/spending")
+    } catch (caught) {
+      setIssueError(caught instanceof Error ? caught.message : "Could not issue Pix access")
+    } finally {
+      setIssuing(false)
+    }
   }
 
   return (
@@ -179,7 +207,7 @@ export default function AssignMethodPage() {
                 <span className="body-strong">
                   <span className="sx-rail">QR</span> Local QR
                 </span>
-                <span className="body-s muted">Scan merchant QR codes in one country.</span>
+                <span className="body-s muted">Pay Brazilian merchants through Pix.</span>
               </button>
             </div>
           </div>
@@ -191,10 +219,11 @@ export default function AssignMethodPage() {
                 className="sx-field__input"
                 value={country}
                 onChange={(e) => changeCountry(e.target.value as Country)}
+                disabled={kind === "qr"}
               >
                 <option>Brazil</option>
-                <option>Indonesia</option>
-                <option>Thailand</option>
+                {kind === "card" ? <option>Indonesia</option> : null}
+                {kind === "card" ? <option>Thailand</option> : null}
               </select>
             </label>
             <label className="sx-field s6">
@@ -250,10 +279,9 @@ export default function AssignMethodPage() {
             <Link href={`/team/${person.id}`} className="sx-btn sx-btn--secondary">
               Cancel
             </Link>
-            <Link href={`/team/${person.id}`} className="sx-btn sx-btn--primary">
-              Give {first} {kind === "card" ? "a card" : `${info.network} QR`}
-            </Link>
+            {kind === "card" ? <Link href={`/team/${person.id}`} className="sx-btn sx-btn--primary">Give {first} a card</Link> : <button type="button" className="sx-btn sx-btn--primary" onClick={issuePixAccess} disabled={issuing || limit <= 0}>{issuing ? "Issuing…" : `Give ${first} Pix access`}</button>}
           </div>
+          {issueError ? <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>{issueError}</span> : null}
         </section>
 
         <aside className="tile s5" aria-labelledby="pv">
@@ -293,7 +321,7 @@ export default function AssignMethodPage() {
             <li>
               {kind === "card"
                 ? `${first} gets a virtual card to use online or in shops.`
-                : `${first} scans any ${info.network} QR in ${country} from the Sancus app.`}
+                : `${first} scans Pix merchant QR codes in Brazil from the Sancus app.`}
             </li>
             <li>Each payment converts from dollars at the live rate, and the receipt shows it.</li>
             <li>

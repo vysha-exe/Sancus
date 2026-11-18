@@ -382,8 +382,8 @@ export const rails = [
   { id: "Pix", usedFor: "Brazil, bank or QR", speed: "Seconds", fee: "$0.80", status: "Simulated", simulated: true, on: true },
   { id: "SEPA", usedFor: "Euro bank accounts", speed: "Same day", fee: "$0.80", status: "Simulated", simulated: true, on: true },
   { id: "SPEI", usedFor: "Mexico", speed: "Minutes", fee: "$0.80", status: "Simulated", simulated: true, on: true },
-  { id: "QRIS", usedFor: "Indonesia QR", speed: "Seconds", fee: "$0.50", status: "Simulated", simulated: true, on: true },
-  { id: "PromptPay", usedFor: "Thailand QR", speed: "Seconds", fee: "$0.50", status: "Simulated", simulated: true, on: true },
+  { id: "QRIS", usedFor: "Receive from Indonesia", speed: "Seconds", fee: "$0.50", status: "Collection sandbox", simulated: true, on: true },
+  { id: "PromptPay", usedFor: "Receive from Thailand", speed: "Seconds", fee: "$0.50", status: "Collection sandbox", simulated: true, on: true },
   { id: "Card", usedFor: "Team cards", speed: "Instant hold", fee: "$0.00", status: "Simulated", simulated: true, on: true },
 ] as const
 

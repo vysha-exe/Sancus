@@ -5,6 +5,8 @@ import { useRef, useState } from "react"
 import { RisingColumn } from "@/components/sancus-ui/logo"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
+import { PixSpendDemo } from "@/components/sancus/pix-spend-demo"
+import { XenditPayoutDemo } from "@/components/sancus/xendit-payout-demo"
 import type { Payment } from "@/lib/sancus/demo-data"
 
 type Method = {
@@ -57,48 +59,6 @@ const initialMethods: Method[] = [
     heldNote: "No hold",
     frozenNote: "Frozen by Maya · Nov 12",
     frozen: true,
-  },
-  {
-    id: "ana-pix",
-    kind: "qr",
-    rail: "Pix QR",
-    holder: "Ana Souza",
-    holderUpper: "ANA SOUZA · BRAZIL",
-    label: "Market runs",
-    limit: "R$ 800,00",
-    used: "R$ 54,12",
-    pct: 7,
-    heldNote: "not held",
-    frozenNote: "Paused by Maya · today",
-    frozen: false,
-  },
-  {
-    id: "arya-qris",
-    kind: "qr",
-    rail: "QRIS",
-    holder: "Arya Putra",
-    holderUpper: "ARYA PUTRA · INDONESIA",
-    label: "Field visits",
-    limit: "Rp 3.200.000",
-    used: "Rp 0",
-    pct: 0,
-    idleNote: "Not used yet",
-    frozenNote: "Paused by Maya · today",
-    frozen: false,
-  },
-  {
-    id: "nida-promptpay",
-    kind: "qr",
-    rail: "PromptPay",
-    holder: "Nida Srisai",
-    holderUpper: "NIDA SRISAI · THAILAND",
-    label: "Supplier visits",
-    limit: "฿8,500.00",
-    used: "฿0.00",
-    pct: 0,
-    idleNote: "Not used yet",
-    frozenNote: "Paused by Maya · today",
-    frozen: false,
   },
 ]
 
@@ -309,7 +269,7 @@ export default function SpendingPage() {
         >
           <span className="body-strong">Add a card or local QR</span>
           <span className="body-s muted">
-            Card for anywhere cards work. QR for Pix, QRIS or PromptPay merchants.
+            Card for anywhere cards work. Pix access for Brazilian merchants.
           </span>
         </Link>
       </div>
@@ -341,6 +301,9 @@ export default function SpendingPage() {
           </span>
         </div>
       </section>
+
+      <PixSpendDemo />
+      <XenditPayoutDemo />
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { isTerminal, type PayoutStatus } from "@/lib/sancus/payout-provider"
 import { displayMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { PayoutDto } from "@/lib/sancus/payouts"
+import type { PixPaymentDto } from "@/lib/sancus/local-rails"
 
 const ORDER: PayoutStatus[] = ["CREATED", "FUNDS_SENT", "CONVERTING", "PAYING_OUT", "COMPLETED"]
 const reached = (s: PayoutStatus, step: PayoutStatus) => ORDER.indexOf(s) >= ORDER.indexOf(step)
@@ -40,11 +41,47 @@ function usePayoutStatus(initial: PayoutDto | null) {
   return current
 }
 
+function usePixPaymentStatus(initial: PixPaymentDto | null) {
+  const [latest, setLatest] = useState(initial)
+  const current = latest ?? initial
+  const id = initial?.id
+  useEffect(() => {
+    if (!id || !current || current.status !== "PENDING") return
+    const timer = window.setInterval(async () => {
+      const response = await fetch(`/api/sancus/pix/payments/${id}/refresh`, { method: "POST" })
+      if (!response.ok) return
+      const body = (await response.json()) as { payment?: PixPaymentDto }
+      if (body.payment) setLatest(body.payment)
+    }, 2500)
+    return () => window.clearInterval(timer)
+  }, [id, current])
+  return current
+}
+
 export default function PayDonePage() {
-  const { recipient, quote, state, view, payout } = usePayFlow()
+  const { recipient, quote, state, view, payout, pixPayment } = usePayFlow()
   const live = usePayoutStatus(payout)
+  const pix = usePixPaymentStatus(pixPayment)
   // Re-read the balance whenever the payout moves (reserved → released / delivered).
   const treasury = useLiveTreasury(live?.status)
+
+  if (pix) {
+    const settled = pix.status === "SETTLED"
+    const failed = ["FAILED", "CANCELLED", "EXPIRED"].includes(pix.status)
+    const amount = `R$ ${(Number(pix.amountBrlMinor) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+    return <div className="page">
+      <PayFlowHead title={settled ? "Pix payment sent" : failed ? "Pix payment failed" : "Sending Pix payment"} step={4} />
+      <div className="grid">
+        <section className="tile s7">
+          <h2 className="sx-h heading-2">{settled ? `Done. ${pix.recipientName} has ${amount}.` : failed ? `Payment to ${pix.recipientName} failed.` : `Pix payment to ${pix.recipientName} is pending.`}</h2>
+          <div className="hop"><i /><span className="body-strong">Submitted to PayZu</span><StatusPill status={failed ? "Failed" : settled ? "Settled" : "Pending"} /><span className="data">{amount}</span></div>
+          <p className="body-s muted">Provider-backed Pix sandbox · Arc USDC conversion is simulated.</p>
+          {pix.failureReason ? <p className="body-s" style={{ color: "var(--danger, #c0392b)" }}>{pix.failureReason}</p> : null}
+        </section>
+        <aside className="tile s5"><div className="kv"><span>Provider reference</span><span>{pix.providerTransactionId.slice(0, 12)}…</span></div><div className="kv"><span>Status</span><span>{pix.status.toLowerCase()}</span></div><div className="tile-foot"><Link href="/activity" className="sx-btn sx-btn--primary">See it in Activity</Link></div></aside>
+      </div>
+    </div>
+  }
 
   // Live payment created in this session.
   if (live) {

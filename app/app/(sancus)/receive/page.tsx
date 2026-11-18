@@ -6,6 +6,7 @@ import { LocalCollectCard } from "@/components/sancus-ui/local-collect-card"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { ledger } from "@/lib/sancus/demo-data"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
+import { CollectionDemo } from "@/components/sancus/collection-demo"
 
 type Source = "ach" | "pix" | "usdc"
 type ShareTab = "bank" | "pix" | "usdc"
@@ -292,6 +293,7 @@ export default function ReceivePage() {
             )}
           </div>
         </section>
+        <CollectionDemo />
       </div>
     </div>
   )
