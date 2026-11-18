@@ -29,7 +29,7 @@ export function SignUpEmailStep() {
     <AuthShell done={0} headEnd={<SignInLink />}>
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
-          <span className="sx-label">Step 1 of 5</span>
+          <span className="sx-label">Step 1 of 6</span>
           <h1 id="q" className="sx-h heading-1">
             Let&apos;s start with your email.
           </h1>
@@ -110,14 +110,14 @@ export function SignUpCodeStep() {
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    if (full) router.push("/sign-up/company")
+    if (full) router.push("/sign-up/account-type")
   }
 
   return (
     <AuthShell done={1}>
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
-          <span className="sx-label">Step 2 of 5</span>
+          <span className="sx-label">Step 2 of 6</span>
           <h1 id="q" className="sx-h heading-1">
             Enter the six-digit code
           </h1>
@@ -170,7 +170,124 @@ export function SignUpCodeStep() {
 
 const COUNTRIES = ["Brazil", "Mexico", "Indonesia", "Thailand", "Portugal", "United States"]
 
-/** Step 3: company (was the standalone onboarding screen). */
+/** After code: Personal (B2C) vs Business (B2B). */
+export function SignUpAccountTypeStep() {
+  const router = useRouter()
+  const { data, update } = useSignUp()
+
+  function choose(accountType: "personal" | "business") {
+    update({ accountType })
+    router.push(accountType === "personal" ? "/sign-up/about-you" : "/sign-up/company")
+  }
+
+  return (
+    <AuthShell done={2}>
+      <div aria-labelledby="q">
+        <div className="auth-q">
+          <span className="sx-label">Step 3 of 6</span>
+          <h1 id="q" className="sx-h heading-1">
+            What kind of account?
+          </h1>
+          <p className="body-l lead">You can open a business later from Settings if you start personal.</p>
+        </div>
+        <div style={{ display: "grid", gap: 10 }}>
+          <button
+            type="button"
+            className={`pick${data.accountType === "personal" ? " pick--on" : ""}`}
+            onClick={() => choose("personal")}
+            style={{ width: "100%", textAlign: "left" }}
+          >
+            <span className="radio" />
+            <span style={{ display: "grid", gap: 2 }}>
+              <span className="body-strong">Personal</span>
+              <span className="body-s muted">Just me. Pay and receive from one account.</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`pick${data.accountType === "business" ? " pick--on" : ""}`}
+            onClick={() => choose("business")}
+            style={{ width: "100%", textAlign: "left" }}
+          >
+            <span className="radio" />
+            <span style={{ display: "grid", gap: 2 }}>
+              <span className="body-strong">Business</span>
+              <span className="body-s muted">A company with people and branches.</span>
+            </span>
+          </button>
+        </div>
+        <div className="auth-btns">
+          <Link href="/sign-up/code" className="sx-btn sx-btn--secondary">
+            Back
+          </Link>
+        </div>
+      </div>
+    </AuthShell>
+  )
+}
+
+/** Personal path: About you (name + country). */
+export function SignUpAboutYouStep() {
+  const router = useRouter()
+  const { data, update } = useSignUp()
+  const ready = data.fullName.trim() !== ""
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!ready) return
+    const first = data.fullName.trim().split(/\s+/)[0] ?? data.firstName
+    update({ firstName: first })
+    router.push("/sign-up/currency")
+  }
+
+  return (
+    <AuthShell done={3}>
+      <form aria-labelledby="q" onSubmit={submit}>
+        <div className="auth-q">
+          <span className="sx-label">Step 4 of 5</span>
+          <h1 id="q" className="sx-h heading-1">
+            About you
+          </h1>
+          <p className="body-l lead">As it appears on your ID.</p>
+        </div>
+        <div className="auth-fields">
+          <label className="sx-field">
+            <span className="sx-label">Full name</span>
+            <input
+              className="sx-field__input"
+              autoComplete="name"
+              value={data.fullName}
+              onChange={(e) => update({ fullName: e.target.value })}
+            />
+          </label>
+          <label className="sx-field">
+            <span className="sx-label">Country you live in</span>
+            <select
+              className="sx-field__input"
+              value={data.country}
+              onChange={(e) => update({ country: e.target.value })}
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+            <span className="sx-field__help">We&apos;ll ask for your CPF when you go live. Not needed in the sandbox.</span>
+          </label>
+        </div>
+        <div className="auth-btns">
+          <button type="submit" className="sx-btn sx-btn--primary" disabled={!ready}>
+            Continue
+          </button>
+          <Link href="/sign-up/account-type" className="sx-btn sx-btn--secondary">
+            Back
+          </Link>
+        </div>
+      </form>
+    </AuthShell>
+  )
+}
+
+/** Step 4 (business): company (was the standalone onboarding screen). */
 export function SignUpCompanyStep() {
   const router = useRouter()
   const { data, update } = useSignUp()
@@ -182,10 +299,10 @@ export function SignUpCompanyStep() {
   }
 
   return (
-    <AuthShell done={2}>
+    <AuthShell done={3}>
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
-          <span className="sx-label">Step 3 of 5</span>
+          <span className="sx-label">Step 4 of 6</span>
           <h1 id="q" className="sx-h heading-1">
             What&apos;s your company called?
           </h1>
@@ -223,7 +340,7 @@ export function SignUpCompanyStep() {
           <button type="submit" className="sx-btn sx-btn--primary" disabled={!ready}>
             Continue
           </button>
-          <Link href="/sign-up/code" className="sx-btn sx-btn--secondary">
+          <Link href="/sign-up/account-type" className="sx-btn sx-btn--secondary">
             Back
           </Link>
         </div>
@@ -246,14 +363,14 @@ export function SignUpCurrencyStep() {
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    router.push("/sign-up/team")
+    router.push(data.accountType === "personal" ? "/sign-up/done" : "/sign-up/team")
   }
 
   return (
-    <AuthShell done={3}>
+    <AuthShell done={data.accountType === "personal" ? 4 : 4}>
       <form aria-labelledby="q" onSubmit={submit}>
         <div className="auth-q">
-          <span className="sx-label">Step 4 of 5</span>
+          <span className="sx-label">{data.accountType === "personal" ? "Step 5 of 5" : "Step 5 of 6"}</span>
           <h1 id="q" className="sx-h heading-1">
             Pick your home currency
           </h1>
@@ -281,7 +398,10 @@ export function SignUpCurrencyStep() {
           <button type="submit" className="sx-btn sx-btn--primary">
             Continue
           </button>
-          <Link href="/sign-up/company" className="sx-btn sx-btn--secondary">
+          <Link
+            href={data.accountType === "personal" ? "/sign-up/about-you" : "/sign-up/company"}
+            className="sx-btn sx-btn--secondary"
+          >
             Back
           </Link>
         </div>
@@ -292,7 +412,7 @@ export function SignUpCurrencyStep() {
 
 const ROLES = ["Finance", "Employee", "Viewer"]
 
-/** Step 5: invite the team. Optional. */
+/** Step 6 (business): invite the team. Optional. */
 export function SignUpTeamStep() {
   const router = useRouter()
   const { data, update } = useSignUp()
@@ -309,10 +429,10 @@ export function SignUpTeamStep() {
   }
 
   return (
-    <AuthShell done={4}>
+    <AuthShell done={5}>
       <form aria-labelledby="q" onSubmit={send}>
         <div className="auth-q">
-          <span className="sx-label">Step 5 of 5</span>
+          <span className="sx-label">Step 6 of 6</span>
           <h1 id="q" className="sx-h heading-1">
             Invite your team
           </h1>
@@ -376,27 +496,96 @@ const ARROW = (
   </svg>
 )
 
-/** Done: account is ready, with the first three things to do. */
+/** Done: account is ready, with the first three things to do. Provisions business company when needed. */
 export function SignUpDoneStep() {
-  const { data } = useSignUp()
+  const { data, update } = useSignUp()
+  const [busy, setBusy] = useState(false)
   const name = data.firstName.trim() || "there"
+  const personal = data.accountType === "personal"
   const meta = [
     `Home currency ${data.currency}`,
-    data.invitesSent > 0 ? `${data.invitesSent} ${data.invitesSent === 1 ? "invite" : "invites"} sent` : null,
+    !personal && data.invitesSent > 0
+      ? `${data.invitesSent} ${data.invitesSent === 1 ? "invite" : "invites"} sent`
+      : null,
   ]
     .filter(Boolean)
     .join(" · ")
 
+  useEffect(() => {
+    if (personal || data.createdCompanyId) return
+    let cancelled = false
+    ;(async () => {
+      setBusy(true)
+      const { SIGNUP_COUNTRY_TO_CODE, setWorkspaceCompany } = await import("@/lib/sancus/workspace")
+      try {
+        const country = SIGNUP_COUNTRY_TO_CODE[data.country] ?? "BR"
+        const res = await fetch("/api/sancus/companies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: data.company.trim() || "My company",
+            country,
+            currency: data.currency,
+          }),
+        })
+        const body = await res.json()
+        if (cancelled) return
+        if (!res.ok) {
+          update({ provisioningError: body.error ?? "Could not create your company" })
+          setBusy(false)
+          return
+        }
+        const id = body.company?.id as string | undefined
+        if (id) {
+          setWorkspaceCompany(id)
+          update({ createdCompanyId: id, provisioningError: null })
+          const roleMap: Record<string, string> = {
+            Finance: "FINANCE",
+            Employee: "EMPLOYEE",
+            Viewer: "VIEWER",
+            Admin: "ADMIN",
+          }
+          for (const inv of data.invites) {
+            const email = inv.email.trim()
+            if (!/^\S+@\S+\.\S+$/.test(email)) continue
+            await fetch(`/api/sancus/companies/${id}/members`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, role: roleMap[inv.role] ?? "EMPLOYEE" }),
+            })
+          }
+        }
+      } catch {
+        if (!cancelled) update({ provisioningError: "Could not reach the server" })
+      }
+      if (!cancelled) setBusy(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+    // Provision once when the done screen mounts for business accounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personal, data.createdCompanyId])
+
+  useEffect(() => {
+    if (!personal) return
+    void import("@/lib/sancus/workspace").then(({ setWorkspacePersonal }) => setWorkspacePersonal())
+  }, [personal])
+
   return (
-    <AuthShell done={5}>
+    <AuthShell done={personal ? 5 : 6}>
       <div className="panel-col">
         <div className="auth-q">
           <h1 id="q" className="sx-h heading-1">
             You&apos;re all set, {name}.
           </h1>
           <p className="body-l lead">
-            {data.company.trim() || "Your company"} has a US dollar account. Add money to make your first payment.
+            {personal
+              ? "Your personal US dollar account is ready. Add money to make your first payment."
+              : `${data.company.trim() || "Your company"} has a US dollar account. Add money to make your first payment.`}
           </p>
+          {busy ? <p className="body-s muted">Setting up your company…</p> : null}
+          {data.provisioningError ? <p className="body-s">{data.provisioningError}</p> : null}
         </div>
         <div className="ready">
           <div className="ready-top">
@@ -409,25 +598,45 @@ export function SignUpDoneStep() {
               <Link href="/receive">
                 <span className="i">1</span>
                 <span>
-                  Add money<small>ACH, wire or USDC</small>
+                  Add money<small>{personal ? "Pix, ACH or USDC" : "ACH, wire or USDC"}</small>
                 </span>
                 {ARROW}
               </Link>
             </li>
+            {personal ? (
+              <li>
+                <Link href="/branches">
+                  <span className="i">2</span>
+                  <span>
+                    Open a business<small>When you need a team and branches</small>
+                  </span>
+                  {ARROW}
+                </Link>
+              </li>
+            ) : (
+              <li>
+                <Link href="/settings">
+                  <span className="i">2</span>
+                  <span>
+                    Set approval rules<small>Who approves what, and over how much</small>
+                  </span>
+                  {ARROW}
+                </Link>
+              </li>
+            )}
             <li>
-              <Link href="/settings">
-                <span className="i">2</span>
-                <span>
-                  Set approval rules<small>Who approves what, and over how much</small>
-                </span>
-                {ARROW}
-              </Link>
-            </li>
-            <li>
-              <Link href="/spending">
+              <Link href={personal ? "/pay" : "/spending"}>
                 <span className="i">3</span>
                 <span>
-                  Give someone a card or QR<small>Limits in their own currency</small>
+                  {personal ? (
+                    <>
+                      Pay someone<small>Anyone, in their currency</small>
+                    </>
+                  ) : (
+                    <>
+                      Give someone a card or QR<small>Limits in their own currency</small>
+                    </>
+                  )}
                 </span>
                 {ARROW}
               </Link>
@@ -435,7 +644,7 @@ export function SignUpDoneStep() {
           </ul>
         </div>
         <div className="auth-btns">
-          <Link href="/home/empty" className="sx-btn sx-btn--primary">
+          <Link href="/home" className="sx-btn sx-btn--primary">
             Go to Home
           </Link>
         </div>

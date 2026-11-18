@@ -14,7 +14,7 @@ export type CompanyRow = {
   created_at: string
 }
 
-export type MembershipRow = { company_id: string; user_id: string; role: Role; status: string }
+export type MembershipRow = { company_id: string; user_id: string | null; role: Role; status: string }
 
 export type CompanyWallet = {
   walletId: string
@@ -86,6 +86,7 @@ export function effectiveRole(
   let depth = 0
   while (node && depth < 20) {
     const m = memberships.find((x) => x.company_id === node!.id && x.user_id === userId && x.status === "ACTIVE")
+    // INVITED rows have user_id null until accepted — ignore them for effective role.
     if (m) return { role: m.role, inherited: depth > 0 }
     node = node.parent_id ? byId.get(node.parent_id) : undefined
     depth++

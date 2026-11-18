@@ -112,7 +112,7 @@ async function fetchApprovals(): Promise<Result> {
     let res = await fetch("/api/sancus/approvals", { cache: "no-store" })
     if (res.status === 401) {
       // Right after demo auto-login the session cookie can lag; retry once.
-      await new Promise((r) => setTimeout(r, 1200))
+      await new Promise((r) => setTimeout(r, 400))
       res = await fetch("/api/sancus/approvals", { cache: "no-store" })
     }
     if (res.status === 401) return { ok: false, unauthorized: true }

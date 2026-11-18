@@ -24,10 +24,9 @@ import {
   type OnrampDepositNotification,
 } from "@/lib/circle/onramp-deposit";
 
-// Fail fast at module load if the webhook's required env vars aren't
-// configured. This is a secret-key + public-URL pair: missing either
-// silently turned dedupe insertions into runtime errors, which is much
-// harder to debug than refusing to boot.
+// Lazy admin client — do not throw at module load. `next build` evaluates
+// route modules while collecting page data; missing local env must not fail
+// the build. Real webhook traffic still fails fast if env is absent.
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -36,15 +35,20 @@ function requireEnv(name: string): string {
   return value;
 }
 
-const SUPABASE_URL = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-const SUPABASE_SECRET_KEY = requireEnv("SUPABASE_SECRET_KEY");
+function createAdmin() {
+  return createClient(requireEnv("NEXT_PUBLIC_SUPABASE_URL"), requireEnv("SUPABASE_SECRET_KEY"), {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
+let supabaseAdmin: ReturnType<typeof createAdmin> | null = null;
+
+function getSupabaseAdmin() {
+  return (supabaseAdmin ??= createAdmin());
+}
 
 type CircleNotification = {
   id: string;
@@ -196,7 +200,7 @@ async function applyTransactionStateChange(
   // Single-pass update. We try matching by circle_transaction_id first
   // (the common case), and if no rows match and we have a tx_hash, also
   // try matching REBALANCE/OUTBOUND rows by tx_hash.
-  const { data: stdRows, error: stdErr } = await supabaseAdmin
+  const { data: stdRows, error: stdErr } = await getSupabaseAdmin()
     .from("transactions")
     .update(updatePayload)
     .eq("circle_transaction_id", notification.id)
@@ -214,7 +218,7 @@ async function applyTransactionStateChange(
     // all of which return only the on-chain hash, not the underlying DCW
     // transaction id. Without SWAP here, a swap left PENDING at execution time
     // could never be reconciled to CONFIRMED/FAILED by any code path.
-    const { data: rebalRows, error: rebalErr } = await supabaseAdmin
+    const { data: rebalRows, error: rebalErr } = await getSupabaseAdmin()
       .from("transactions")
       .update(updatePayload)
       .eq("tx_hash", txHash)
@@ -270,7 +274,7 @@ async function insertInboundTransfer(
   }
 
   // Attribute the transfer to the owning user via the receiving address.
-  const { data: walletRow, error: walletErr } = await supabaseAdmin
+  const { data: walletRow, error: walletErr } = await getSupabaseAdmin()
     .from("wallets")
     .select("user_id")
     .ilike("address", recipient)
@@ -291,7 +295,7 @@ async function insertInboundTransfer(
   // is a single entry.
   const amount = Number(notification.amounts?.[0] ?? 0);
 
-  const { error: upsertErr } = await supabaseAdmin
+  const { error: upsertErr } = await getSupabaseAdmin()
     .from("transactions")
     .upsert(
       {
@@ -339,7 +343,7 @@ async function applyGatewayDeposit(
   }
 
   // Path 1: reconcile an existing (dashboard) deposit row by tx hash.
-  const { data: reconciled, error: reconcileErr } = await supabaseAdmin
+  const { data: reconciled, error: reconcileErr } = await getSupabaseAdmin()
     .from("transactions")
     .update({ status: "COMPLETE", updated_at: new Date().toISOString() })
     .eq("tx_hash", txHash)
@@ -374,7 +378,7 @@ async function applyGatewayDeposit(
     return;
   }
 
-  const { data: walletRow, error: walletErr } = await supabaseAdmin
+  const { data: walletRow, error: walletErr } = await getSupabaseAdmin()
     .from("wallets")
     .select("user_id")
     .ilike("address", depositor)
@@ -392,7 +396,7 @@ async function applyGatewayDeposit(
   }
 
   const amount = Number(notification.amount ?? 0);
-  const { error: insertErr } = await supabaseAdmin.from("transactions").insert([
+  const { error: insertErr } = await getSupabaseAdmin().from("transactions").insert([
     {
       user_id: walletRow.user_id,
       amount: Number.isFinite(amount) ? amount : 0,
@@ -438,7 +442,7 @@ async function applyOnrampDeposit(
     return;
   }
 
-  const { data: existing, error: existingErr } = await supabaseAdmin
+  const { data: existing, error: existingErr } = await getSupabaseAdmin()
     .from("transactions")
     .select("id")
     .eq("onramp_session_id", built.row.onramp_session_id)
@@ -450,7 +454,7 @@ async function applyOnrampDeposit(
   }
   if (existing) return;
 
-  const { error: insertErr } = await supabaseAdmin
+  const { error: insertErr } = await getSupabaseAdmin()
     .from("transactions")
     .insert(built.row);
 
@@ -500,7 +504,7 @@ export async function POST(req: NextRequest) {
     // alongside `notification_id`. That was a holdover from when the two
     // fields meant different things; today they're identical, so we only
     // store `notification_id`.
-    const { error: insertErr } = await supabaseAdmin
+    const { error: insertErr } = await getSupabaseAdmin()
       .from("webhook_events")
       .insert({
         notification_id: notification.id,
@@ -553,7 +557,7 @@ export async function POST(req: NextRequest) {
         // second attempt.
         console.error("Failed to apply onramp deposit:", applyErr);
 
-        const { error: releaseErr } = await supabaseAdmin
+        const { error: releaseErr } = await getSupabaseAdmin()
           .from("webhook_events")
           .delete()
           .eq("notification_id", notification.id);
