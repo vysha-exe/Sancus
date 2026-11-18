@@ -58,11 +58,14 @@ export default function PayAmountPage() {
               <span className="sx-label">You send (USDC)</span>
               <input
                 className="sx-field__input sx-field__amount"
-                value={view.live && !state.usdAmount ? view.totalLabel.replace("$", "") : state.usdAmount}
+                value={state.usdAmount}
                 onChange={(e) => setUsdAmount(e.target.value)}
                 inputMode="decimal"
+                placeholder="0.00"
               />
-              <span className="sx-field__help">From your USDC balance · includes the {view.feeLabel} fee</span>
+              <span className="sx-field__help">
+                From your USDC balance{view.feeLabel !== "–" ? ` · includes the ${view.feeLabel} fee` : ""}
+              </span>
             </label>
             <label className="sx-field s6" style={{ gridColumn: "span 6" }}>
               <span className="sx-label">They get ({view.currency})</span>
@@ -71,6 +74,7 @@ export default function PayAmountPage() {
                 value={state.localAmount}
                 onChange={(e) => setLocalAmount(e.target.value)}
                 inputMode="decimal"
+                placeholder="0.00"
               />
               <span className="sx-field__help">
                 {quoteLoading ? "Updating rate…" : view.rateLabel}
