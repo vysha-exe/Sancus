@@ -9,7 +9,7 @@ import { usePayFlow } from "@/lib/sancus/pay-flow"
 
 export default function PayReviewPage() {
   const router = useRouter()
-  const { recipient, state, view, refreshQuote, quoteLoading, quoteError, submit, submitting } = usePayFlow()
+  const { recipient, state, view, refreshQuote, quoteLoading, quoteError, submit, submitting, providerBacked } = usePayFlow()
   const [demoSeconds, setDemoSeconds] = useState(42)
   const [now, setNow] = useState(() => Date.now())
   const [error, setError] = useState<string | null>(null)
@@ -133,7 +133,7 @@ export default function PayReviewPage() {
 
           <div className="tile-foot" style={{ borderTop: 0, paddingTop: 0 }}>
             {seconds > 0 && !quoteLoading ? (
-              view.live ? (
+              providerBacked ? (
                 <button
                   type="button"
                   className="sx-btn sx-btn--primary"

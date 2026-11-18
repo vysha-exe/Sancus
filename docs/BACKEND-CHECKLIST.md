@@ -154,11 +154,12 @@
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ☐ | Port QRIS (Midtrans) charge from `rails-demo` | `POST /api/sancus/collections` (rail `QRIS`) | 🟡 (works in rails-demo) | P1 | | QR returned; Midtrans simulator pays it; status → paid |
-| ☐ | Port PromptPay (Omise) charge | rail `PROMPTPAY` | 🟡 (rails-demo) | P1 | | Same as above via Omise test dashboard |
-| ☐ | Port Pix (PayZu) charge | rail `PIX` | 🟡 (rails-demo) | P2 | | Auto-completes ~10s in PayZu sandbox |
-| ☐ | Collection status | `GET /api/sancus/collections/:id/status` | 🟡 (rails-demo) | P1 | | Polls provider; ledger credit on paid |
-| ☐ | Provider webhooks (Midtrans / Omise) | `POST /api/sancus/webhooks/{midtrans,omise}` | ⬜ | P2 | | Signature verified; deduped |
+| ◐ | Port QRIS (Midtrans) charge from `rails-demo` | `POST /api/sancus/collections` (rail `QRIS`) | 🟡 apply `app/supabase/migrations/20261117160000_sancus_local_rails.sql` | P1 | | QR returned; Midtrans simulator pays it; status → paid |
+| ◐ | Port PromptPay (Omise) charge | rail `PROMPTPAY` | 🟡 same migration as QRIS | P1 | | Same as above via Omise test dashboard |
+| ◐ | Port Pix (PayZu) charge | rail `PIX` | 🟡 same migration; PayZu token may be expired | P2 | | Auto-completes ~10s in PayZu sandbox |
+| ◐ | Collection status | `POST /api/sancus/collections/:id/refresh` | 🟡 needs the local-rails migration applied | P1 | | Polls provider and persists normalized status |
+| ◐ | Xendit outbound payouts | `POST /api/sancus/xendit/payouts` | 🟡 apply `app/supabase/migrations/20261117170000_sancus_xendit_payouts.sql` | P1 | | Sandbox payout row is saved. Account verification still blocks live test payouts. |
+| ◐ | Provider webhooks (Midtrans / Omise / PayZu) | `POST /api/sancus/webhooks/{midtrans,omise,payzu}` | 🟡 implemented; registration pending | P2 | | Provider status re-read before DB update |
 | ☐ | USD deposit → USDC (Bridge virtual account) | `POST /api/sancus/deposits/bridge` | ⬜ (blocked on access) | P1 | | `simulate_deposit` credits treasury |
 | ☐ | Card / Apple Pay top-up (Circle Onramp Kit) | `POST /api/onramp/session` | 🟡 upstream, key untested | P2 | | Sandbox purchase settles into an Arc wallet |
 

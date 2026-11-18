@@ -104,7 +104,7 @@ export default function ActivityPage() {
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {live.source === "live" ? (
-            <span className="sx-pill sx-pill--settled">Live payouts</span>
+            <span className="sx-pill sx-pill--settled">Live activity</span>
           ) : (
             <span className="sx-pill sx-pill--simulated">Demo ledger</span>
           )}
@@ -194,6 +194,8 @@ export default function ActivityPage() {
                         <option>Wire</option>
                         <option>Pix</option>
                         <option>Pix QR</option>
+                        <option>QRIS</option>
+                        <option>PromptPay</option>
                         <option>SEPA</option>
                         <option>SPEI</option>
                         <option>Card</option>

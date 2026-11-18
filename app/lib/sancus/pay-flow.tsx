@@ -27,6 +27,7 @@ import { displayMinor, parseToMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/s
 import type { SerializedQuote } from "@/lib/sancus/fx"
 import type { PayoutDto } from "@/lib/sancus/payouts"
 import { notifyApprovalsChanged } from "@/lib/sancus/use-live-approvals"
+import type { PixPaymentDto } from "@/lib/sancus/local-rails"
 
 type PayState = {
   recipientId: string
@@ -60,7 +61,7 @@ export type PayView = {
   simulated: boolean
 }
 
-type SubmitResult = { ok: true; payout: PayoutDto } | { ok: false; error: string }
+type SubmitResult = { ok: true } | { ok: false; error: string }
 
 type PayContextValue = {
   state: PayState
@@ -80,6 +81,8 @@ type PayContextValue = {
   submit: () => Promise<SubmitResult>
   submitting: boolean
   payout: PayoutDto | null
+  pixPayment: PixPaymentDto | null
+  providerBacked: boolean
 }
 
 const PayContext = createContext<PayContextValue | null>(null)
@@ -120,11 +123,13 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   const [quoteNonce, setQuoteNonce] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [payout, setPayout] = useState<PayoutDto | null>(null)
+  const [pixPayment, setPixPayment] = useState<PixPaymentDto | null>(null)
   // One idempotency key per payment attempt: retries can't double-pay.
   const idempotencyKey = useRef<string | null>(null)
 
   const recipient = getRecipient(state.recipientId) ?? recipients[0]
   const isLive = Boolean(recipient.payout)
+  const isPix = recipient.id === "juliana"
 
   const setRecipientId = useCallback((id: string) => {
     const r = getRecipient(id) ?? recipients[0]
@@ -220,10 +225,34 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   }, [quotable, recipient, state.localAmount, quoteNonce])
 
   const submit = useCallback(async (): Promise<SubmitResult> => {
-    if (!recipient.payout) return { ok: false, error: "This recipient is demo-only" }
+    if (!recipient.payout && !isPix) return { ok: false, error: "This recipient is demo-only" }
     idempotencyKey.current ??= newKey()
     setSubmitting(true)
     try {
+      if (isPix) {
+        const amountBrl = Number.parseFloat(
+          state.localAmount.includes(",")
+            ? state.localAmount.replace(/\./g, "").replace(",", ".")
+            : state.localAmount.replace(/,/g, "")
+        )
+        const res = await fetch("/api/sancus/pix/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey.current },
+          body: JSON.stringify({
+            purpose: "SUPPLIER_PAYMENT",
+            recipientName: recipient.name,
+            amountBrl,
+            pixKey: "juliana.sandbox@example.com",
+            description: state.memo || "Sancus supplier payment",
+          }),
+        })
+        const body = await res.json()
+        if (!res.ok) return { ok: false, error: body.error ?? "Pix payment failed" }
+        setPixPayment(body.payment as PixPaymentDto)
+        idempotencyKey.current = null
+        return { ok: true }
+      }
+      if (!recipient.payout) return { ok: false, error: "This recipient is not configured for payout" }
       const res = await fetch("/api/sancus/payouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey.current },
@@ -244,14 +273,14 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       setPayout(created)
       if (created.status === "PENDING_APPROVAL") notifyApprovalsChanged()
       idempotencyKey.current = null
-      return { ok: true, payout: created }
+      return { ok: true }
     } catch {
       // Keep the key: retrying the same attempt can't create a second payout.
       return { ok: false, error: "Network error. Retrying is safe; you won't be charged twice." }
     } finally {
       setSubmitting(false)
     }
-  }, [recipient, state.localAmount, state.memo])
+  }, [recipient, state.localAmount, state.memo, isPix])
 
   const view = useMemo<PayView>(() => {
     if (isLive) {
@@ -306,6 +335,8 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       submit,
       submitting,
       payout,
+      pixPayment,
+      providerBacked: isLive || isPix,
     }),
     [
       state,
@@ -324,6 +355,8 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       submit,
       submitting,
       payout,
+      pixPayment,
+      isPix,
     ]
   )
 
