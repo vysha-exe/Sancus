@@ -1,13 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { RisingColumn } from "@/components/sancus-ui/logo"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
 import { PixSpendDemo } from "@/components/sancus/pix-spend-demo"
 import { XenditPayoutDemo } from "@/components/sancus/xendit-payout-demo"
 import type { Payment } from "@/lib/sancus/demo-data"
+import type { SpendingMethodDto } from "@/lib/sancus/local-rails"
+import { displayMinor } from "@/lib/sancus/money"
 
 type Method = {
   id: string
@@ -134,11 +136,74 @@ function Face({ method }: { method: Method }) {
   )
 }
 
+function liveToMethod(m: SpendingMethodDto): Method {
+  const limit = BigInt(m.monthlyLimitMinor)
+  const used = BigInt(m.usedMinor)
+  const pct = limit > 0n ? Number((used * 100n) / limit) : 0
+  const dec = 2
+  const fmt = (n: bigint) => displayMinor(n, dec, "", 2)
+  const prefix = m.currency === "BRL" ? "R$ " : m.currency === "IDR" ? "Rp " : m.currency === "THB" ? "฿" : "$"
+  const rail = m.type === "CARD" ? "Card" : m.type === "QRIS" ? "QRIS" : m.type === "PROMPTPAY" ? "PromptPay" : "Pix"
+  return {
+    id: m.id,
+    kind: m.type === "CARD" ? "card" : "qr",
+    rail,
+    holder: m.employeeName,
+    holderUpper: m.employeeName.toUpperCase(),
+    label: m.label,
+    limit: `${prefix}${fmt(limit).replace(".", ",")}`,
+    used: `${prefix}${fmt(used).replace(".", ",")}`,
+    pct: Math.min(100, pct),
+    frozen: m.status === "PAUSED" || m.status === "REVOKED",
+    frozenNote: m.status === "REVOKED" ? "Revoked" : "Paused",
+    heldNote: `Live ${rail}`,
+    last4: m.type === "CARD" ? "····" : undefined,
+  }
+}
+
+type HoldRow = {
+  id: string
+  merchant: string
+  amount: string
+  status: "Held" | "Settled" | "Released"
+  when: string
+}
+
 export default function SpendingPage() {
   const [methods, setMethods] = useState(initialMethods)
+  const [liveIds, setLiveIds] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<Filter>("all")
   const [purchases, setPurchases] = useState<Payment[]>([])
+  const [liveNote, setLiveNote] = useState<string | null>(null)
+  const [holds, setHolds] = useState<HoldRow[]>([
+    { id: "h1", merchant: "Papelaria Central", amount: "$100.00", status: "Settled", when: "Today, 9:12" },
+    { id: "h2", merchant: "Padaria Bela Vista", amount: "$48.50", status: "Held", when: "Today, 8:40" },
+    { id: "h3", merchant: "Uber Trip", amount: "$12.20", status: "Released", when: "Yesterday" },
+  ])
+  const [selectedCard, setSelectedCard] = useState("ana-card")
   const counter = useRef(0)
+
+  const loadLive = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sancus/spending-methods", { cache: "no-store" })
+      if (!res.ok) return
+      const body = await res.json()
+      const live = ((body.methods ?? []) as SpendingMethodDto[]).map(liveToMethod)
+      if (live.length === 0) return
+      setLiveIds(new Set(live.map((m) => m.id)))
+      setMethods((prev) => {
+        const demoCards = prev.filter((m) => m.kind === "card" && !live.some((l) => l.id === m.id))
+        return [...demoCards, ...live]
+      })
+      setLiveNote(`${live.length} live ${live.length === 1 ? "method" : "methods"}`)
+    } catch {
+      /* keep demo cards */
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadLive()
+  }, [loadLive])
 
   const frozenCount = methods.filter((m) => m.frozen).length
   const cardCount = methods.filter((m) => m.kind === "card").length
@@ -151,13 +216,25 @@ export default function SpendingPage() {
     return true
   })
 
-  function toggle(id: string) {
+  async function toggle(id: string) {
+    if (liveIds.has(id)) {
+      const current = methods.find((m) => m.id === id)
+      const action = current?.frozen ? "resume" : "pause"
+      const res = await fetch(`/api/sancus/spending-methods/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      })
+      if (res.ok) void loadLive()
+      return
+    }
     setMethods((prev) => prev.map((m) => (m.id === id ? { ...m, frozen: !m.frozen } : m)))
   }
 
   function simulatePurchase() {
     counter.current += 1
     const id = `sim-${counter.current}`
+    const holdId = `hold-${counter.current}`
     const base: Payment = {
       id,
       who: "Livraria Cultura · Ana",
@@ -169,10 +246,16 @@ export default function SpendingPage() {
       href: "/activity",
     }
     setPurchases((prev) => [base, ...prev])
+    setHolds((prev) => [
+      { id: holdId, merchant: "Livraria Cultura", amount: "$25.00", status: "Held", when: "Just now" },
+      ...prev,
+    ])
+    setSelectedCard("ana-card")
     window.setTimeout(() => {
       setPurchases((prev) =>
         prev.map((p) => (p.id === id ? { ...p, status: "Settled", meta: "Held, then settled just now" } : p)),
       )
+      setHolds((prev) => prev.map((h) => (h.id === holdId ? { ...h, status: "Settled", when: "Just now" } : h)))
     }, 1500)
   }
 
@@ -191,6 +274,7 @@ export default function SpendingPage() {
           <p className="body-s muted" style={{ margin: 0 }}>
             Cards and local QR for your team. Each spends from your balance, up to a monthly limit
             in that person&apos;s own currency.
+            {liveNote ? ` · ${liveNote}` : ""}
           </p>
         </div>
         <Link href="/team/ana/methods/new" className="sx-btn sx-btn--primary">
@@ -274,33 +358,86 @@ export default function SpendingPage() {
         </Link>
       </div>
 
-      <section className="tile" aria-labelledby="recent">
-        <div className="tile-head">
-          <h2 className="tile-title" id="recent">
-            Recent team spending
-          </h2>
-          <Link href="/activity" className="sx-btn sx-btn--quiet">
-            See all
-          </Link>
-        </div>
-        <div className="sx-rows">
-          {[...purchases, ...baseSpending].map((p) => (
-            <PaymentRow key={p.id} payment={p} />
-          ))}
-        </div>
-        <div className="tile-foot">
-          <button
-            type="button"
-            className="sx-btn sx-btn--secondary sx-btn--sm"
-            onClick={simulatePurchase}
-          >
-            Simulate a purchase
-          </button>
-          <span className="body-s muted">
-            Demo only: runs hold → settle so you can show it live.
-          </span>
-        </div>
-      </section>
+      <div className="grid">
+        <section className="tile s7" aria-labelledby="recent">
+          <div className="tile-head">
+            <h2 className="tile-title" id="recent">
+              Recent team spending
+            </h2>
+            <Link href="/activity" className="sx-btn sx-btn--quiet">
+              See all
+            </Link>
+          </div>
+          <div className="sx-rows">
+            {[...purchases, ...baseSpending].map((p) => (
+              <PaymentRow key={p.id} payment={p} />
+            ))}
+          </div>
+          <div className="tile-foot">
+            <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={simulatePurchase}>
+              Simulate a purchase
+            </button>
+            <span className="body-s muted">Demo only: runs hold → settle so you can show it live.</span>
+          </div>
+        </section>
+
+        <section className="tile s5" aria-labelledby="holds">
+          <div className="tile-head">
+            <h2 className="tile-title" id="holds">
+              Holds on card {methods.find((m) => m.id === selectedCard)?.last4 ?? "4021"}
+            </h2>
+            <span className="sx-pill sx-pill--simulated">Marqeta · simulated</span>
+          </div>
+          <div className="filters" role="group" aria-label="Card" style={{ marginBottom: 8 }}>
+            {methods
+              .filter((m) => m.kind === "card")
+              .map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className="chip"
+                  aria-pressed={selectedCard === m.id}
+                  onClick={() => setSelectedCard(m.id)}
+                >
+                  {m.holder.split(" ")[0]} · {m.last4}
+                </button>
+              ))}
+          </div>
+          <div className="holds">
+            {holds.map((h) => (
+              <div key={h.id} className="hold">
+                <div>
+                  <span className="body-strong">{h.merchant}</span>
+                  <span className="body-s muted" style={{ display: "block" }}>
+                    {h.when}
+                  </span>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <span className="amt">{h.amount}</span>
+                  <span style={{ display: "block" }}>
+                    <span
+                      className={`sx-pill ${
+                        h.status === "Held"
+                          ? "sx-pill--pending"
+                          : h.status === "Settled"
+                            ? "sx-pill--settled"
+                            : "sx-pill--simulated"
+                      }`}
+                    >
+                      {h.status}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="tile-foot">
+            <span className="body-s muted">
+              Held amounts sit in your balance until the merchant settles or the hold drops.
+            </span>
+          </div>
+        </section>
+      </div>
 
       <PixSpendDemo />
       <XenditPayoutDemo />

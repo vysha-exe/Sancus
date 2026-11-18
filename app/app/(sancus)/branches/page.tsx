@@ -12,6 +12,7 @@ import {
 import { COUNTRIES, countryByCode } from "@/lib/sancus/countries"
 import { CompanyTreeDiagram } from "@/components/sancus-ui/company-tree-diagram"
 import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
+import { useWorkspace } from "@/lib/sancus/use-workspace"
 
 type Me = { circleConfigured: boolean; tree: CompanyNode[]; nodeCount: number; walletCount: number }
 
@@ -54,6 +55,7 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
 }
 
 export default function BranchesPage() {
+  const ws = useWorkspace()
   const [me, setMe] = useState<Me | null>(null)
   const [mode, setMode] = useState<"loading" | "live" | "demo">("loading")
   const [error, setError] = useState<string | null>(null)
@@ -145,8 +147,31 @@ export default function BranchesPage() {
           <div className="tile s12">
             <span className="body-s muted">Loading your branches…</span>
           </div>
+        ) : tree.length === 0 && mode === "live" ? (
+          <section className="tile s12" aria-labelledby="empty-biz">
+            <span className="state-cap">Branches · no company yet</span>
+            <div className="empty" style={{ minHeight: 180 }}>
+              <b style={{ color: "var(--ink)" }} id="empty-biz">
+                No business yet
+              </b>
+              <span>Open one to add a team and branches.</span>
+            </div>
+            <CreateGlobalAccount
+              circleConfigured={me?.circleConfigured ?? false}
+              onCreated={async () => {
+                await load()
+                await ws.refresh()
+              }}
+            />
+          </section>
         ) : tree.length === 0 ? (
-          <CreateGlobalAccount circleConfigured={me?.circleConfigured ?? false} onCreated={load} />
+          <CreateGlobalAccount
+            circleConfigured={me?.circleConfigured ?? false}
+            onCreated={async () => {
+              await load()
+              await ws.refresh()
+            }}
+          />
         ) : (
           <>
           <section className="tile s12" aria-labelledby="structure">
@@ -170,7 +195,7 @@ export default function BranchesPage() {
   )
 }
 
-function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured: boolean; onCreated: () => void }) {
+function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured: boolean; onCreated: () => void | Promise<void> }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -182,6 +207,11 @@ function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured
     const r = await postJson("/api/sancus/companies", { name: f.get("name"), country: f.get("country") })
     setBusy(false)
     if (!r.ok) return setError(String(r.data.error ?? "Could not create the account"))
+    const company = r.data.company as { id?: string } | undefined
+    if (company?.id) {
+      const { setWorkspaceCompany } = await import("@/lib/sancus/workspace")
+      setWorkspaceCompany(company.id)
+    }
     if (r.data.walletError) setError(`Account created, but the wallet wasn't: ${r.data.walletError}`)
     onCreated()
   }
@@ -243,6 +273,10 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const isRoot = node.parentId === null || node.depth === 0
+  // Root = level 1 (depth 0); max 6 levels → can't add under depth 5.
+  const atMaxDepth = node.depth >= 5
+  const canAdd = live && node.can.createBranch && !atMaxDepth
+  const viewOnlyParent = live && !node.can.createBranch && node.role === "VIEWER"
 
   async function addBranch(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -288,6 +322,12 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
                 {node.roleInherited ? " (inherited)" : ""}
               </>
             ) : null}
+            {atMaxDepth ? (
+              <>
+                {" · "}
+                <span className="tag">Level 6 of 6</span>
+              </>
+            ) : null}
           </span>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -297,6 +337,26 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
           ) : null}
         </div>
       </div>
+
+      {atMaxDepth ? (
+        <div className="banner">
+          <span>Branches stop at 6 levels. Add a sibling under the parent instead.</span>
+        </div>
+      ) : null}
+
+      {viewOnlyParent ? (
+        <div className="banner">
+          <span>You can see this, not change it. Ask an Owner for a different role.</span>
+        </div>
+      ) : null}
+
+      {live && node.roleInherited && node.parentId && !node.can.createBranch && node.role && node.role !== "VIEWER" ? (
+        <div className="banner">
+          <span>
+            You manage {node.name} and below. Parent branches are managed by their Owner and Admins.
+          </span>
+        </div>
+      ) : null}
 
       {node.wallets.length ? (
         <div className="sx-rows">
@@ -333,7 +393,7 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
         <span className="body-s muted">No wallets yet.</span>
       )}
 
-      {live && node.can.createBranch ? (
+      {canAdd ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
             type="button"
@@ -342,6 +402,14 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
             aria-expanded={adding}
           >
             + {isRoot ? "Branch" : "Sub-branch"}
+          </button>
+        </div>
+      ) : null}
+
+      {atMaxDepth && live && node.can.createBranch ? (
+        <div className="tile-foot" style={{ justifyContent: "flex-start" }}>
+          <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" disabled>
+            Add a branch under {node.name}
           </button>
         </div>
       ) : null}
@@ -366,9 +434,9 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
       ) : null}
 
       {error ? (
-        <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>
-          {error}
-        </span>
+        <div className="banner banner--err" role="alert">
+          <span>{/depth|6 levels/i.test(error) ? "Branches stop at 6 levels. Add this one under a higher branch instead." : error}</span>
+        </div>
       ) : null}
 
       {node.children.length ? (

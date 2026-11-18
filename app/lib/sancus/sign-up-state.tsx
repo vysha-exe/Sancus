@@ -2,23 +2,33 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
 
-/** Mock sign-up answers, carried across the five steps by the /sign-up layout (kept in memory only). Defaults follow the wireframes (Café Paulista demo). */
+/** Mock sign-up answers, carried across the steps by the /sign-up layout (kept in memory only). Defaults follow the wireframes (Café Paulista demo). */
+export type AccountType = "personal" | "business"
+
 export type SignUpData = {
   firstName: string
   email: string
   agreed: boolean
+  accountType: AccountType
+  /** Full legal name for personal accounts (wireframe “About you”). */
+  fullName: string
   company: string
   country: string
   currency: string
   invites: { email: string; role: string }[]
   /** How many invites the user sent on the team step (0 if skipped). */
   invitesSent: number
+  /** Set after business onboarding creates the company. */
+  createdCompanyId: string | null
+  provisioningError: string | null
 }
 
 export const SIGN_UP_DEFAULTS: SignUpData = {
   firstName: "Maya",
   email: "maya@cafepaulista.com.br",
   agreed: true,
+  accountType: "business",
+  fullName: "Maya Oliveira",
   company: "Café Paulista Ltda",
   country: "Brazil",
   currency: "BRL",
@@ -28,6 +38,8 @@ export const SIGN_UP_DEFAULTS: SignUpData = {
     { email: "", role: "Employee" },
   ],
   invitesSent: 0,
+  createdCompanyId: null,
+  provisioningError: null,
 }
 
 type Ctx = {

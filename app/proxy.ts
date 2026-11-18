@@ -63,8 +63,10 @@ export async function proxy(request: NextRequest) {
     },
   });
 
+  const { pathname } = request.nextUrl;
+
   // API routes do their own per-route auth checks. Skip proxy logic.
-  if (request.nextUrl.pathname.startsWith("/api")) {
+  if (pathname.startsWith("/api")) {
     return response;
   }
 
@@ -73,13 +75,20 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
+  const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
+  const isAuthForm = pathname === "/auth/login" || pathname === "/auth/sign-up";
+
+  // Public marketing / mock sign-up: no session read. Auth forms still need
+  // getUser so signed-in visitors can be bounced to /home.
+  if (!isProtected && !isAuthForm) {
+    return response;
+  }
+
   const supabase = createSupabaseReqResClient(request, response);
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-  const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
   const demoOn = isDemoLoginEnabled();
   const demoGuest = request.cookies.get(DEMO_GUEST_COOKIE)?.value === "1";
 
@@ -105,7 +114,7 @@ export async function proxy(request: NextRequest) {
 
   // Authenticated users hitting login/signup get bounced to the Sancus app.
   // Marketing site and mock /sign-in, /sign-up routes stay public.
-  if (user && (pathname === "/auth/login" || pathname === "/auth/sign-up")) {
+  if (user && isAuthForm) {
     const url = request.nextUrl.clone();
     url.pathname = "/home";
     return NextResponse.redirect(url);

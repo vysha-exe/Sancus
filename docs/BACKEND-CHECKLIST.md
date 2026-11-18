@@ -43,8 +43,12 @@
 | Activity › summary tiles | treasury + approvals (available, on its way out, waiting for approval) | ✅ |
 | Pay › done (over the approval rule) | "Sent for approval" → approved / declined | ✅ |
 | Agents › Paid by other agents | `GET /api/sancus/x402/earnings` (live, refreshes every 5 s) | ✅ |
-| Settings › approval rules toggles | `PUT /api/sancus/policies` exists; toggles not wired yet | ⬜ |
-| Team, Spending/Cards, Invoices, Agents › assistant & budget | no backend yet (§8, §10–11, §14) | ⬜ demo data |
+| Settings › approval rules toggles | `PUT /api/sancus/policies` — threshold wired; other toggles still local | 🟡 |
+| Team | memberships + invite APIs; Team page live when a company exists (§10) | 🟡 |
+| Branches | `GET/POST /companies`, Branches UI | ✅ |
+| Spending › Pix methods | `GET/PATCH /spending-methods` + live Pix cards; virtual cards still demo (§8) | 🟡 |
+| Receive › local rails | collections UI primary on Receive | 🟡 |
+| Invoices, Agents › assistant & budget | no backend yet (§11, §14) | ⬜ demo data |
 | Agents › voice mode (mic → talk → agent talks back) | §14.2 voice session + STT/TTS | ⬜ |
 | Demo-only recipients (Brazil, US, EU, Mexico) | simulated in the UI only | ⬜ |
 
@@ -188,12 +192,17 @@
 
 ## 10. Business accounts & team
 
+See also [`docs/b2b-b2c-structure.md`](b2b-b2c-structure.md) (tree + B2C + VIEWER).
+
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ☐ | Company model (one per user for demo) | `sancus_companies` migration | ⬜ | P1 | | Demo company "Lion City Trading Pte Ltd" exists |
-| ☐ | Members + roles (OWNER / ADMIN / FINANCE / EMPLOYEE) | `sancus_memberships` | ⬜ | P1 | | Role checked in policy engine + approvals |
-| ☐ | Create / get company | `POST /api/sancus/companies`, `GET /api/sancus/companies/me` | ⬜ | P1 | | Onboarding creates company + wallets |
-| ☐ | Invite member / change role | `POST /api/sancus/companies/members`, `PATCH /api/sancus/companies/members/:id` | ⬜ | P2 | | Invited user sees company on login |
+| ☐ | Company tree (root + branches, max 6) | `sancus_companies` + `sancus_create_company` | ✅ | P1 | | Branches UI creates global account + children |
+| ☐ | Members + roles (OWNER / ADMIN / FINANCE / EMPLOYEE / VIEWER) | `sancus_memberships` + `companies.ts` | 🟡 | P1 | | Roles in Team UI; still need policy-engine gates on every money route |
+| ☐ | Create / get company | `POST /api/sancus/companies`, `GET …/me`, `POST …/:id/branches` | ✅ | P1 | | Each node gets one Circle wallet |
+| ☐ | Personal treasury (B2C) | `POST/GET /api/sancus/treasury/setup` | ✅ | P1 | | Personal wallets with `company_id` null |
+| ☐ | Invite member / change role / accept | `POST …/companies/:id/members`, `PATCH …/members/:id`, `POST …/invites/:token/accept` | 🟡 | P2 | | APIs + Team invite sheet; email still stubbed |
+| ☐ | B2C vs B2B chrome | shell hides Team/Branches when no company; sign-up account-type step | 🟡 | P1 | | Personal nav gated; business sign-up not yet calling create company API |
+| ☐ | Company-scoped payouts / policies | `company_id` on payouts + `sancus_company_policies` migration | 🟡 | P1 | | Migration added; money routes still mostly personal |
 
 ## 11. Invoices
 

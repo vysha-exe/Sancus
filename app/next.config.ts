@@ -16,10 +16,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  cacheComponents: true,
+  // Cache Components / PPR blocks the fully-client Sancus shell when anything
+  // in the request path touches cookies (Supabase auth). Keep it off until
+  // auth-aware segments are wrapped in Suspense; product features unchanged.
+  cacheComponents: false,
+
+  // Critical: a stray C:\Users\patel\package-lock.json made Turbopack treat the
+  // home directory as the workspace root, so compiles hung scanning unrelated
+  // trees. Pin root to this app folder.
+  turbopack: {
+    root: path.join(__dirname),
+  },
+
+  // Externalize heavy server SDKs. Avoid packages with fragile subpath exports
+  // (e.g. @circle-fin/x402-batching/server) — those must stay bundled.
+  serverExternalPackages: [
+    "viem",
+    "@circle-fin/developer-controlled-wallets",
+  ],
+
+  experimental: {
+    optimizePackageImports: ["lucide-react", "@tabler/icons-react", "date-fns"],
+  },
 };
 
 export default nextConfig;

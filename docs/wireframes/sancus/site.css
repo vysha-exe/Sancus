@@ -376,3 +376,7 @@
 
 /* Unbuilt flutes: solid and quiet, no dashes, so the column reads as one object */
 .build-col .f-todo, .build-col rect.f-todo { fill: var(--surface-200); stroke: var(--line); stroke-width: .5; stroke-dasharray: none; opacity: 1; }
+
+/* Business sign-up has six steps: five flutes, then the capital. */
+.build-list--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.opt .code3 svg { display: block; }

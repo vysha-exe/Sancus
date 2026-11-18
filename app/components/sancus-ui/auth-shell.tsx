@@ -2,7 +2,7 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import { RisingColumn } from "./logo"
 
-export const SIGN_UP_STEPS = ["Email", "Code", "Company", "Currency", "Team"] as const
+export const SIGN_UP_STEPS = ["Email", "Code", "Type", "Company", "Currency", "Team"] as const
 
 type FluteState = "done" | "now" | "todo"
 

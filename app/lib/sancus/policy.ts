@@ -97,6 +97,22 @@ export async function loadPolicy(supabase: SupabaseClient, userId: string): Prom
   return policyFromRow(data as PolicyRow | null)
 }
 
+/** Company node policy; falls back to the actor's personal policy, then defaults. */
+export async function loadCompanyPolicy(
+  supabase: SupabaseClient,
+  companyId: string,
+  fallbackUserId?: string
+): Promise<Policy> {
+  const { data } = await supabase
+    .from("sancus_company_policies")
+    .select("approval_threshold_minor, per_payment_limit_minor, daily_limit_minor, blocked_recipients")
+    .eq("company_id", companyId)
+    .maybeSingle()
+  if (data) return policyFromRow(data as PolicyRow)
+  if (fallbackUserId) return loadPolicy(supabase, fallbackUserId)
+  return DEFAULT_POLICY
+}
+
 /** USDC committed today (UTC) to payouts that weren't declined or failed. */
 export async function spentToday(supabase: SupabaseClient, userId: string, now = new Date()): Promise<bigint> {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
