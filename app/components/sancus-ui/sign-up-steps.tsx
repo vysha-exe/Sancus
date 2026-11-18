@@ -65,7 +65,7 @@ export function SignUpEmailStep() {
           <button type="submit" className="sx-btn sx-btn--primary" disabled={!ready}>
             Continue
           </button>
-          <Link href="/home" className="sx-btn sx-btn--secondary">
+          <Link href="/demo" className="sx-btn sx-btn--secondary">
             Try the demo
           </Link>
         </div>

@@ -3,8 +3,8 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, type ReactNode } from "react"
-import type { NavKey } from "@/lib/sancus/accounts"
-import { can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
+import { ACCOUNT_TYPE_LABEL, type NavKey } from "@/lib/sancus/accounts"
+import { accountDisplayName, can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
 import { useEnsureTreasury } from "@/lib/sancus/use-ensure-treasury"
@@ -69,22 +69,18 @@ export function AppShell({
   useEnsureTreasury(accountReady && can(account, "money.send"))
   const ws = useWorkspace()
   // Personal mode (or no company yet): hide Team/Branches. Business selection shows them.
-  const showBusinessNav = account?.type === "ADMIN" || (ws.ready ? !ws.isPersonal && ws.hasBusiness : false)
+  const showBusinessNav = ws.ready ? !ws.isPersonal && ws.hasBusiness : false
   // Each account type gets its own sections (see lib/sancus/accounts.ts).
   const keys: NavKey[] = (account?.nav ?? DEFAULT_NAV).filter(
     (k) => k !== "settings" && (account?.type === "BRANCH" || showBusinessNav || (k !== "team" && k !== "branches"))
   )
   const navItems = keys.map((k) => nav.find((n) => n.key === k)).filter((n): n is (typeof nav)[number] => Boolean(n))
-  const actorRole = account?.type === "ADMIN" ? "Admin" : account ? account.label : ws.isPersonal ? "Personal" : workspace.actor.role
-  const actorName = account?.type === "ADMIN"
-    ? "Admin"
-    : account?.firstName
-      ? account.firstName
-      : account?.email
-        ? account.email.split(/[@+]/)[0].replace(/^\w/, (c) => c.toUpperCase())
-        : workspace.actor.firstName
+  // Primary line is the account type (Business admin, Branch admin, …). Secondary is company or person.
+  // Guest demo (no account) is the business-admin demo.
+  const actorName = account ? ACCOUNT_TYPE_LABEL[account.type] : ACCOUNT_TYPE_LABEL.ADMIN
+  const actorRole = accountDisplayName(account, workspace.name)
 
-  // A business admin always opens in the global account; Personal is not part of the admin experience.
+  // A business admin always works in the company (there's no personal account on the admin dashboard).
   useEffect(() => {
     if (account?.type !== "ADMIN" || !ws.ready || !ws.isPersonal || !ws.hasBusiness) return
     const root = account.scopes.find((s) => s.isRoot)
@@ -107,14 +103,14 @@ export function AppShell({
         <header className="hdr">
           <SancusLockup />
           <div className="bar">
-            {!account || account.type === "ADMIN" ? <WorkspaceSwitcher /> : null}
+            {!account || account.type === "ADMIN" ? <WorkspaceSwitcher allowPersonal={account?.type !== "ADMIN"} /> : null}
             <label className="search-pill">
               <IconSearch />
               <span className="vh">Search</span>
               <input placeholder="Search payments, people, invoices" />
             </label>
             {headerExtra}
-            <div className="hdr-actions">
+            <div className="hdr-end push">
               <NotificationBell />
               <AccountMenu name={actorName} role={actorRole} email={account?.email ?? null} signedIn={Boolean(account)} />
             </div>
