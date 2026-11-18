@@ -219,6 +219,7 @@ body:has(.frame) {
 .search-pill input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 400 14px var(--font-sans); outline: none; }
 .search-pill:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .hdr .push { margin-left: auto; }
+.hdr-end { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .hdr .icon-btn { background: var(--surface-100); border-color: var(--line); }
 .me { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 3px 14px 3px 3px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--surface-100); color: var(--ink); cursor: pointer; text-align: left; }
 .me .av { width: 36px; height: 36px; }

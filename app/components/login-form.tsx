@@ -33,8 +33,6 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { DEMO_LOGIN_PATH } from "@/lib/sancus/demo-login";
-
 const DEMO_ERRORS: Record<string, string> = {
   "demo-disabled": "Demo login is turned off. Use Enter the demo on the landing page, or set SANCUS_DEMO_LOGIN=true.",
   "demo-misconfigured": "Demo login needs SANCUS_DEMO_EMAIL and an 8+ character SANCUS_DEMO_PASSWORD.",
@@ -135,12 +133,9 @@ export function LoginForm({
                 Sign up
               </Link>
               {" · "}
-              <a
-                href={`${DEMO_LOGIN_PATH}?next=${encodeURIComponent("/home")}`}
-                className="underline underline-offset-4"
-              >
+              <Link href="/demo" className="underline underline-offset-4">
                 Enter the demo
-              </a>
+              </Link>
             </div>
           </form>
         </CardContent>
