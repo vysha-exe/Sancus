@@ -5,56 +5,95 @@ import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
 import { getPerson, people } from "@/lib/sancus/demo-data"
+import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 
 type Kind = "card" | "qr"
-type Country = "Brazil" | "Indonesia" | "Thailand"
+type Country =
+  | "United States"
+  | "Canada"
+  | "Brazil"
+  | "United Kingdom"
+  | "Ireland"
+  | "Germany"
+  | "France"
+  | "Netherlands"
+  | "Spain"
+  | "Italy"
+  | "Sweden"
+  | "Switzerland"
+  | "Singapore"
+  | "Hong Kong"
+  | "Japan"
+  | "Australia"
+  | "Indonesia"
+  | "Thailand"
 
-const countryInfo: Record<
-  Country,
-  { network: string; code: string; rate: number; defaultQr: number; defaultCard: number; help: string }
-> = {
-  Brazil: {
-    network: "Pix",
-    code: "BRL",
-    rate: 5.4123,
-    defaultQr: 800,
-    defaultCard: 2700,
-    help: "Pix is the only QR network in Brazil.",
-  },
-  Indonesia: {
-    network: "QRIS",
-    code: "IDR",
-    rate: 16300,
-    defaultQr: 3200000,
-    defaultCard: 3200000,
-    help: "QRIS is the only QR network in Indonesia.",
-  },
-  Thailand: {
-    network: "PromptPay",
-    code: "THB",
-    rate: 34.5,
-    defaultQr: 8500,
-    defaultCard: 8500,
-    help: "PromptPay is the only QR network in Thailand.",
-  },
+type CountryInfo = {
+  network: string
+  code: string
+  rate: number
+  defaultQr: number
+  defaultCard: number
+  help: string
 }
+
+const euro = (help: string): CountryInfo => ({
+  network: "Card",
+  code: "EUR",
+  rate: FIXED_USD_RATES.EUR,
+  defaultQr: 460,
+  defaultCard: 460,
+  help,
+})
+
+const countryInfo: Record<Country, CountryInfo> = {
+  "United States": { network: "Card", code: "USD", rate: FIXED_USD_RATES.USD, defaultQr: 500, defaultCard: 500, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Canada: { network: "Card", code: "CAD", rate: FIXED_USD_RATES.CAD, defaultQr: 680, defaultCard: 680, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Brazil: { network: "Pix", code: "BRL", rate: FIXED_USD_RATES.BRL, defaultQr: 800, defaultCard: 2700, help: "Pix is the only QR network in Brazil." },
+  "United Kingdom": { network: "Card", code: "GBP", rate: FIXED_USD_RATES.GBP, defaultQr: 400, defaultCard: 400, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Ireland: euro("Cards are accepted anywhere Visa or Mastercard is."),
+  Germany: euro("Cards are accepted anywhere Visa or Mastercard is."),
+  France: euro("Cards are accepted anywhere Visa or Mastercard is."),
+  Netherlands: euro("Cards are accepted anywhere Visa or Mastercard is."),
+  Spain: euro("Cards are accepted anywhere Visa or Mastercard is."),
+  Italy: euro("Cards are accepted anywhere Visa or Mastercard is."),
+  Sweden: { network: "Card", code: "SEK", rate: FIXED_USD_RATES.SEK, defaultQr: 5200, defaultCard: 5200, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Switzerland: { network: "Card", code: "CHF", rate: FIXED_USD_RATES.CHF, defaultQr: 450, defaultCard: 450, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Singapore: { network: "Card", code: "SGD", rate: FIXED_USD_RATES.SGD, defaultQr: 670, defaultCard: 670, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  "Hong Kong": { network: "Card", code: "HKD", rate: FIXED_USD_RATES.HKD, defaultQr: 3900, defaultCard: 3900, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Japan: { network: "Card", code: "JPY", rate: FIXED_USD_RATES.JPY, defaultQr: 75000, defaultCard: 75000, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Australia: { network: "Card", code: "AUD", rate: FIXED_USD_RATES.AUD, defaultQr: 760, defaultCard: 760, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Indonesia: { network: "QRIS", code: "IDR", rate: FIXED_USD_RATES.IDR, defaultQr: 3200000, defaultCard: 3200000, help: "QRIS is the only QR network in Indonesia." },
+  Thailand: { network: "PromptPay", code: "THB", rate: FIXED_USD_RATES.THB, defaultQr: 8500, defaultCard: 8500, help: "PromptPay is the only QR network in Thailand." },
+}
+
+const cardRegions: { label: string; countries: Country[] }[] = [
+  { label: "Americas", countries: ["United States", "Canada", "Brazil"] },
+  { label: "Europe", countries: ["United Kingdom", "Ireland", "Germany", "France", "Netherlands", "Spain", "Italy", "Sweden", "Switzerland"] },
+  { label: "Asia Pacific", countries: ["Singapore", "Hong Kong", "Japan", "Australia", "Indonesia", "Thailand"] },
+]
 
 function formatLocal(code: string, n: number): string {
   if (code === "BRL") return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   if (code === "IDR") return `Rp ${Math.round(n).toLocaleString("id-ID")}`
-  return `฿${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  if (code === "THB") return `฿${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const digits = code === "JPY" ? 0 : 2
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: code, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n)
 }
 
 function formatShort(code: string, n: number): string {
   if (code === "BRL") return `R$ ${Math.round(n).toLocaleString("pt-BR")}`
   if (code === "IDR") return `Rp ${Math.round(n).toLocaleString("id-ID")}`
-  return `฿${Math.round(n).toLocaleString("en-US")}`
+  if (code === "THB") return `฿${Math.round(n).toLocaleString("en-US")}`
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: code, maximumFractionDigits: 0 }).format(n)
 }
 
 function parseNumber(raw: string, code: string): number {
   // Brazilian and Indonesian formats use "." for thousands and "," for decimals.
-  const cleaned =
-    code === "THB" ? raw.replace(/[^0-9.]/g, "") : raw.replace(/\./g, "").replace(",", ".").replace(/[^0-9.]/g, "")
+  const dotDecimal = code !== "BRL" && code !== "IDR"
+  const cleaned = dotDecimal
+    ? raw.replace(/[^0-9.]/g, "")
+    : raw.replace(/\./g, "").replace(",", ".").replace(/[^0-9.]/g, "")
   const n = Number.parseFloat(cleaned)
   return Number.isFinite(n) ? n : 0
 }
@@ -70,6 +109,7 @@ export default function AssignMethodPage() {
   const initialId = params?.personId ?? "ana"
   const initialPerson = getPerson(initialId)
   const [liveName, setLiveName] = useState<string | null>(null)
+  const [liveUserId, setLiveUserId] = useState<string | null>(null)
   const [liveOk, setLiveOk] = useState(false)
   const spenders = people.filter((p) => p.role === "Employee" || p.role === "Finance")
   const [personId, setPersonId] = useState(
@@ -83,6 +123,7 @@ export default function AssignMethodPage() {
         if (!res.ok) return
         const body = await res.json()
         setLiveName(body.member?.email ?? body.member?.userId ?? "Teammate")
+        setLiveUserId(body.member?.userId ?? null)
         setLiveOk(true)
         setPersonId(initialId)
       })
@@ -114,7 +155,7 @@ export default function AssignMethodPage() {
           <div>
             <h1 className="sx-h heading-2">We couldn&apos;t find that person</h1>
             <p className="body-s muted" style={{ margin: 0 }}>
-              Pick someone from your team to give them a card or QR.
+              Pick someone from your team to give them a card or Pix access.
             </p>
           </div>
         </header>
@@ -140,7 +181,12 @@ export default function AssignMethodPage() {
   function changeKind(next: Kind) {
     setKind(next)
     setName(next === "card" ? "Office and supplies" : "Market runs")
-    setLimitRaw(formatLocal(info.code, next === "card" ? info.defaultCard : info.defaultQr))
+    const nextCountry = next === "qr" && !["Brazil", "Indonesia", "Thailand"].includes(country)
+      ? "Brazil"
+      : country
+    const nextInfo = countryInfo[nextCountry]
+    setCountry(nextCountry)
+    setLimitRaw(formatLocal(nextInfo.code, next === "card" ? nextInfo.defaultCard : nextInfo.defaultQr))
   }
 
   function changePerson(id: string) {
@@ -150,15 +196,19 @@ export default function AssignMethodPage() {
   }
 
   async function issueAccess() {
+    if (liveOk && !liveUserId) {
+      setIssueError("They need to accept the invite and create their employee login before you can issue spending access.")
+      return
+    }
     setIssuing(true)
     setIssueError(null)
-    const methodType = kind === "card" ? "CARD" : info.network === "QRIS" ? "QRIS" : info.network === "PromptPay" ? "PROMPTPAY" : "PIX"
+    const methodType = info.network === "QRIS" ? "QRIS" : info.network === "PromptPay" ? "PROMPTPAY" : "PIX"
     try {
       const response = await fetch("/api/sancus/spending-methods", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          employeeId: person.id,
+          employeeId: liveOk ? liveUserId : person.id,
           employeeName: person.name,
           label: name,
           methodType,
@@ -177,13 +227,46 @@ export default function AssignMethodPage() {
     }
   }
 
+  async function issueCard() {
+    if (liveOk && !liveUserId) {
+      setIssueError("They need to accept the invite and create their employee login before you can issue a card.")
+      return
+    }
+    setIssuing(true)
+    setIssueError(null)
+    try {
+      const response = await fetch("/api/sancus/cards", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          employeeId: liveOk ? liveUserId : person.id,
+          employeeName: person.name,
+          label: name,
+          country,
+          currency: info.code,
+          monthlyLimit: limit,
+        }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || "Could not issue card")
+      router.push("/spending")
+    } catch (caught) {
+      setIssueError(caught instanceof Error ? caught.message : "Could not issue card")
+    } finally {
+      setIssuing(false)
+    }
+  }
+
   return (
     <div className="page">
       <header className="page-head">
         <div>
           <nav aria-label="Breadcrumb" className="body-s muted">
             <Link href="/team">Team</Link> / <Link href={`/team/${person.id}`}>{person.name}</Link> / Add a
-            card or QR
+            card or Pix access
           </nav>
           <h1 className="sx-h heading-2">Give {first} a way to spend</h1>
         </div>
@@ -235,7 +318,7 @@ export default function AssignMethodPage() {
                 style={{ textAlign: "left", font: "inherit", color: "inherit" }}
               >
                 <span className="body-strong">
-                  <span className="sx-rail">QR</span> Local QR
+                  <span className="sx-rail">Pix</span> Pix access
                 </span>
                 <span className="body-s muted">Pix, QRIS or PromptPay for local merchants.</span>
               </button>
@@ -250,9 +333,21 @@ export default function AssignMethodPage() {
                 value={country}
                 onChange={(e) => changeCountry(e.target.value as Country)}
               >
-                <option>Brazil</option>
-                <option>Indonesia</option>
-                <option>Thailand</option>
+                {kind === "card"
+                  ? cardRegions.map((region) => (
+                      <optgroup key={region.label} label={region.label}>
+                        {region.countries.map((name) => (
+                          <option key={name}>{name}</option>
+                        ))}
+                      </optgroup>
+                    ))
+                  : (
+                    <>
+                      <option>Brazil</option>
+                      <option>Indonesia</option>
+                      <option>Thailand</option>
+                    </>
+                  )}
               </select>
             </label>
             <label className="sx-field s6">
@@ -308,7 +403,12 @@ export default function AssignMethodPage() {
             <Link href={`/team/${person.id}`} className="sx-btn sx-btn--secondary">
               Cancel
             </Link>
-            <button type="button" className="sx-btn sx-btn--primary" onClick={() => void issueAccess()} disabled={issuing || limit <= 0}>
+            <button
+              type="button"
+              className="sx-btn sx-btn--primary"
+              onClick={() => void (kind === "card" ? issueCard() : issueAccess())}
+              disabled={issuing || limit <= 0 || !name.trim()}
+            >
               {issuing
                 ? "Issuing…"
                 : kind === "card"
@@ -335,7 +435,8 @@ export default function AssignMethodPage() {
             }}
           >
             <span style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="sx-rail">{kind === "card" ? "Card" : `${info.network} QR`}</span>
+              <span className="sx-rail">{kind === "card" ? "Card" : "Pix access"}</span>
+              <span className="sx-pill">{kind === "card" ? "Marqeta sandbox" : "PayZu sandbox"}</span>
             </span>
             {kind === "card" ? (
               <span className="data" style={{ alignSelf: "center", justifySelf: "center" }}>
@@ -357,7 +458,7 @@ export default function AssignMethodPage() {
                 ? `${first} gets a virtual card to use online or in shops.`
                 : `${first} pays merchants with ${info.network} in ${country} from the Sancus app.`}
             </li>
-            <li>Each payment converts from dollars at the live rate, and the receipt shows it.</li>
+            <li>Each payment converts from dollars at the fixed demo rate, and the receipt shows it.</li>
             <li>
               Over {formatLocal(info.code, limit)} a month, {first} has to ask you.
             </li>
@@ -369,7 +470,7 @@ export default function AssignMethodPage() {
           >
             <span className="sx-label">Limits are in local currency</span>
             <span className="body-s muted">
-              Card and QR limits count in each person&apos;s currency, so they match the till. Your
+              Card and Pix limits count in each person&apos;s currency, so they match the till. Your
               balance is in dollars, so held amounts move a little with the rate. We re-price them
               every morning. Per-payment approval limits stay in USD, set by your approval rule.
             </span>

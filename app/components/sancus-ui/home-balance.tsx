@@ -4,17 +4,13 @@ import Link from "next/link"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 
-const usd6 = (minor: string) => `$${(Number(minor) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
 export function HomeBalance() {
   const ws = useWorkspace()
-  // Business workspace: that company plus its branches. Personal: your own wallets + Gateway.
   const scope = !ws.ready ? undefined : ws.isPersonal || !ws.activeNode ? null : ws.activeNode.id
   const live = useLiveTreasury(undefined, scope)
-  const funded = (live.summary?.wallets ?? []).filter((w) => w.usdcMinor && w.usdcMinor !== "0")
 
   return (
-    <section className="tile s8" aria-labelledby="bal">
+    <section className="tile s8" aria-labelledby="bal" aria-busy={live.loading}>
       <div className="tile-head">
         <span className="sx-label" id="bal">
           Available balance
@@ -34,23 +30,12 @@ export function HomeBalance() {
       </div>
       <div className="sx-balance">
         <span className="sx-balance__amount">
-          {live.loading ? "…" : live.availableLabel} <small>USD</small>
+          {live.loading ? "***" : live.availableLabel} <small>USD</small>
         </span>
         <span className="sx-balance__meta">
-          {scope && ws.activeNode ? `${ws.activeNode.name} and its branches · ` : ""}
-          {live.meta}
+          {live.loading ? "***" : `${scope && ws.activeNode ? `${ws.activeNode.name} and its branches · ` : ""}${live.meta}`}
         </span>
       </div>
-      {scope && funded.length ? (
-        <div style={{ display: "grid", gap: 4 }} aria-label="Where the balance sits">
-          {funded.map((w) => (
-            <div className="kv" key={w.walletId}>
-              <span className="body-s">{w.name ?? "Wallet"}</span>
-              <span className="body-s data">{usd6(w.usdcMinor!)}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
       <svg
         viewBox="0 0 600 120"
         preserveAspectRatio="none"
@@ -79,7 +64,7 @@ export function HomeBalance() {
       <div className="tile-foot">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/pay" className="sx-btn sx-btn--primary">
-            Make a payment
+            Pay someone
           </Link>
           <Link href="/receive" className="sx-btn sx-btn--secondary">
             Add money

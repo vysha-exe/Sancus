@@ -54,7 +54,6 @@ export function XenditPayoutDemo() {
   const [amount, setAmount] = useState(presets.PROMPTPAY.amount)
   const [employeeName, setEmployeeName] = useState("Ana Souza")
   const [payouts, setPayouts] = useState<XenditPayoutDto[]>([])
-  const [configured, setConfigured] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const selected = useMemo(() => payouts[0] ?? null, [payouts])
@@ -62,8 +61,8 @@ export function XenditPayoutDemo() {
   const load = useCallback(async () => {
     const response = await fetch("/api/sancus/xendit/payouts", { cache: "no-store" })
     if (!response.ok) return
-    const body = (await response.json()) as { configured?: boolean; payouts?: XenditPayoutDto[] }
-    setConfigured(Boolean(body.configured)); setPayouts(body.payouts ?? [])
+    const body = (await response.json()) as { payouts?: XenditPayoutDto[] }
+    setPayouts(body.payouts ?? [])
   }, [])
   useEffect(() => {
     // Initial server sync; state changes after the request resolves.
@@ -113,9 +112,9 @@ export function XenditPayoutDemo() {
       <div className="tile-head">
         <div>
           <h2 className="tile-title" id="xendit-outbound">Use issued local-payment access</h2>
-          <p className="body-s muted" style={{ margin: "4px 0 0" }}>Employee permission and limits live in Sancus; Xendit delivers each approved payout in test mode.</p>
+          <p className="body-s muted" style={{ margin: "4px 0 0" }}>A normal account is marked paid. Xendit is used only when the key is allowed to send money out.</p>
         </div>
-        <span className={`sx-pill ${configured ? "sx-pill--settled" : "sx-pill--simulated"}`}>{configured ? "Xendit key loaded" : "Xendit key required"}</span>
+        <span className="sx-pill sx-pill--simulated">Simulated</span>
       </div>
       <div className="filters" role="group" aria-label="Outbound local rail">
         {(Object.keys(presets) as XenditRail[]).map((id) => <button key={id} type="button" className="chip" aria-pressed={rail === id} onClick={() => chooseRail(id)}>{presets[id].label}</button>)}
@@ -130,7 +129,7 @@ export function XenditPayoutDemo() {
             <label className="sx-field s5"><span className="sx-label">Routing type</span><select className="sx-field__input" value={routingType} onChange={(e) => setRoutingType(e.target.value as RoutingType)}><option>SWIFT</option><option>WALLET</option><option>MOBILE_NO</option><option>NATIONAL_ID</option></select></label>
             <label className="sx-field s7"><span className="sx-label">Bank / wallet routing value</span><input className="sx-field__input" value={routingValue} onChange={(e) => setRoutingValue(e.target.value)} /></label>
           </div>
-          <div className="tile-foot"><span className="body-s muted">{current.hint}</span><button type="button" className="sx-btn sx-btn--primary" disabled={busy || !configured || Number(amount) <= 0} onClick={create}>{busy ? "Working…" : `Pay via ${rail.replace("_", "-")}`}</button></div>
+          <div className="tile-foot"><span className="body-s muted">{current.hint}</span><button type="button" className="sx-btn sx-btn--primary" disabled={busy || Number(amount) <= 0} onClick={create}>{busy ? "Working…" : `Pay via ${rail.replace("_", "-")}`}</button></div>
           <span className="body-s muted">Sandbox failure accounts: <span className="data">121212</span> invalid · <span className="data">999999</span> rejected · <span className="data">123456</span> temporary failure.</span>
           {error ? <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>{error}</span> : null}
         </div>
@@ -141,7 +140,7 @@ export function XenditPayoutDemo() {
             <span className="body-s muted">{selected.employeeName || "Company admin"} · {selected.accountNumberMasked}</span>
             <span className="body-s muted">Provider: {selected.providerStatus}</span>
             <div className="tile-foot"><button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" disabled={busy} onClick={refresh}>Refresh status</button></div>
-          </> : <div className="empty">Add the development key, then send a sandbox payout to see provider status here.</div>}
+          </> : <div className="empty">Send a payout to see who was paid.</div>}
         </aside>
       </div>
     </section>

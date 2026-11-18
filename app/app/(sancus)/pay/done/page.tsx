@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { balance } from "@/lib/sancus/demo-data"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
+import { fixedUsdRateLabel } from "@/lib/sancus/fixed-rates"
 import { isTerminal, type PayoutStatus } from "@/lib/sancus/payout-provider"
 import { displayMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { PayoutDto } from "@/lib/sancus/payouts"
@@ -180,7 +181,7 @@ export default function PayDonePage() {
                 <i className={reached(status, "PAYING_OUT") ? "" : "todo"} />
                 <span className="body-strong">Converted</span>
                 <StatusPill status={step("PAYING_OUT")} />
-                <span className="data">1 USD = {live.clientRate} SGD</span>
+                <span className="data">{fixedUsdRateLabel("SGD")}</span>
               </div>
               <div className="hop">
                 <i className={completed ? "" : "todo"} />
@@ -287,7 +288,7 @@ export default function PayDonePage() {
           </div>
           <div className="kv">
             <span>Available now</span>
-            <span>{treasury.source === "live" ? treasury.availableLabel : balance.availableLabel}</span>
+            <span>{treasury.loading ? "***" : treasury.source === "live" ? treasury.availableLabel : balance.availableLabel}</span>
           </div>
           <div className="tile-foot" style={{ flexDirection: "column", alignItems: "stretch" }}>
             <button type="button" className="sx-btn sx-btn--secondary">

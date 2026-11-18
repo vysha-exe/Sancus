@@ -37,7 +37,7 @@ export type PixPaymentDto = {
   failureReason: string | null
   settledAt: string | null
   createdAt: string
-  simulated: true
+  simulated: boolean
 }
 
 export type SpendingMethodType = "PIX" | "QRIS" | "PROMPTPAY" | "CARD"
@@ -69,7 +69,7 @@ export type PixPaymentDbRow = {
   id: string; purpose: PixPaymentDto["purpose"]; spending_method_id: string | null; employee_id: string | null; employee_name: string | null;
   recipient_name: string; pix_method: PixPaymentDto["pixMethod"]; amount_brl_minor: number | string;
   provider_transaction_id: string; provider_status: string; status: LocalRailStatus; end_to_end_id: string | null;
-  failure_reason: string | null; settled_at: string | null; created_at: string;
+  failure_reason: string | null; settled_at: string | null; created_at: string; simulated: boolean;
 }
 
 export function toCollectionDto(row: CollectionDbRow): CollectionDto {
@@ -90,7 +90,7 @@ export function toPixPaymentDto(row: PixPaymentDbRow): PixPaymentDto {
     amountBrlMinor: String(row.amount_brl_minor), providerTransactionId: row.provider_transaction_id,
     providerStatus: row.provider_status, status: row.status, endToEndId: row.end_to_end_id,
     failureReason: row.failure_reason, settledAt: row.settled_at, createdAt: row.created_at,
-    simulated: true,
+    simulated: row.simulated,
   }
 }
 

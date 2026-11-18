@@ -2,7 +2,8 @@
 import { NextResponse } from "next/server"
 import type { SupabaseClient, User } from "@supabase/supabase-js"
 import type { CompanyRow, MembershipRow } from "./companies"
-import { resolveAccount, type Permission, type SancusAccount } from "./accounts"
+import { AdminAccount, resolveAccount, type Permission, type SancusAccount } from "./accounts"
+import { simpleAccounts } from "./simple-auth"
 
 export async function loadAccount(supabase: SupabaseClient, user: Pick<User, "id" | "email">): Promise<SancusAccount> {
   const [{ data: memberships }, { data: companies }] = await Promise.all([
@@ -10,12 +11,22 @@ export async function loadAccount(supabase: SupabaseClient, user: Pick<User, "id
     // RLS returns only nodes this user can see (their nodes and everything under them).
     supabase.from("sancus_companies").select("id, parent_id, root_id, name, country"),
   ])
-  return resolveAccount({
+  const companyRows = (companies ?? []) as Pick<CompanyRow, "id" | "parent_id" | "root_id" | "name" | "country">[]
+  const account = resolveAccount({
     userId: user.id,
     email: user.email ?? null,
-    companies: (companies ?? []) as Pick<CompanyRow, "id" | "parent_id" | "root_id" | "name" | "country">[],
+    companies: companyRows,
     memberships: (memberships ?? []) as Pick<MembershipRow, "company_id" | "user_id" | "role" | "status">[],
   })
+  // The hackathon's configured admin login is authoritative even before a
+  // company membership has been seeded. It must never fall through to the
+  // Individual dashboard just because the database starts empty.
+  if (user.email?.toLowerCase() === simpleAccounts().admin.email) {
+    return account.type === "ADMIN"
+      ? account
+      : new AdminAccount(user.id, user.email ?? null, account.scopes, companyRows)
+  }
+  return account
 }
 
 const MESSAGES: Partial<Record<Permission, string>> = {

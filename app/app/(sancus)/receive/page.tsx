@@ -7,6 +7,7 @@ import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { ledger } from "@/lib/sancus/demo-data"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { CollectionDemo } from "@/components/sancus/collection-demo"
+import { DemoReadiness } from "@/components/sancus/demo-readiness"
 
 type DepositSource = "ach" | "usdc"
 
@@ -84,7 +85,7 @@ export default function ReceivePage() {
   const label = money.format(value)
   const treasury = useLiveTreasury()
   const arcWallet = treasury.summary?.wallets.find((w) => w.blockchain === "ARC-TESTNET")
-  const usdcAddress = arcWallet?.address ?? "0x4F2a9b1e…77d0c81E"
+  const usdcAddress = treasury.loading ? "***" : arcWallet?.address ?? "0x4F2a9b1e…77d0c81E"
   const mercado = ledger.find((p) => p.id === "mercado")
 
   function copy(text: string, id: string) {
@@ -107,6 +108,8 @@ export default function ReceivePage() {
           </p>
         </div>
       </header>
+
+      <DemoReadiness />
 
       <div className="grid">
         <section className="tile s12" aria-labelledby="local">

@@ -44,14 +44,15 @@ export async function GET(request: NextRequest) {
   let creds = baseCreds
 
   try {
-    // Non-admin demo accounts are created and wired into the demo company on first use.
-    if (as !== "admin") {
-      const secret = process.env.SUPABASE_SECRET_KEY?.trim()
-      if (!secret) return enterAsGuest(request, next, "demo-missing-secret")
+    // Create and wire every demo identity, including the global Admin account.
+    const secret = process.env.SUPABASE_SECRET_KEY?.trim()
+    if (secret) {
       const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, secret, {
         auth: { autoRefreshToken: false, persistSession: false },
       })
       creds = await ensureDemoAccount(admin, baseCreds, as)
+    } else if (as !== "admin") {
+      return enterAsGuest(request, next, "demo-missing-secret")
     }
 
     const supabase = await createClient()

@@ -6,6 +6,9 @@ import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { PayoutDto } from "@/lib/sancus/payouts"
 import type { CollectionDto, PixPaymentDto } from "@/lib/sancus/local-rails"
 import type { XenditPayoutDto } from "@/lib/sancus/xendit-payouts"
+import type { EmployeeCardPurchaseDto } from "@/lib/sancus/employee-spending"
+import type { InternalTransferDto } from "@/lib/sancus/internal-transfers"
+import { SANCUS_DATA_CHANGED } from "@/lib/sancus/live-refresh"
 
 function statusFromPayout(status: string): Status {
   switch (status) {
@@ -48,7 +51,28 @@ function localStatus(value: string): Status {
 function localMoney(currency: string, minor: string) {
   return new Intl.NumberFormat(currency === "IDR" ? "id-ID" : currency === "BRL" ? "pt-BR" : currency === "PHP" ? "en-PH" : "th-TH", {
     style: "currency", currency, maximumFractionDigits: currency === "IDR" ? 0 : 2,
-  }).format(Number(minor) / (currency === "IDR" ? 1 : 100))
+  }).format(Number(minor) / (currency === "IDR" || currency === "JPY" ? 1 : 100))
+}
+
+function mapCardPurchase(p: EmployeeCardPurchaseDto): Payment {
+  const amount = localMoney(p.currency, p.amountMinor)
+  return {
+    id: `card-purchase-${p.id}`,
+    who: p.merchantName,
+    amount: `−${amount}`,
+    meta: `${new Date(p.authorizedAt).toLocaleString()} · employee card`,
+    rail: "Card",
+    status: p.status === "SETTLED" ? "Settled" : p.status === "HELD" ? "Pending" : "Failed",
+    simulated: true,
+    href: "/spending",
+    ledger: {
+      when: new Date(p.authorizedAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
+      by: p.employeeName,
+      theyGot: amount,
+      fee: "—",
+      rail: "Card",
+    },
+  }
 }
 
 function mapCollection(p: CollectionDto): Payment {
@@ -61,7 +85,7 @@ function mapCollection(p: CollectionDto): Payment {
     meta: `${new Date(p.createdAt).toLocaleString()} · sandbox collection`,
     rail: p.rail === "PROMPTPAY" ? "PromptPay" : p.rail,
     status: localStatus(p.status),
-    simulated: true,
+    simulated: p.simulated,
     href: "/receive",
     ledger: {
       when: new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
@@ -82,7 +106,7 @@ function mapPixPayment(p: PixPaymentDto): Payment {
     meta: `${new Date(p.createdAt).toLocaleString()} · PayZu sandbox`,
     rail: "Pix",
     status: localStatus(p.status),
-    simulated: true,
+    simulated: p.simulated,
     href: p.purpose === "EMPLOYEE_SPEND" ? "/spending" : "/pay",
     ledger: {
       when: new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
@@ -100,7 +124,7 @@ function mapXenditPayout(p: XenditPayoutDto): Payment {
     id: `xendit-payout-${p.id}`,
     who: `${p.recipientName}${p.employeeName ? ` · ${p.employeeName}` : ""}`,
     amount: `−${amount}`,
-    meta: `${new Date(p.createdAt).toLocaleString()} · Xendit test mode`,
+    meta: `${new Date(p.createdAt).toLocaleString()} · ${p.providerTransactionId.startsWith("SIM-XE-") ? "Simulated payout" : "Xendit test mode"}`,
     rail: p.rail.replace("_", "-"),
     status: localStatus(p.status),
     simulated: true,
@@ -115,7 +139,6 @@ function mapXenditPayout(p: XenditPayoutDto): Payment {
   }
 }
 
-// US ACH payouts (/api/sancus/payments).
 type AchRow = {
   id: string
   recipient: { name: string; bankName: string; accountMasked: string }
@@ -127,10 +150,12 @@ type AchRow = {
   settlement: { fundedOnchain: boolean }
   createdAt: string
 }
+
 function mapAch(p: AchRow): Payment {
   const usd = displayMinor(BigInt(p.usdAmountMinor), 2, "", 2)
-  const status: Status =
-    p.status === "PAYMENT_PROCESSED" ? "Settled" : ["FAILED", "RETURNED", "REJECTED"].includes(p.status) ? "Failed" : "Pending"
+  const status: Status = p.status === "PAYMENT_PROCESSED"
+    ? "Settled"
+    : ["FAILED", "RETURNED", "REJECTED"].includes(p.status) ? "Failed" : "Pending"
   return {
     id: `ach-${p.id}`,
     who: p.recipient.name,
@@ -150,8 +175,16 @@ function mapAch(p: AchRow): Payment {
   }
 }
 
-// Local-rail collections that mint mock stablecoins (/api/sancus/rails/collections).
-type RailCollectionRow = { id: string; rail: string; currency: string; amountMinor: string; status: string; destination: { label: string | null }; createdAt: string }
+type RailCollectionRow = {
+  id: string
+  rail: string
+  currency: string
+  amountMinor: string
+  status: string
+  destination: { label: string | null }
+  createdAt: string
+}
+
 function mapRailCollection(c: RailCollectionRow): Payment {
   const amount = `${(Number(c.amountMinor) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${c.currency}`
   const rail = c.rail === "PROMPTPAY" ? "PromptPay" : c.rail === "PIX" ? "Pix" : c.rail
@@ -175,6 +208,29 @@ function mapRailCollection(c: RailCollectionRow): Payment {
   }
 }
 
+function mapInternalTransfer(p: InternalTransferDto): Payment {
+  const amount = `$${displayMinor(BigInt(p.usdcAmountMinor), USDC_DECIMALS, "", 2)}`
+  const settled = p.status === "COMPLETED"
+  const failed = ["FAILED", "DECLINED", "EXPIRED", "REVERSED"].includes(p.status)
+  return {
+    id: `internal-transfer-${p.id}`,
+    who: `${p.sourceName} → ${p.destinationName}`,
+    amount: `−${amount}`,
+    meta: `${new Date(p.createdAt).toLocaleString()} · ${p.sourceCurrency} → USDC → ${p.destinationCurrency}`,
+    rail: "Internal",
+    status: settled ? "Settled" : failed ? "Failed" : "Pending",
+    simulated: p.simulated,
+    href: `/branches/${p.destinationCompanyId}`,
+    ledger: {
+      when: new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
+      by: p.sourceName,
+      theyGot: amount,
+      fee: "$0.00",
+      rail: "Arc",
+    },
+  }
+}
+
 const POLL_MS = 5000
 
 export function useLiveActivity(): {
@@ -184,14 +240,20 @@ export function useLiveActivity(): {
 } {
   const [live, setLive] = useState<Payment[] | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tick, setTick] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    const refresh = () => setRefreshKey((value) => value + 1)
+    window.addEventListener(SANCUS_DATA_CHANGED, refresh)
+    return () => window.removeEventListener(SANCUS_DATA_CHANGED, refresh)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     const json = async <T,>(url: string): Promise<T | null> => {
       try {
-        const r = await fetch(url, { cache: "no-store" })
-        return r.ok ? ((await r.json()) as T) : null
+        const response = await fetch(url, { cache: "no-store" })
+        return response.ok ? ((await response.json()) as T) : null
       } catch {
         return null
       }
@@ -206,25 +268,28 @@ export function useLiveActivity(): {
           res = await fetch("/api/sancus/payouts", { cache: "no-store" })
         }
         const payoutBody = res.ok ? ((await res.json()) as { payouts?: PayoutDto[] }) : {}
-        const [collectionsBody, pixBody, xenditBody, achBody, railBody] = await Promise.all([
+        const [collectionsBody, pixBody, xenditBody, cardBody, internalBody, achBody, railBody] = await Promise.all([
           json<{ collections?: CollectionDto[] }>("/api/sancus/collections"),
           json<{ payments?: PixPaymentDto[] }>("/api/sancus/pix/payments"),
           json<{ payouts?: XenditPayoutDto[] }>("/api/sancus/xendit/payouts"),
+          json<{ purchases?: EmployeeCardPurchaseDto[] }>("/api/sancus/card-purchases"),
+          json<{ transfers?: InternalTransferDto[] }>("/api/sancus/internal-transfers"),
           json<{ payments?: AchRow[] }>("/api/sancus/payments"),
           json<{ collections?: RailCollectionRow[] }>("/api/sancus/rails/collections"),
         ])
-        // Newest first across every rail.
         const dated: { at: string; row: Payment }[] = [
-          ...(collectionsBody?.collections ?? []).map((c) => ({ at: c.createdAt, row: mapCollection(c) })),
-          ...(pixBody?.payments ?? []).map((p) => ({ at: p.createdAt, row: mapPixPayment(p) })),
-          ...(xenditBody?.payouts ?? []).map((p) => ({ at: p.createdAt, row: mapXenditPayout(p) })),
-          ...(payoutBody.payouts ?? []).map((p) => ({ at: p.createdAt, row: mapPayout(p) })),
-          ...(achBody?.payments ?? []).map((p) => ({ at: p.createdAt, row: mapAch(p) })),
-          ...(railBody?.collections ?? []).map((c) => ({ at: c.createdAt, row: mapRailCollection(c) })),
+          ...(internalBody?.transfers ?? []).map((item) => ({ at: item.createdAt, row: mapInternalTransfer(item) })),
+          ...(cardBody?.purchases ?? []).map((item) => ({ at: item.authorizedAt, row: mapCardPurchase(item) })),
+          ...(collectionsBody?.collections ?? []).map((item) => ({ at: item.createdAt, row: mapCollection(item) })),
+          ...(pixBody?.payments ?? []).map((item) => ({ at: item.createdAt, row: mapPixPayment(item) })),
+          ...(xenditBody?.payouts ?? []).map((item) => ({ at: item.createdAt, row: mapXenditPayout(item) })),
+          ...(payoutBody.payouts ?? []).map((item) => ({ at: item.createdAt, row: mapPayout(item) })),
+          ...(achBody?.payments ?? []).map((item) => ({ at: item.createdAt, row: mapAch(item) })),
+          ...(railBody?.collections ?? []).map((item) => ({ at: item.createdAt, row: mapRailCollection(item) })),
         ]
         dated.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
         if (!cancelled) {
-          setLive(dated.map((d) => d.row))
+          setLive(dated.map((item) => item.row))
           setLoading(false)
         }
       } catch {
@@ -234,19 +299,22 @@ export function useLiveActivity(): {
     return () => {
       cancelled = true
     }
-  }, [tick])
+  }, [refreshKey])
 
-  // Keep it current: re-check while anything is in progress, and whenever the tab regains focus.
-  const pending = live?.some((p) => p.status === "Pending") ?? false
+  const pending = live?.some((payment) => payment.status === "Pending") ?? false
   useEffect(() => {
-    const onFocus = () => setTick((t) => t + 1)
-    window.addEventListener("focus", onFocus)
-    const timer = pending ? window.setInterval(onFocus, POLL_MS) : undefined
+    const refresh = () => setRefreshKey((value) => value + 1)
+    window.addEventListener("focus", refresh)
+    const timer = pending ? window.setInterval(refresh, POLL_MS) : undefined
     return () => {
-      window.removeEventListener("focus", onFocus)
+      window.removeEventListener("focus", refresh)
       if (timer) window.clearInterval(timer)
     }
   }, [pending])
+
+  if (loading && live === null) {
+    return { source: "demo", payments: [], loading: true }
+  }
 
   if (!live || live.length === 0) {
     return { source: "demo", payments: demoLedger, loading }

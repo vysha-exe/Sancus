@@ -171,8 +171,8 @@
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ☐ | Port Marqeta adapter from `rails-demo` | `lib/sancus/rails/marqeta.ts` | 🟡 (rails-demo) | P1 | | Uses `MARQETA_*` env in `app/` |
-| ☐ | Issue virtual card to an employee with a limit | `POST /api/sancus/cards` | ⬜ | **P0** | | Card shows last 4 + limit |
+| ☑ | Port Marqeta adapter from `rails-demo` | `lib/sancus/rails/marqeta.ts` | ✅ | P1 | | Uses `MARQETA_*` env in `app/` |
+| ◐ | Issue virtual card to an employee with a limit | `POST /api/sancus/cards` | 🟡 apply `app/supabase/migrations/20261118130000_sancus_cards.sql` | **P0** | | Card shows last 4 + limit |
 | ☐ | List / freeze / change limit | `GET /api/sancus/cards`, `PATCH /api/sancus/cards/:id` | ⬜ | P1 | | Frozen card declines |
 | ☐ | Simulate purchase → authorization hold → settle / release | `POST /api/sancus/cards/:id/simulate-purchase`, `POST /api/sancus/cards/authorizations/:id/settle` | ⬜ | P0 | | $100 approved (hold), $600 on $500 card declined |
 | ☐ | Real-time auth decision (Marqeta Gateway JIT Funding) | `POST /api/sancus/webhooks/marqeta/jit` | ⬜ | P1 | | Policy engine decides approve/decline in < 2s |
