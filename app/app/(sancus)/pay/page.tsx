@@ -4,10 +4,32 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import { AddPayeeSheet } from "@/components/sancus-ui/add-payee-sheet"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
-import type { Recipient } from "@/lib/sancus/demo-data"
+import { recipientIsLive, type Recipient } from "@/lib/sancus/demo-data"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
 
 const filters = ["All", "Suppliers", "Contractors", "Team"] as const
+
+function RecipientPayoutPill({ live }: { live: boolean }) {
+  return live ? (
+    <span className="sx-pill sx-pill--settled">Live</span>
+  ) : (
+    <span className="sx-pill sx-pill--simulated">Simulated</span>
+  )
+}
+
+function RecipientKindRail({ r }: { r: Recipient }) {
+  return (
+    <span
+      className="body-s"
+      style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 8px", minWidth: 0 }}
+    >
+      <span className="trunc">
+        {r.kind} · {r.rail}
+      </span>
+      <RecipientPayoutPill live={recipientIsLive(r)} />
+    </span>
+  )
+}
 
 function matchesFilter(r: Recipient, filter: (typeof filters)[number]) {
   if (filter === "All") return true
@@ -17,7 +39,7 @@ function matchesFilter(r: Recipient, filter: (typeof filters)[number]) {
 }
 
 export default function PayWhoPage() {
-  const { recipient, recipients, setRecipientId } = usePayFlow()
+  const { recipient, recipients, setRecipientId, invoice } = usePayFlow()
   const [filter, setFilter] = useState<(typeof filters)[number]>("All")
   const [query, setQuery] = useState("")
   const [adding, setAdding] = useState(false)
@@ -36,6 +58,16 @@ export default function PayWhoPage() {
   return (
     <div className="page">
       <PayFlowHead title="Who are you paying?" step={1} />
+
+      {invoice ? (
+        <div className="tile s12" role="status" style={{ marginBottom: 16 }}>
+          <span className="body-s">
+            <b>Paying invoice{invoice.invoiceNumber ? ` ${invoice.invoiceNumber}` : ""}</b> from {invoice.supplier} ·{" "}
+            {new Intl.NumberFormat("en-US", { style: "currency", currency: invoice.currency }).format(invoice.amount)}.{" "}
+            {invoice.matched ? `We selected ${recipient.name}.` : "Pick the payee or add a new one to continue."}
+          </span>
+        </div>
+      ) : null}
 
       <p className="body-s muted" style={{ margin: "-8px 0 20px" }}>
         Pick someone from your list, or add a new payee. Then continue to enter the amount.
@@ -98,9 +130,7 @@ export default function PayWhoPage() {
                     <span className="av">{r.initials}</span>
                     <span style={{ flex: 1, minWidth: 0, display: "grid" }}>
                       <span className="body-strong trunc">{r.name}</span>
-                      <span className="body-s trunc">
-                        {r.kind} · {r.rail}
-                      </span>
+                      <RecipientKindRail r={r} />
                     </span>
                   </button>
                 )
@@ -117,6 +147,7 @@ export default function PayWhoPage() {
               <h2 id="sel" className="sx-h heading-3 trunc" style={{ margin: 0 }}>
                 {recipient.name}
               </h2>
+              <RecipientKindRail r={recipient} />
               <span className="body-s muted trunc">
                 {method ? `${method.rail} · ${method.detail}` : recipient.rail}
               </span>

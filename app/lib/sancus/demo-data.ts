@@ -418,3 +418,8 @@ export function getPerson(id: string): Person | undefined {
 export function getRecipient(id: string): Recipient | undefined {
   return recipients.find((r) => r.id === id)
 }
+
+/** Singapore PayNow / FAST recipients with backend payout config. */
+export function recipientIsLive(r: Recipient): boolean {
+  return Boolean(r.payout)
+}

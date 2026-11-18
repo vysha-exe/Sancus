@@ -174,6 +174,27 @@ export function updateMarqetaCardLimit(input: MarqetaLimitInput) {
   return updateMarqetaCardLimitWithConfig(readConfig(), input)
 }
 
+export async function setMarqetaCardStateWithConfig(
+  config: MarqetaConfig,
+  input: { cardToken: string; state: "ACTIVE" | "SUSPENDED" },
+  fetchImpl: typeof fetch = fetch,
+) {
+  await request(config, "/cardtransitions", {
+    method: "POST",
+    body: JSON.stringify({
+      token: randomUUID().replace(/-/g, ""),
+      card_token: input.cardToken,
+      state: input.state,
+      channel: "API",
+      reason_code: input.state === "ACTIVE" ? "00" : "01",
+    }),
+  }, fetchImpl)
+}
+
+export function setMarqetaCardState(input: { cardToken: string; state: "ACTIVE" | "SUSPENDED" }) {
+  return setMarqetaCardStateWithConfig(readConfig(), input)
+}
+
 export function simulatedMarqetaCard(seed: string): MarqetaIssuedCard {
   const token = stableDemoToken(seed, 24)
   const suffix = String((Number.parseInt(token.slice(0, 8), 16) % 10_000)).padStart(4, "0")

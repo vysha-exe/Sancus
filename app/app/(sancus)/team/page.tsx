@@ -60,15 +60,27 @@ export default function TeamPage() {
     const res = await fetch("/api/sancus/companies/me", { cache: "no-store" })
     if (res.status === 401) {
       setMode("demo")
+      setError(null)
       return null
     }
     if (!res.ok) {
-      setMode("demo")
+      const body = await res.json().catch(() => ({}))
+      setCompanies([])
+      setCompanyId(null)
+      setData(null)
+      setError((body as { error?: string }).error ?? "Could not load your branches")
+      setMode("live")
       return null
     }
     const body = (await res.json()) as CompanyMe
     const list = flatten(body.tree ?? [])
     setCompanies(list)
+    if (list.length === 0) {
+      setCompanyId(null)
+      setMode("demo")
+      setError(null)
+      return null
+    }
     const preferred = ws.companyId
     const id = (preferred && list.some((c) => c.id === preferred) ? preferred : list[0]?.id) ?? null
     setCompanyId(id)
@@ -98,7 +110,10 @@ export default function TeamPage() {
         if (!id) return
         await loadMembers(id)
       } catch {
-        if (!cancelled) setMode("demo")
+        if (!cancelled) {
+          setError("Could not reach the server")
+          setMode("live")
+        }
       }
     })()
     return () => {
@@ -387,7 +402,11 @@ export default function TeamPage() {
           inviteRoles={data.inviteRoles}
           localCurrency={ws.activeNode?.currency ?? "BRL"}
           onSent={(acceptPath) => {
-            setInviteMsg(acceptPath ? `Invite sent. Accept path: ${acceptPath}` : "Invite sent.")
+            setInviteMsg(
+              acceptPath
+                ? `Invite sent. Share this accept path: ${acceptPath}`
+                : "Invite sent, but no accept link came back from the server. Check Team for pending invites."
+            )
             void loadMembers(companyId)
           }}
         />
