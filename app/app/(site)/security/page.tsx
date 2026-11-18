@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 
 const HOPS: { title: string; data: string }[] = [
   { title: "Rules checked", data: "Treasury contract · within limits" },
-  { title: "Rate locked", data: "1 USD = 5.4123 BRL · 60 s" },
+  { title: "Fixed demo rate", data: "1 USD = 5.4123 BRL" },
   { title: "Funded from balance", data: "$100.80 · USDC" },
   { title: "Paid out by Pix", data: "Pix key ju•••@gmail.com" },
   { title: "Received by Juliana", data: "R$ 541,23" },
@@ -20,7 +20,7 @@ const CAPABILITIES: { feature: string; how: string }[] = [
   { feature: "QRIS and PromptPay", how: "Local collection rails across Asia" },
   { feature: "Team cards", how: "Virtual cards with limits and holds" },
   { feature: "Pix, SPEI, SEPA, ACH and wire", how: "Payouts on the rails your counterparties already use" },
-  { feature: "Rates", how: "Shown and locked before you confirm" },
+  { feature: "Rates", how: "Fixed for a consistent hackathon demo" },
 ]
 
 export default function SecurityPage() {
@@ -107,8 +107,7 @@ export default function SecurityPage() {
               <span className="n">04</span>
               <h2 className="sx-h">No surprise rates</h2>
               <p className="body">
-                The rate is locked for 60 seconds at review. When the lock runs out, the button becomes Refresh rate. We
-                never charge on an expired quote.
+                The hackathon demo uses the same fixed rates on every screen, so amounts never change while you present.
               </p>
             </div>
             <div className="layer">

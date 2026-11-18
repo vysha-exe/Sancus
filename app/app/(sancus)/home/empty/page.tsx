@@ -24,7 +24,7 @@ export default function HomeEmptyPage() {
       <header className="page-head">
         <div>
           <h1 className="sx-h heading-2">
-            Welcome to Sancus. Let&apos;s add some money.
+            Welcome, Admin. Let&apos;s add some money.
           </h1>
         </div>
         <span className="body-s muted">Day one</span>
@@ -54,7 +54,7 @@ export default function HomeEmptyPage() {
                 Add money
               </Link>
               <button type="button" className="sx-btn sx-btn--secondary" disabled>
-                Make a payment
+                Pay someone
               </button>
             </div>
             <span className="body-s muted">Add money to start paying people.</span>
@@ -146,16 +146,6 @@ export default function HomeEmptyPage() {
               Add an invoice
             </Link>
           </div>
-        </section>
-
-        <section className="tile s4" aria-labelledby="agents">
-          <div className="tile-head">
-            <h2 className="tile-title" id="agents">
-              Agents
-            </h2>
-            <span className="sx-pill sx-pill--simulated">Off</span>
-          </div>
-          <div className="empty">Let an agent handle small payments inside a budget you set.</div>
         </section>
 
         <section className="tile s4" aria-labelledby="ask">

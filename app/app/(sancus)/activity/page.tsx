@@ -64,10 +64,18 @@ export default function ActivityPage() {
   const live = useLiveActivity()
   const approvalsLive = useLiveApprovals()
   const treasury = useLiveTreasury()
+  const summaryLoading = treasury.loading || approvalsLive.loading
   const t = treasury.summary
   // Live tiles: approvals waiting are reserved but not yet "on their way out".
   const waitingMinor = BigInt(Math.round(approvalsLive.waitingTotal * 1_000_000))
-  const tiles = t
+  const tiles = summaryLoading
+    ? {
+        available: "***",
+        held: "***",
+        out: "***",
+        waiting: "***",
+      }
+    : t
     ? {
         available: usdMinor(t.availableMinor),
         held: "$0.00",
@@ -214,8 +222,18 @@ export default function ActivityPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {rows.map(({ p, x }) => (
+              <tbody aria-busy={live.loading}>
+                {live.loading
+                  ? Array.from({ length: 3 }, (_, index) => (
+                      <tr key={`loading-${index}`}>
+                        {Array.from({ length: 8 }, (__, cell) => (
+                          <td key={cell} className={cell >= 4 && cell <= 6 ? "num" : undefined}>
+                            ***
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  : rows.map(({ p, x }) => (
                   <tr key={p.id}>
                     <td className="data">{x.when}</td>
                     <td className="who">
@@ -241,8 +259,8 @@ export default function ActivityPage() {
                       </span>
                     </td>
                   </tr>
-                ))}
-                {rows.length === 0 ? (
+                  ))}
+                {!live.loading && rows.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="body-s muted">
                       Nothing matches those filters.
@@ -254,9 +272,9 @@ export default function ActivityPage() {
           </div>
           <div className="tile-foot">
             <span className="body-s muted">
-              {rows.length} of {live.payments.length} · 50 per page, newest first
+              {live.loading ? "***" : `${rows.length} of ${live.payments.length} · 50 per page, newest first`}
             </span>
-            <span className="body-s muted">Updated 10:05</span>
+            <span className="body-s muted">{live.loading ? "***" : "Updated 10:05"}</span>
           </div>
         </section>
       </div>

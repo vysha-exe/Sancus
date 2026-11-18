@@ -8,6 +8,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { requirePermission } from "@/lib/sancus/accounts-server"
 import { toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
 import { decideAch } from "@/lib/sancus/ach-server"
+import { executeInternalTransfer, toInternalTransferDto, type InternalTransferRow } from "@/lib/sancus/internal-transfers"
 import { executePayout, syncPayoutLedger, toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
 
 const bodySchema = z.object({
@@ -33,7 +34,36 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const { data } = await supabase.from("sancus_payouts").select("*").eq("user_id", user.id).eq("id", id).maybeSingle()
   const row = data as PayoutRow | null
   if (!row) {
-    // Not a Singapore payout: maybe a US ACH payment waiting for approval.
+    // Not a Singapore payout: maybe an internal treasury transfer.
+    const { data: internal } = await supabase.from("sancus_internal_transfers").select("*").eq("id", id).maybeSingle()
+    if (internal) {
+      const transfer = internal as InternalTransferRow
+      if (transfer.status !== "PENDING_APPROVAL") {
+        return NextResponse.json({ error: "This transfer was already decided" }, { status: 409 })
+      }
+      if (transfer.user_id === user.id && action === "approve") {
+        return NextResponse.json({ error: "You can't approve your own transfer. Ask another admin." }, { status: 403 })
+      }
+      const now = new Date().toISOString()
+      const { data: claimed } = await supabase
+        .from("sancus_internal_transfers")
+        .update(
+          action === "approve"
+            ? { status: "QUEUED", approved_at: now, approved_by: user.id, decided_at: now, decided_note: note?.trim() || null }
+            : { status: "DECLINED", decided_at: now, decided_note: note?.trim() || null, failure_reason: note?.trim() || "Declined by approver" }
+        )
+        .eq("id", id)
+        .eq("status", "PENDING_APPROVAL")
+        .select("*")
+        .maybeSingle()
+      if (!claimed) return NextResponse.json({ error: "Someone already decided this transfer" }, { status: 409 })
+      const updated = action === "approve"
+        ? await executeInternalTransfer(supabase, claimed as InternalTransferRow)
+        : (claimed as InternalTransferRow)
+      return NextResponse.json({ internalTransfer: toInternalTransferDto(updated) })
+    }
+
+    // Maybe a US ACH payment waiting for approval.
     const { data: ach } = await supabase.from("sancus_ach_payments").select("*").eq("user_id", user.id).eq("id", id).maybeSingle()
     if (!ach) return NextResponse.json({ error: "Payout not found" }, { status: 404 })
     const decided = await decideAch(supabase, user.id, ach as AchPaymentRow, action, note)

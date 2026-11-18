@@ -76,7 +76,8 @@ export default function EmployeePage() {
   }, [personId])
 
   useEffect(() => {
-    void load()
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
   }, [load])
 
   async function saveLimits() {
@@ -268,7 +269,7 @@ export default function EmployeePage() {
         </div>
         {canSpend ? (
           <Link href={`/team/${person.id}/methods/new`} className="sx-btn sx-btn--primary">
-            Add a card or QR
+            Add a card or Pix access
           </Link>
         ) : null}
       </header>

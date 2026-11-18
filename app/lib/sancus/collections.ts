@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { CollectionDbRow, CollectionRail, LocalRailStatus } from "./local-rails"
 import { getQrisTransaction, mapQrisStatus } from "./rails/midtrans"
 import { getOmiseCharge, mapOmiseStatus } from "./rails/omise"
-import { getPixCollection, mapPayZuStatus } from "./rails/payzu"
+import { getPixCollection, mapPayZuStatus, simulatedPixStatus } from "./rails/payzu"
 
 export type CollectionRow = CollectionDbRow & {
   id: string
@@ -36,7 +36,9 @@ export async function refreshCollection(supabase: SupabaseClient, row: Collectio
     settledAt = status === "SETTLED" ? new Date().toISOString() : null
     payload = charge
   } else {
-    const transaction = await getPixCollection(row.provider_transaction_id)
+    const transaction = row.simulated
+      ? simulatedPixStatus(row.provider_transaction_id)
+      : await getPixCollection(row.provider_transaction_id)
     providerStatus = transaction.status || providerStatus
     status = mapPayZuStatus(providerStatus)
     failureReason = status === "FAILED" || status === "CANCELLED" ? transaction.cancellationReason || transaction.message || "Pix collection failed" : null

@@ -21,7 +21,7 @@ export function HomeBalance() {
   if (scope && ws.activeNode) walk(ws.activeNode)
 
   return (
-    <section className="tile s8" aria-labelledby="bal">
+    <section className="tile s8" aria-labelledby="bal" aria-busy={live.loading}>
       <div className="tile-head">
         <span className="sx-label" id="bal">
           Available balance
@@ -41,11 +41,10 @@ export function HomeBalance() {
       </div>
       <div className="sx-balance">
         <span className="sx-balance__amount">
-          {live.loading ? "…" : live.availableLabel} <small>USD</small>
+          {live.loading ? "***" : live.availableLabel} <small>USD</small>
         </span>
         <span className="sx-balance__meta">
-          {scope && ws.activeNode ? `${ws.activeNode.name} and its branches · ` : ""}
-          {live.meta}
+          {live.loading ? "***" : `${scope && ws.activeNode ? `${ws.activeNode.name} and its branches · ` : ""}${live.meta}`}
         </span>
       </div>
       {scope && nodes.length ? (
@@ -86,7 +85,7 @@ export function HomeBalance() {
       <div className="tile-foot">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/pay" className="sx-btn sx-btn--primary">
-            Make a payment
+            Pay someone
           </Link>
           <Link href="/receive" className="sx-btn sx-btn--secondary">
             Add money

@@ -23,9 +23,6 @@ export function ActivityTabs({
       >
         Approvals <span className="count">{approvalCount}</span>
       </Link>
-      <Link href="/pay" className="tab">
-        Recipients
-      </Link>
     </nav>
   )
 }

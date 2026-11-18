@@ -81,11 +81,12 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const secret = process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
   if (!url || !secret) return NextResponse.json({ error: "Creating logins needs SUPABASE_SECRET_KEY on the server" }, { status: 503 })
 
-  // 1. Where the login goes. A new branch is created first (admin only), with its wallet.
+  // 1. Where the login goes. A new country branch can be created first by the
+  // global admin, either for its first employee or its branch admin.
   let companyId = input.companyId
   let branchCreated: { id: string; name: string; walletAddress: string | null } | null = null
   if (input.newBranch) {
-    if (input.type !== "BRANCH" || !actor.can("branches.create")) {
+    if (!actor.can("branches.create")) {
       return NextResponse.json({ error: "Only the global account's admin can add branches" }, { status: 403 })
     }
     const parentId = companyId ?? actor.scopes.find((s) => s.isRoot)?.companyId

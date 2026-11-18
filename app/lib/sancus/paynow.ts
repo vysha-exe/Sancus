@@ -99,7 +99,7 @@ export function chooseRail(r: SgRecipient): RailChoice {
   }
   return {
     rail: "PAYNOW",
-    reason: `PayNow resolves the ${r.proxyType === "MOBILE" ? "mobile number" : "UEN"} to the recipient's bank and settles over FAST.`,
+    reason: `PayNow resolves the ${r.proxyType === "MOBILE" ? "mobile number" : "UEN"} and settles directly to the recipient's bank.`,
     etaLabel: "Usually within seconds",
   }
 }

@@ -35,6 +35,7 @@ export function AccountsManager({ title = "Logins" }: { title?: string }) {
   const [newBranch, setNewBranch] = useState(false)
   const [branchName, setBranchName] = useState("")
   const [branchCountry, setBranchCountry] = useState("TH")
+  const [employeeCountry, setEmployeeCountry] = useState("TH")
   const [firstName, setFirstName] = useState("")
   const [email, setEmail] = useState("")
   const [perPay, setPerPay] = useState("500")
@@ -53,7 +54,9 @@ export function AccountsManager({ title = "Logins" }: { title?: string }) {
       setAccount(body.account)
       setCompanies(body.companies)
       setPeople(body.people)
-      setCompanyId((cur) => cur || (body.companies.find((c: Company) => c.parentId) ?? body.companies[0])?.id || "")
+      const defaultCompany = (body.companies.find((c: Company) => c.parentId) ?? body.companies[0]) as Company | undefined
+      setCompanyId((cur) => cur || defaultCompany?.id || "")
+      setEmployeeCountry((cur) => cur || defaultCompany?.country || "TH")
       setState("ready")
     } catch {
       setState("error")
@@ -82,7 +85,14 @@ export function AccountsManager({ title = "Logins" }: { title?: string }) {
     setCreated(null)
     const body: Record<string, unknown> = { type, firstName: firstName.trim(), email: email.trim() }
     if (type === "BRANCH" && newBranch) body.newBranch = { name: branchName.trim(), country: branchCountry }
-    else body.companyId = companyId
+    else if (type === "EMPLOYEE" && isAdmin) {
+      const existingCountry = companies.find((company) => company.country === employeeCountry)
+      if (existingCountry) body.companyId = existingCountry.id
+      else {
+        body.companyId = companies.find((company) => !company.parentId)?.id
+        body.newBranch = { name: countryByCode(employeeCountry)?.name ?? employeeCountry, country: employeeCountry }
+      }
+    } else body.companyId = companyId
     if (type === "EMPLOYEE") {
       const p = toMinor(perPay)
       const d = toMinor(daily)
@@ -169,7 +179,21 @@ export function AccountsManager({ title = "Logins" }: { title?: string }) {
             </label>
           ) : null}
 
-          {type === "BRANCH" && newBranch ? (
+          {type === "EMPLOYEE" && isAdmin ? (
+            <label className="sx-field">
+              <span className="sx-label">Works in</span>
+              <select id="employee-country" className="sx-field__input" value={employeeCountry} onChange={(e) => setEmployeeCountry(e.target.value)}>
+                {COUNTRIES.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.flag} {country.name}
+                  </option>
+                ))}
+              </select>
+              {!companies.some((company) => company.country === employeeCountry) ? (
+                <span className="sx-field__help">Creates the {countryByCode(employeeCountry)?.name ?? employeeCountry} branch with this login.</span>
+              ) : null}
+            </label>
+          ) : type === "BRANCH" && newBranch ? (
             <div className="grid" style={{ gap: 10 }}>
               <label className="sx-field s7">
                 <span className="sx-label">Branch name</span>

@@ -1,7 +1,8 @@
 "use client"
 
-// Sancus: global account → branches → sub-branches, each with its own wallets.
+// Sancus: one global treasury → direct country branches, each with its own wallet.
 import { useCallback, useEffect, useState, type FormEvent } from "react"
+import Link from "next/link"
 import {
   buildCompanyTree,
   ROLE_LABEL,
@@ -26,8 +27,7 @@ const demoTree: CompanyNode[] = (() => {
   const rows: CompanyRow[] = [
     { id: "hq", parent_id: null, root_id: "hq", name: "Lion City Trading (Global)", country: "SG", base_currency: "SGD", created_at: t(0) },
     { id: "id", parent_id: "hq", root_id: "hq", name: "Indonesia", country: "ID", base_currency: "IDR", created_at: t(1) },
-    { id: "jkt", parent_id: "id", root_id: "hq", name: "Jakarta warehouse", country: "ID", base_currency: "IDR", created_at: t(2) },
-    { id: "th", parent_id: "hq", root_id: "hq", name: "Thailand", country: "TH", base_currency: "THB", created_at: t(3) },
+    { id: "th", parent_id: "hq", root_id: "hq", name: "Thailand", country: "TH", base_currency: "THB", created_at: t(2) },
   ]
   const w = (companyId: string, name: string, usdc: string): CompanyWallet => ({
     walletId: `${companyId}-${name}`,
@@ -40,7 +40,7 @@ const demoTree: CompanyNode[] = (() => {
   return buildCompanyTree(
     rows,
     [{ company_id: "hq", user_id: "demo", role: "OWNER", status: "ACTIVE" }],
-    [w("hq", "Global treasury", "6390340000"), w("id", "Indonesia treasury", "1200000000"), w("jkt", "Jakarta payroll", "350000000"), w("th", "Thailand treasury", "800000000")],
+    [w("hq", "Global treasury", "6390340000"), w("id", "Indonesia treasury", "1200000000"), w("th", "Thailand treasury", "800000000")],
     "demo"
   )
 })()
@@ -104,8 +104,8 @@ export default function BranchesPage() {
 
   const tree = mode === "demo" ? demoTree : (me?.tree ?? [])
   const total = tree.reduce((s, n) => s + BigInt(n.totalMinor), 0n)
-  const nodes = mode === "demo" ? 4 : (me?.nodeCount ?? 0)
-  const walletCount = mode === "demo" ? 4 : (me?.walletCount ?? 0)
+  const nodes = mode === "demo" ? 2 : Math.max(0, (me?.nodeCount ?? 0) - tree.length)
+  const walletCount = mode === "demo" ? 3 : (me?.walletCount ?? 0)
 
   return (
     <div className="page">
@@ -113,8 +113,7 @@ export default function BranchesPage() {
         <div>
           <h1 className="sx-h heading-2">Branches</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            One global account, with a branch for each country and sub-branches under them. Every branch keeps its own
-            wallets and balance.
+            One global treasury with a direct branch for each country. Every branch keeps its own wallet and balance.
           </p>
         </div>
         {mode === "live" ? <span className="sx-pill sx-pill--settled">Live</span> : null}
@@ -178,7 +177,7 @@ export default function BranchesPage() {
               <h2 className="tile-title" id="structure">
                 Company structure
               </h2>
-              <span className="body-s muted">Totals include sub-branches · tap a box to see its wallets</span>
+              <span className="body-s muted">Select an account to open its treasury, payments, team, and transfers</span>
             </div>
             <CompanyTreeDiagram tree={tree} />
           </section>
@@ -203,7 +202,7 @@ function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured
     const f = new FormData(e.currentTarget)
     setBusy(true)
     setError(null)
-    const r = await postJson("/api/sancus/companies", { name: f.get("name"), country: f.get("country") })
+    const r = await postJson("/api/sancus/companies", { name: f.get("name"), country: "US" })
     setBusy(false)
     if (!r.ok) return setError(String(r.data.error ?? "Could not create the account"))
     const company = r.data.company as { id?: string } | undefined
@@ -221,8 +220,7 @@ function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured
         Create your global account
       </h2>
       <p className="body-s muted" style={{ margin: 0, maxWidth: "62ch" }}>
-        This is the top of your company. You&apos;ll be its Owner, and you can add a branch for each country, then
-        sub-branches under those. Each one gets its own wallet automatically.
+        This is your country-neutral global treasury. You&apos;ll be its Owner, and each country is added beneath it as a branch.
       </p>
       {!circleConfigured ? (
         <p className="body-s" style={{ margin: 0 }}>
@@ -231,13 +229,9 @@ function CreateGlobalAccount({ circleConfigured, onCreated }: { circleConfigured
         </p>
       ) : null}
       <form onSubmit={submit} className="grid" style={{ gap: 12 }}>
-        <label className="sx-field" style={{ gridColumn: "span 7" }}>
+        <label className="sx-field" style={{ gridColumn: "span 12" }}>
           <span className="sx-label">Company name</span>
           <input name="name" className="sx-field__input" placeholder="Lion City Trading" required maxLength={120} />
-        </label>
-        <label className="sx-field" style={{ gridColumn: "span 5" }}>
-          <span className="sx-label">Headquarters</span>
-          <CountrySelect name="country" defaultValue="SG" />
         </label>
         <div style={{ gridColumn: "span 12", display: "flex", gap: 12, alignItems: "center" }}>
           <button type="submit" className="sx-btn sx-btn--primary" disabled={busy}>
@@ -272,9 +266,7 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const isRoot = node.parentId === null || node.depth === 0
-  // Root = level 1 (depth 0); max 6 levels → can't add under depth 5.
-  const atMaxDepth = node.depth >= 5
-  const canAdd = live && node.can.createBranch && !atMaxDepth
+  const canAdd = live && isRoot && node.can.createBranch
   const viewOnlyParent = live && !node.can.createBranch && node.role === "VIEWER"
 
   async function addBranch(e: FormEvent<HTMLFormElement>) {
@@ -304,27 +296,18 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
   return (
     <div id={`branch-${node.id}`} style={{ display: "grid", gap: 10, scrollMarginTop: 80 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: isRoot ? 28 : 22 }} aria-hidden>
-          {flag(node.country)}
-        </span>
+        {isRoot ? null : <span style={{ fontSize: 22 }} aria-hidden>{flag(node.country)}</span>}
         <div style={{ display: "grid", minWidth: 0, flex: 1 }}>
           <h2 className={`sx-h ${isRoot ? "heading-3" : "body-strong"} trunc`} style={{ margin: 0 }}>
-            {node.name}
+            <Link href={`/branches/${node.id}`} style={{ color: "inherit", textDecoration: "none" }}>{node.name}</Link>
           </h2>
           <span className="body-s muted">
-            {node.parentId === null ? "Global account" : node.depth <= 1 ? "Branch" : "Sub-branch"} · {countryByCode(node.country)?.name ?? node.country} ·{" "}
-            {node.currency}
+            {isRoot ? "Global treasury · USDC" : `Branch · ${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}
             {node.role ? (
               <>
                 {" · "}
                 {ROLE_LABEL[node.role]}
                 {node.roleInherited ? " (inherited)" : ""}
-              </>
-            ) : null}
-            {atMaxDepth ? (
-              <>
-                {" · "}
-                <span className="tag">Level 6 of 6</span>
               </>
             ) : null}
           </span>
@@ -336,12 +319,6 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
           ) : null}
         </div>
       </div>
-
-      {atMaxDepth ? (
-        <div className="banner">
-          <span>Branches stop at 6 levels. Add a sibling under the parent instead.</span>
-        </div>
-      ) : null}
 
       {viewOnlyParent ? (
         <div className="banner">
@@ -400,15 +377,7 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
             onClick={() => setAdding(!adding)}
             aria-expanded={adding}
           >
-            + {isRoot ? "Branch" : "Sub-branch"}
-          </button>
-        </div>
-      ) : null}
-
-      {atMaxDepth && live && node.can.createBranch ? (
-        <div className="tile-foot" style={{ justifyContent: "flex-start" }}>
-          <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" disabled>
-            Add a branch under {node.name}
+            + Branch
           </button>
         </div>
       ) : null}

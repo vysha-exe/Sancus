@@ -30,6 +30,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseReqResClient } from "@/lib/supabase/server-client";
 import { DEMO_GUEST_COOKIE, DEMO_LOGIN_PATH, isDemoLoginEnabled } from "@/lib/sancus/demo-login";
+import { SANCUS_ADMIN_COOKIE, SANCUS_EMPLOYEE_COOKIE, verifyAdminSession, verifyEmployeeSession } from "@/lib/sancus/simple-auth";
 import { hasEnvVars } from "@/lib/utils";
 
 // Sancus app screens. Only enforced when Supabase is configured (see the
@@ -72,13 +73,42 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // No Supabase env → serve the mock UI without auth (local wireframe mode).
-  if (!hasEnvVars) {
+  const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
+  if (pathname === "/auth/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/sign-in";
+    return NextResponse.redirect(url);
+  }
+  const simpleAdmin = await verifyAdminSession(request.cookies.get(SANCUS_ADMIN_COOKIE)?.value);
+  if (simpleAdmin) {
+    if (pathname === "/sign-in" || pathname === "/auth/sign-up") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/home";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+  const simpleEmployee = await verifyEmployeeSession(request.cookies.get(SANCUS_EMPLOYEE_COOKIE)?.value);
+  if (simpleEmployee) {
+    if (pathname === "/sign-in" || pathname === "/auth/sign-up" || (isProtected && !pathname.startsWith("/me") && !pathname.startsWith("/settings"))) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/me";
+      return NextResponse.redirect(url);
+    }
     return response;
   }
 
-  const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
-  const isAuthForm = pathname === "/auth/login" || pathname === "/auth/sign-up";
+  // Without browser Supabase config, the small signed-cookie login still protects the app.
+  if (!hasEnvVars) {
+    if (isProtected) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/sign-in";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
+  const isAuthForm = pathname === "/sign-in" || pathname === "/auth/sign-up";
 
   // Public marketing / mock sign-up: no session read. Auth forms still need
   // getUser so signed-in visitors can be bounced to /home.
@@ -110,7 +140,7 @@ export async function proxy(request: NextRequest) {
   // Unauthenticated users hitting a protected route get bounced to login.
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
+    url.pathname = "/sign-in";
     return NextResponse.redirect(url);
   }
 

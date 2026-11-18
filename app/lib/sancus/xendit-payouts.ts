@@ -20,7 +20,7 @@ export type XenditPayoutDto = {
   failureReason: string | null
   settledAt: string | null
   createdAt: string
-  simulated: true
+  simulated: boolean
 }
 
 export type XenditPayoutRow = {
@@ -29,7 +29,7 @@ export type XenditPayoutRow = {
   recipient_name: string; account_number_masked: string; routing_type: string; routing_value: string;
   amount_minor: number | string; description: string | null; provider_transaction_id: string;
   provider_status: string; status: XenditPayoutState; failure_reason: string | null;
-  settled_at: string | null; created_at: string;
+  settled_at: string | null; created_at: string; simulated: boolean;
 }
 
 export function toXenditPayoutDto(row: XenditPayoutRow): XenditPayoutDto {
@@ -40,7 +40,7 @@ export function toXenditPayoutDto(row: XenditPayoutRow): XenditPayoutDto {
     routingValue: row.routing_value, amountMinor: String(row.amount_minor), description: row.description,
     providerTransactionId: row.provider_transaction_id, providerStatus: row.provider_status,
     status: row.status, failureReason: row.failure_reason, settledAt: row.settled_at,
-    createdAt: row.created_at, simulated: true,
+    createdAt: row.created_at, simulated: row.simulated,
   }
 }
 
