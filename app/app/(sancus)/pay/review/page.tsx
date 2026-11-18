@@ -11,11 +11,13 @@ export default function PayReviewPage() {
   const router = useRouter()
   const { recipient, state, view, refreshQuote, quoteLoading, quoteError, submit, submitting, providerBacked } = usePayFlow()
   const [demoSeconds, setDemoSeconds] = useState(42)
-  const [now, setNow] = useState(() => Date.now())
+  const [now, setNow] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   // Demo recipients: the wireframe countdown. Live: tick a clock against the quote's expiry.
+  // Don't seed with Date.now() during prerender (cacheComponents / Vercel build).
   useEffect(() => {
+    setNow(Date.now())
     const t = window.setInterval(() => {
       setNow(Date.now())
       setDemoSeconds((s) => (s > 0 ? s - 1 : 0))
