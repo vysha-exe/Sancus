@@ -106,6 +106,10 @@ a.sx-row:hover { background: var(--surface-200); color: inherit; }
 .pick--on { border: 2px solid var(--accent); padding: 11px 13px; }
 .pick--off { opacity: .45; cursor: not-allowed; }
 .pick .body-s { color: var(--ink-muted); }
+.pick--business { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pick--business:hover { background: var(--brand-deep); border-color: var(--brand-deep); color: #fff; }
+.pick--business .body-strong, .pick--business .body-s { color: #fff; }
+.pick--business .body-s { opacity: .88; }
 .radio { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-strong); flex: none; box-sizing: border-box; }
 .pick--on .radio { border: 6px solid var(--accent); }
 .opt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
