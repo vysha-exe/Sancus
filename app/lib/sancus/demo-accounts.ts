@@ -23,6 +23,16 @@ export function demoEmailFor(baseEmail: string, as: DemoAs): string {
   return `${local}+${as}@${domain}`
 }
 
+/** True when this email is one of the canned demo identities (admin / +finance / +branch / …). */
+export function isDemoUserEmail(
+  email: string | null | undefined,
+  baseEmail = process.env.SANCUS_DEMO_EMAIL?.trim()
+): boolean {
+  if (!email || !baseEmail) return false
+  const normalized = email.trim().toLowerCase()
+  return DEMO_AS.some((as) => demoEmailFor(baseEmail, as).toLowerCase() === normalized)
+}
+
 async function findUserId(admin: SupabaseClient, email: string): Promise<string | null> {
   for (let page = 1; page <= 10; page++) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
