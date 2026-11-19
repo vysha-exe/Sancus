@@ -19,7 +19,7 @@
 4. ✅ Policy engine + approvals (§3, §4)
 5. ✅ Singapore PayNow payout, simulated (§6.1) → ⬜ StraitsX sandbox if access arrives
 6. 🟡 Real USDC leg on Arc (`SANCUS_SETTLEMENT_ADDRESS`) (§6.1): code done, needs step 1 keys + funded wallet
-7. ⬜ Cards: issue + simulated purchase with hold (§8)
+7. 🟡 Cards: issue + simulated purchase with hold (§8) — Spending UI wired to cards + card-purchases APIs
 8. 🟡 x402 earning endpoint (§13): built and tested up to Circle's facilitator; first real paid call needs the buyer wallet funded
 9. ⬜ Seed / reset script for the demo company (§16)
 
@@ -32,7 +32,7 @@
 | Auto sign-in for app screens | `proxy.ts` → `/api/sancus/demo-login` (when Supabase is configured; mock UI otherwise) | ✅ |
 | Home › balance | `GET /api/sancus/treasury` (`useLiveTreasury`) | ✅ |
 | Home › latest payments | `GET /api/sancus/payouts` (`useLiveActivity`) | ✅ |
-| Pay › who | Singapore recipients marked **Live** (demo-data `payout` field) | ✅ |
+| Pay › who | Singapore **Live** + other corridors **Simulated** pills (`recipientIsLive` / `payout`) | ✅ |
 | Pay › amount / review | `POST /api/sancus/payouts/quote` (live quote, 60 s lock, refresh) | ✅ |
 | Pay › confirm / done | `POST /api/sancus/payouts` + status polling + treasury refresh | ✅ |
 | Activity | `GET /api/sancus/payouts` incl. when / they got / fee | ✅ |
@@ -43,14 +43,15 @@
 | Activity › summary tiles | treasury + approvals (available, on its way out, waiting for approval) | ✅ |
 | Pay › done (over the approval rule) | "Sent for approval" → approved / declined | ✅ |
 | Agents › Paid by other agents | `GET /api/sancus/x402/earnings` (live, refreshes every 5 s) | ✅ |
-| Settings › approval rules toggles | `PUT /api/sancus/policies` — threshold wired; other toggles still local | 🟡 |
-| Team | memberships + invite APIs; Team page live when a company exists (§10) | 🟡 |
+| Settings › approval rules toggles | `PUT /api/sancus/policies` — threshold + `twoSignoffs` / `newRecipients` / `afterHours` in `rules`; `newRecipients` enforced | ✅ |
+| Team | list/invite/limits/role/disable live when a company exists; demo only with no company (§10) | ✅ |
 | Branches | `GET/POST /companies`, Branches UI | ✅ |
-| Spending › Pix methods | `GET/PATCH /spending-methods` + live Pix cards; virtual cards still demo (§8) | 🟡 |
+| Spending › methods + cards | live methods + Marqeta/sim cards; freeze; simulate hold→settle via card-purchases (§8) | ✅ |
 | Receive › local rails | collections UI primary on Receive | 🟡 |
-| Invoices, Agents › assistant & budget | no backend yet (§11, §14) | ⬜ demo data |
-| Agents › voice mode (mic → talk → agent talks back) | §14.2 voice session + STT/TTS | ⬜ |
-| Demo-only recipients (Brazil, US, EU, Mexico) | simulated in the UI only | ⬜ |
+| Invoices | upload → extract → confirm → pay slice (`/api/sancus/invoices`, §11) | 🟡 apply migration |
+| Agents › assistant & budget | `AgentConsole` on `/agents`; budget from agent status; pause persisted | ✅ |
+| Agents › voice mode (mic → talk → agent talks back) | Web Speech + `/api/sancus/agent/speak` (ElevenLabs when keyed) | 🟡 |
+| Demo-only recipients (Brazil, US, EU, Mexico) | labeled **Simulated** on Pay › Who | ✅ |
 
 ## 1. Cross-cutting foundations
 
@@ -173,8 +174,8 @@
 |---|---|---|---|---|---|---|
 | ☑ | Port Marqeta adapter from `rails-demo` | `lib/sancus/rails/marqeta.ts` | ✅ | P1 | | Uses `MARQETA_*` env in `app/` |
 | ◐ | Issue virtual card to an employee with a limit | `POST /api/sancus/cards` | 🟡 apply `app/supabase/migrations/20261118130000_sancus_cards.sql` | **P0** | | Card shows last 4 + limit |
-| ☐ | List / freeze / change limit | `GET /api/sancus/cards`, `PATCH /api/sancus/cards/:id` | ⬜ | P1 | | Frozen card declines |
-| ☐ | Simulate purchase → authorization hold → settle / release | `POST /api/sancus/cards/:id/simulate-purchase`, `POST /api/sancus/cards/authorizations/:id/settle` | ⬜ | P0 | | $100 approved (hold), $600 on $500 card declined |
+| ☐ | List / freeze / change limit | `GET/PATCH /api/sancus/cards` (+ Spending UI Freeze) | 🟡 | P1 | | Status ACTIVE/SUSPENDED; methods pause/resume |
+| ☐ | Simulate purchase → authorization hold → settle / release | `POST /api/sancus/card-purchases`, `POST …/card-purchases/:id/settle` | 🟡 | P0 | | Spending “Simulate a purchase” hold → settle |
 | ☐ | Real-time auth decision (Marqeta Gateway JIT Funding) | `POST /api/sancus/webhooks/marqeta/jit` | ⬜ | P1 | | Policy engine decides approve/decline in < 2s |
 
 ## 9. Ledger & reconciliation
@@ -200,7 +201,7 @@ See also [`docs/b2b-b2c-structure.md`](b2b-b2c-structure.md) (tree + B2C + VIEWE
 | ☐ | Members + roles (OWNER / ADMIN / FINANCE / EMPLOYEE / VIEWER) | `sancus_memberships` + `companies.ts` | 🟡 | P1 | | Roles in Team UI; still need policy-engine gates on every money route |
 | ☐ | Create / get company | `POST /api/sancus/companies`, `GET …/me`, `POST …/:id/branches` | ✅ | P1 | | Each node gets one Circle wallet |
 | ☐ | Personal treasury (B2C) | `POST/GET /api/sancus/treasury/setup` | ✅ | P1 | | Personal wallets with `company_id` null |
-| ☐ | Invite member / change role / accept | `POST …/companies/:id/members`, `PATCH …/members/:id`, `POST …/invites/:token/accept` | 🟡 | P2 | | APIs + Team invite sheet; email still stubbed |
+| ☐ | Invite member / change role / accept | `POST …/companies/:id/members`, `PATCH …/members/:id`, `POST …/invites/:token/accept` | 🟡 | P2 | | Team UI: invite + role/disable + limits; email still stubbed |
 | ☐ | B2C vs B2B chrome | shell hides Team/Branches when no company; sign-up account-type step | 🟡 | P1 | | Personal nav gated; business sign-up not yet calling create company API |
 | ☐ | Company-scoped payouts / policies | `company_id` on payouts + `sancus_company_policies` migration | 🟡 | P1 | | Migration added; money routes still mostly personal |
 
@@ -208,9 +209,9 @@ See also [`docs/b2b-b2c-structure.md`](b2b-b2c-structure.md) (tree + B2C + VIEWE
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ☐ | Upload invoice (PDF/image) to Supabase Storage | `POST /api/sancus/invoices` | ⬜ | P1 | | File stored, row created |
-| ☐ | Extract vendor, amount, currency, due date (LLM) | `lib/sancus/invoice-extract.ts` | ⬜ | P1 | | Prefills Pay form; user confirms |
-| ☐ | List / pay invoice | `GET /api/sancus/invoices`, `POST /api/sancus/invoices/:id/pay` | ⬜ | P1 | | Payment links back to invoice; invoice → paid |
+| ☐ | Upload invoice (PDF/image) to Supabase Storage | `POST /api/sancus/invoices` | 🟡 apply `20261118170000_sancus_invoices.sql` | P1 | | File stored when service role available; row created |
+| ☐ | Extract vendor, amount, currency, due date (LLM) | `lib/sancus/invoice-extract.ts` | 🟡 | P1 | | Prefills confirm; LLM when keyed, else mock from filename |
+| ☐ | List / pay invoice | `GET /api/sancus/invoices`, `POST /api/sancus/invoices/:id/pay` | 🟡 | P1 | | Bills list + confirm → Pay with invoice context |
 
 ## 12. Compliance
 
@@ -240,7 +241,7 @@ See also [`docs/b2b-b2c-structure.md`](b2b-b2c-structure.md) (tree + B2C + VIEWE
 |---|---|---|---|---|---|---|
 | ☐ | Agent wallet (Circle dev wallet) with spending caps from policy | §2 + §3 | ⬜ | P1 | | Agent can't exceed its cap even if prompted |
 | ☐ | Run agent: read unpaid invoices → propose / execute payouts within policy | `POST /api/sancus/agent/run` | ⬜ | P1 | | Logs each decision with reasoning |
-| ☐ | Chat turn (typed): user message → tool calls (quote, pay, approve, balance) → reply | `POST /api/sancus/agent/chat` | ⬜ | P1 | | Same tools the voice path uses; text reply in Agents UI |
+| ☐ | Chat turn (typed): user message → tool calls (quote, pay, approve, balance) → reply | `POST /api/sancus/agent` + `AgentConsole` on `/agents` | 🟡 | P1 | | Streaming chat in Agents UI when Anthropic keyed |
 | ☐ | Agent buys data over x402 (e.g. FX or verification) | `lib/sancus/agent-x402-client.ts` | ⬜ | P2 | | Paid call from agent wallet, capped |
 | ☐ | Agent activity feed | `GET /api/sancus/agent/log` | ⬜ | P2 | | Shown in dashboard |
 
@@ -250,10 +251,10 @@ Press a microphone on Agents, enter voice mode, speak what to do; the agent exec
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ☐ | Voice session: start / stop voice mode from Agents mic | `POST /api/sancus/agent/voice/session` (start/end) | ⬜ | **P1** | | Mic enters voice mode; hang up ends session; UI shows listening / thinking / speaking |
-| ☐ | Speech-to-text (browser mic → transcript) | `POST /api/sancus/agent/voice/transcribe` or Web Speech / Whisper | ⬜ | P1 | | "Pay Lim Trading two thousand Singapore dollars" → clean text for the agent |
-| ☐ | Voice turn: transcript → same agent tools as §14.1 → spoken reply | `POST /api/sancus/agent/voice/turn` | ⬜ | **P1** | | Agent runs tools (quote/pay/balance/approvals), returns text + audio; respects spending caps |
-| ☐ | Text-to-speech reply (agent talks back) | ElevenLabs TTS (`lib/sancus/voice.ts`) | ⬜ | P1 | | Reply is heard as natural speech (**ElevenLabs bounty**); also show caption in UI |
+| ☐ | Voice session: start / stop voice mode from Agents mic | `AgentConsole` voice phase (listening / thinking / speaking) | 🟡 | **P1** | | Mic enters voice mode; hang up ends session |
+| ☐ | Speech-to-text (browser mic → transcript) | Web Speech in `AgentConsole` | 🟡 | P1 | | Browser transcript → agent turn |
+| ☐ | Voice turn: transcript → same agent tools as §14.1 → spoken reply | agent stream + `/api/sancus/agent/speak` | 🟡 | **P1** | | Same tools as typed chat; spoken reply when TTS available |
+| ☐ | Text-to-speech reply (agent talks back) | ElevenLabs via `/api/sancus/agent/speak` (browser voice fallback) | 🟡 | P1 | | Reply heard when ElevenLabs keyed; caption in UI |
 | ☐ | Duplex UX: barge-in / interrupt while speaking | Agents voice UI | ⬜ | P2 | | User can interrupt; agent stops talking and listens again |
 | ☐ | Confirm money moves by voice before execute | in voice turn + policy | ⬜ | P0 | | Over-threshold or pay intents: agent asks "Should I send S$2,000?"; only acts after yes |
 | ☐ | Voice session log (transcript + actions) | `sancus_agent_voice_turns` or agent log | ⬜ | P1 | | Each spoken turn stored; appears in Agents activity |

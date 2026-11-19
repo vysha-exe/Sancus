@@ -76,19 +76,19 @@ export function TeamInviteSheet({
           monthlyLimitMinor: parseLocalToCents(monthlyLocal),
         }),
       })
-      const body = await res.json()
+      const body = (await res.json().catch(() => ({}))) as { error?: string; acceptPath?: string }
       if (!res.ok) {
-        setFieldError(body.error ?? "Could not invite")
-        setBusy(false)
+        setFieldError(body.error ?? (res.status >= 500 ? "Could not send invite — try again" : "Could not invite"))
         return
       }
       setEmail("")
-      onSent(body.acceptPath ?? "")
+      onSent(typeof body.acceptPath === "string" ? body.acceptPath : "")
       onClose()
     } catch {
       setFieldError("Could not reach the server")
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
   }
 
   return (

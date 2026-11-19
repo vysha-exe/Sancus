@@ -33,6 +33,12 @@ import type { PixPaymentDto } from "@/lib/sancus/local-rails"
 import { defaultCurrency, isPayRail, type PayCurrency, type QuoteSide, type SerializedPayQuote } from "@/lib/sancus/pay-quote"
 import type { CompanyNode } from "@/lib/sancus/companies"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
+import { INVOICE_PAY_STORAGE_KEY, type InvoicePayContext } from "@/lib/sancus/invoices"
+
+/** An invoice handed over from /invoices/confirm; `matched` is whether a saved payee was preselected. */
+export type PayInvoice = InvoicePayContext & { matched: boolean }
+
+const normalizeName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 
 type PayState = {
   recipientId: string
@@ -97,6 +103,8 @@ type PayContextValue = {
   sourceAccount: CompanyNode | null
   sourceBalancesReady: boolean
   setSourceCompanyId: (id: string) => void
+  /** Invoice the user is paying, if they arrived from the invoice confirm screen. */
+  invoice: PayInvoice | null
 }
 
 const PayContext = createContext<PayContextValue | null>(null)
@@ -161,8 +169,47 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   // One idempotency key per payment attempt: retries can't double-pay.
   const idempotencyKey = useRef<string | null>(null)
 
+  const [invoice, setInvoice] = useState<PayInvoice | null>(null)
+
   useEffect(() => {
-    setCustomPayees(loadCustomPayees())
+    const timer = window.setTimeout(() => {
+      const saved = loadCustomPayees()
+      setCustomPayees(saved)
+
+      // Arrived from an invoice: preselect the matching payee, memo and amount, once.
+      let context: InvoicePayContext | null = null
+      try {
+        const raw = sessionStorage.getItem(INVOICE_PAY_STORAGE_KEY)
+        if (raw) context = JSON.parse(raw) as InvoicePayContext
+        sessionStorage.removeItem(INVOICE_PAY_STORAGE_KEY)
+      } catch {
+        context = null
+      }
+      if (!context?.supplier || !Number.isFinite(context.amount)) return
+      const invoiceContext: InvoicePayContext = context
+      const wanted = normalizeName(invoiceContext.supplier)
+      const all = [...saved, ...demoRecipients]
+      const match =
+        all.find((r) => normalizeName(r.name) === wanted) ??
+        (wanted.length >= 4 ? all.find((r) => { const n = normalizeName(r.name); return n.includes(wanted) || wanted.includes(n) }) : undefined)
+      setInvoice({ ...invoiceContext, matched: Boolean(match) })
+      if (!match) return
+      const amountText = String(invoiceContext.amount)
+      const railName = match.payout ? (match.payout.proxyType === "BANK" ? "FAST" : "PayNow") : match.rail
+      const matchCurrency = match.payout ? null : payoutCurrency(match.rail, railName)
+      setState((s) => ({
+        ...s,
+        recipientId: match.id,
+        rail: railName,
+        memo: invoiceContext.invoiceNumber ? `Invoice ${invoiceContext.invoiceNumber}` : s.memo,
+        ...(invoiceContext.currency === "USD" && !match.payout
+          ? { usdAmount: amountText, localAmount: "", side: "send" as const }
+          : matchCurrency === invoiceContext.currency
+            ? { localAmount: amountText, usdAmount: "", side: "receive" as const }
+            : { usdAmount: "", localAmount: "", side: match.payout ? ("receive" as const) : ("send" as const) }),
+      }))
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   const recipients = useMemo(() => [...customPayees, ...demoRecipients], [customPayees])
@@ -466,6 +513,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       sourceAccount,
       sourceBalancesReady: workspace.balancesReady,
       setSourceCompanyId,
+      invoice,
     }),
     [
       state,
@@ -494,6 +542,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       sourceAccount,
       workspace.balancesReady,
       setSourceCompanyId,
+      invoice,
     ]
   )
 

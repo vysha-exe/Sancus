@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server"
-import { withAuth } from "@/lib/api/with-auth"
+import { z } from "zod"
+import { validateJsonBody } from "@/lib/api/validate"
+import { createAdminContext, withAuth } from "@/lib/api/with-auth"
 import { requirePermission } from "@/lib/sancus/accounts-server"
 import { toEmployeeCardPurchaseDto, type EmployeeCardPurchaseRow } from "@/lib/sancus/employee-spending"
+
+const schema = z.object({
+  cardId: z.string().uuid(),
+  merchantName: z.string().trim().min(1).max(120),
+  amount: z.number().positive().max(250_000_000),
+})
+
+const zeroDecimal = new Set(["JPY"])
 
 export const GET = withAuth(async (_req, { user, supabase }) => {
   const denied = await requirePermission(supabase, user, "activity.view")
@@ -9,4 +19,34 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
   const { data, error } = await supabase.from("sancus_card_purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50)
   if (error) return NextResponse.json({ error: "Could not load card purchases" }, { status: 500 })
   return NextResponse.json({ purchases: ((data ?? []) as EmployeeCardPurchaseRow[]).map(toEmployeeCardPurchaseDto) })
+})
+
+export const POST = withAuth(async (req, { user, supabase }) => {
+  const denied = await requirePermission(supabase, user, "spending.manage")
+  if (denied) return denied
+  const parsed = await validateJsonBody(req, schema)
+  if (!parsed.ok) return parsed.response
+
+  const { data: card } = await supabase.from("sancus_cards").select("*").eq("id", parsed.data.cardId).eq("user_id", user.id).maybeSingle()
+  if (!card) return NextResponse.json({ error: "Card not found" }, { status: 404 })
+  if (card.status !== "ACTIVE") {
+    return NextResponse.json({ error: `Declined: card is ${String(card.status).toLowerCase()}` }, { status: 403 })
+  }
+
+  const scale = zeroDecimal.has(card.currency) ? 1 : 100
+  // Admin simulate: attribute to the acting user so we never violate auth.users FKs
+  // when card.employee_id is a demo slug or a non-auth uuid.
+  const { supabase: admin } = await createAdminContext()
+  const { data, error } = await admin.from("sancus_card_purchases").insert({
+    user_id: user.id,
+    employee_id: user.id,
+    employee_name: card.employee_name,
+    card_id: card.id,
+    merchant_name: parsed.data.merchantName,
+    amount_minor: Math.round(parsed.data.amount * scale),
+    currency: card.currency,
+    status: "HELD",
+  }).select("*").single()
+  if (error || !data) return NextResponse.json({ error: "Could not create the card authorization" }, { status: 500 })
+  return NextResponse.json({ purchase: toEmployeeCardPurchaseDto(data as EmployeeCardPurchaseRow) }, { status: 201 })
 })

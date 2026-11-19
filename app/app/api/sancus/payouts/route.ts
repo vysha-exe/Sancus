@@ -13,7 +13,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { requirePermission } from "@/lib/sancus/accounts-server"
 import { formatRate } from "@/lib/sancus/fx"
 import { getPayoutProvider } from "@/lib/sancus/payout-provider"
-import { evaluatePayout, loadCompanyPolicy, loadPolicy, spentToday } from "@/lib/sancus/policy"
+import { evaluatePayout, isNewRecipient, loadCompanyPolicy, loadPolicy, spentToday } from "@/lib/sancus/policy"
 import { companyIdFromRequest } from "@/lib/sancus/workspace"
 import { liveSgdFxConfig } from "@/lib/sancus/live-fx"
 import {
@@ -140,6 +140,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     amountMinor: quote.usdcAmountMinor,
     recipient: { name: recipient.name, proxyValue: recipient.proxyValue },
     spentTodayMinor: await spentToday(supabase, user.id),
+    isNewRecipient: policy.rules.newRecipients
+      ? await isNewRecipient(supabase, user.id, { name: recipient.name, proxyValue: recipient.proxyValue })
+      : false,
   })
   if (evaluation.decision === "BLOCK") {
     return NextResponse.json(

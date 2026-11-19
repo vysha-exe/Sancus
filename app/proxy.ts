@@ -74,6 +74,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
+  const demoGuest = request.cookies.get(DEMO_GUEST_COOKIE)?.value === "1";
   if (pathname === "/auth/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
@@ -95,6 +96,12 @@ export async function proxy(request: NextRequest) {
       url.pathname = "/me";
       return NextResponse.redirect(url);
     }
+    return response;
+  }
+
+  // Demo-login guest cookie unlocks app screens with demo data (no Supabase session).
+  // Must run before the !hasEnvVars / unauthenticated bounces, or Open demo loops to /sign-in.
+  if (demoGuest && isProtected) {
     return response;
   }
 
@@ -122,15 +129,11 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const demoOn = isDemoLoginEnabled();
-  const demoGuest = request.cookies.get(DEMO_GUEST_COOKIE)?.value === "1";
 
   // Demo mode: try a real demo session once for protected screens. If auth
   // already failed, the guest cookie lets the UI through with demo data.
   // Do NOT hijack /auth/login or /auth/sign-up — those stay available.
   if (!user && demoOn && isProtected) {
-    if (demoGuest) {
-      return response;
-    }
     const url = request.nextUrl.clone();
     url.pathname = DEMO_LOGIN_PATH;
     url.search = `?next=${encodeURIComponent(pathname)}`;

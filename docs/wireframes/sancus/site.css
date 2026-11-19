@@ -380,3 +380,19 @@
 /* Business sign-up has six steps: five flutes, then the capital. */
 .build-list--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .opt .code3 svg { display: block; }
+
+/* Auth side panel: soft gradient that fades into the page, with the next few steps */
+.build { padding: 16px; gap: 0; border-left: 0; background: var(--surface-100); align-items: stretch; justify-content: stretch; }
+.gp { position: relative; flex: 1; border-radius: 28px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; padding: 56px 40px; box-sizing: border-box; color: var(--ink); background: radial-gradient(90% 40% at 90% 0%, rgba(192,132,69,.28), rgba(192,132,69,0) 70%), linear-gradient(180deg, #8CC7B5 0%, rgba(140,199,181,.5) 38%, rgba(238,241,236,0) 85%); }
+.gp::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .25; mix-blend-mode: overlay; -webkit-mask-image: linear-gradient(180deg, #000, transparent 80%); mask-image: linear-gradient(180deg, #000, transparent 80%); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.gp-in { position: relative; z-index: 1; width: 100%; max-width: 360px; display: grid; gap: 14px; justify-items: center; text-align: center; }
+.gp-logo { display: inline-flex; align-items: center; gap: 10px; font: 600 15px/1 var(--font-sans); letter-spacing: .16em; margin-bottom: 8px; color: var(--brand-deep); }
+.gp h2 { margin: 0; font: 400 36px/1.1 var(--font-serif); }
+.gp p { margin: 0; color: var(--ink-muted); font-size: 15px; line-height: 22px; }
+.gsteps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; width: 100%; }
+.gsteps li { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 14px; border-radius: 12px; background: rgba(255,255,255,.65); border: 1px solid var(--line); color: var(--ink-muted); font-size: 14px; text-align: left; }
+.gsteps b { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 500 11px/1 var(--font-mono); background: var(--surface-200); color: var(--ink-muted); }
+.gsteps .done b { background: var(--brand-verdigris); color: #fff; }
+.gsteps .now { background: var(--brand-deep); border-color: var(--brand-deep); color: #fff; font-weight: 500; }
+.gsteps .now b { background: #fff; color: var(--brand-deep); }
+.gp .gp-meta { font: 400 12px/16px var(--font-mono); letter-spacing: .08em; color: var(--ink-muted); }

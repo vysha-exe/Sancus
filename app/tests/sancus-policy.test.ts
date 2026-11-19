@@ -51,6 +51,39 @@ describe("sancus policy engine", () => {
       perPaymentLimitMinor: 1_000_000_000n,
       dailyLimitMinor: 2_000_000_000n,
       blockedRecipients: [],
+      rules: { twoSignoffs: true, newRecipients: true, afterHours: false },
     })
+  })
+
+  it("defaults the rules and fills in any missing keys from the stored row", () => {
+    expect(DEFAULT_POLICY.rules).toEqual({ twoSignoffs: true, newRecipients: true, afterHours: false })
+    const row = {
+      approval_threshold_minor: "500000000",
+      per_payment_limit_minor: "1000000000",
+      daily_limit_minor: "2000000000",
+      blocked_recipients: null,
+    }
+    expect(policyFromRow({ ...row, rules: { newRecipients: false, afterHours: true } }).rules).toEqual({
+      twoSignoffs: true,
+      newRecipients: false,
+      afterHours: true,
+    })
+  })
+
+  it("sends a first payment to a new recipient to approval when the rule is on", () => {
+    const e = evaluatePayout({ policy, amountMinor: usdc(10), recipient: lim, spentTodayMinor: 0n, isNewRecipient: true })
+    expect(e.decision).toBe("NEEDS_APPROVAL")
+    expect(e.reason).toContain("First payment to someone new")
+  })
+
+  it("lets a new recipient through when the rule is off, and a known one when it is on", () => {
+    const off: Policy = { ...policy, rules: { ...policy.rules, newRecipients: false } }
+    expect(evaluatePayout({ policy: off, amountMinor: usdc(10), recipient: lim, spentTodayMinor: 0n, isNewRecipient: true }).decision).toBe("ALLOW")
+    expect(evaluatePayout({ policy, amountMinor: usdc(10), recipient: lim, spentTodayMinor: 0n, isNewRecipient: false }).decision).toBe("ALLOW")
+  })
+
+  it("still blocks a new recipient on the blocklist", () => {
+    const e = evaluatePayout({ policy, amountMinor: usdc(10), recipient: { name: "Shady Corp", proxyValue: "x" }, spentTodayMinor: 0n, isNewRecipient: true })
+    expect(e.decision).toBe("BLOCK")
   })
 })

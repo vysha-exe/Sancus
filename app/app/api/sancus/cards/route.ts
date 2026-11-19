@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/sancus/accounts-server"
 import {
   isMarqetaConfigured,
   issueMarqetaCard,
+  setMarqetaCardState,
   simulatedMarqetaCard,
   updateMarqetaCardLimit,
 } from "@/lib/sancus/rails/marqeta"
@@ -26,7 +27,10 @@ const schema = z.object({
 
 const updateSchema = z.object({
   id: z.string().uuid(),
-  monthlyLimit: z.number().positive().max(250_000_000),
+  monthlyLimit: z.number().positive().max(250_000_000).optional(),
+  status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
+}).refine((value) => value.monthlyLimit !== undefined || value.status !== undefined, {
+  message: "A monthly limit or status is required",
 })
 
 export const GET = withAuth(async (_req, { user, supabase }) => {
@@ -79,29 +83,44 @@ export const PATCH = withAuth(async (req, { user, supabase }) => {
   if (readError) return NextResponse.json({ error: "Could not load card" }, { status: 500 })
   if (!current) return NextResponse.json({ error: "Card not found" }, { status: 404 })
 
+  const { monthlyLimit, status } = parsed.data
   const scale = zeroDecimalCurrencies.has(current.currency) ? 1 : 100
-  if (!current.simulated && isMarqetaConfigured()) {
+  const live = !current.simulated && isMarqetaConfigured()
+  if (live && monthlyLimit !== undefined) {
     try {
       await updateMarqetaCardLimit({
         velocityControlToken: current.velocity_control_token,
         userToken: current.provider_user_token,
         label: current.label,
         currency: current.currency,
-        monthlyLimit: parsed.data.monthlyLimit,
+        monthlyLimit,
       })
     } catch (error) {
       return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update Marqeta limit" }, { status: 502 })
     }
   }
+  if (live && status) {
+    try {
+      await setMarqetaCardState({ cardToken: current.provider_card_token, state: status })
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update Marqeta card status" }, { status: 502 })
+    }
+  }
 
+  const update: Record<string, unknown> = {}
+  if (monthlyLimit !== undefined) update.monthly_limit_minor = Math.round(monthlyLimit * scale)
+  if (status) {
+    update.status = status
+    update.provider_status = status
+  }
   const { data, error } = await supabase
     .from("sancus_cards")
-    .update({ monthly_limit_minor: Math.round(parsed.data.monthlyLimit * scale) })
+    .update(update)
     .eq("id", parsed.data.id)
     .eq("user_id", user.id)
     .select("*")
     .single()
-  if (error || !data) return NextResponse.json({ error: "Could not save card limit" }, { status: 500 })
+  if (error || !data) return NextResponse.json({ error: "Could not update card" }, { status: 500 })
   return NextResponse.json({ card: toSancusCardDto(data as SancusCardRow) })
 })
 
