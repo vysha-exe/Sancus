@@ -137,12 +137,14 @@ export async function executeInternalTransfer(
   if (row.status === "PENDING_APPROVAL" || row.status === "DECLINED" || row.status === "COMPLETED") return row
 
   const ref = `sancus:internal:${row.id}`
+  let holdReference: string | null = row.source_bank_hold_reference
+  let bankCaptured = Boolean(row.source_bank_account_id && row.burn_tx_hash)
   try {
     row = await save(supabase, row.id, { status: "SOURCE_RESERVED", failed_stage: null, failure_reason: null })
 
     if (row.source_bank_account_id && !row.burn_tx_hash) {
       try {
-        const holdReference = row.source_bank_hold_reference ?? `${ref}:bank-hold`
+        holdReference = row.source_bank_hold_reference ?? `${ref}:bank-hold`
         const { error: holdError } = await supabase.rpc("sancus_bank_create_hold", {
           p_account_id: row.source_bank_account_id,
           p_amount_minor: String(row.source_amount_minor),
@@ -153,6 +155,7 @@ export async function executeInternalTransfer(
         if (holdError) throw new Error(holdError.message)
         const { error: captureError } = await supabase.rpc("sancus_bank_capture_hold", { p_reference: holdReference })
         if (captureError) throw new Error(captureError.message)
+        bankCaptured = true
         row = await save(supabase, row.id, {
           status: "LOCAL_DEBITED",
           source_bank_hold_reference: holdReference,
@@ -205,6 +208,25 @@ export async function executeInternalTransfer(
   } catch (error) {
     const stage = typeof error === "object" && error && "stage" in error ? String(error.stage) : "SETTLEMENT"
     const message = error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500)
+    // Undo bank side-effects so a failed settlement doesn't strand operating-account funds.
+    if (row.source_bank_account_id && holdReference) {
+      try {
+        if (bankCaptured) {
+          await supabase.rpc("sancus_bank_post_credit", {
+            p_account_id: row.source_bank_account_id,
+            p_amount_minor: String(row.source_amount_minor),
+            p_entry_type: "INTERNAL_TRANSFER_REVERSAL",
+            p_source_type: "INTERNAL_TRANSFER",
+            p_source_id: row.id,
+            p_idempotency_key: `${ref}:bank-reversal`,
+          })
+        } else {
+          await supabase.rpc("sancus_bank_release_hold", { p_reference: holdReference })
+        }
+      } catch {
+        /* best-effort; still mark FAILED below */
+      }
+    }
     try {
       return await save(supabase, row.id, { status: "FAILED", failed_stage: stage, failure_reason: message })
     } catch {

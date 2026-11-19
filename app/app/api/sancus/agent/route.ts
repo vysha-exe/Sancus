@@ -56,7 +56,7 @@ const VOICE_RULES = [
 const ROLE_NOTES: Record<"ADMIN" | "BRANCH" | "EMPLOYEE" | "INDIVIDUAL", string> = {
   ADMIN: "This is the business admin: they see every branch, pay suppliers and contractors, and manage everyone's limits.",
   BRANCH:
-    "This is a branch admin: they run their own branch, collect money into it (propose_collection) and manage their own employees' limits. They can't send money or see other branches' people; for payments, tell them to ask the business admin.",
+    "This is a branch admin: they run their own branch, can pay other companies in the org (internal transfers) and external payees, collect money (propose_collection), and manage their employees' limits.",
   EMPLOYEE:
     "This is an employee: help with their card, spending methods and limits using my_spending. They can't send money, change limits or see company balances; for a higher limit, tell them to ask their branch admin.",
   INDIVIDUAL:

@@ -8,7 +8,7 @@
 // rates as local-per-USDC × 1e6. Rates are indicative (configured), like the other simulated rails.
 
 export type PayCurrency = "USDC" | "USD" | "BRL" | "THB" | "IDR" | "EUR" | "MXN"
-export type PayRail = "USDC" | "ACH" | "Wire" | "Pix" | "PromptPay" | "BI-FAST" | "SEPA" | "SPEI"
+export type PayRail = "USDC" | "ACH" | "Wire" | "Pix" | "PromptPay" | "BI-FAST" | "SEPA" | "SPEI" | "Internal"
 export type QuoteSide = "send" | "receive"
 
 const USDC_DP = 6
@@ -33,6 +33,7 @@ export const RAILS: Record<PayRail, { feeUsdcMinor: bigint; eta: string; currenc
   "BI-FAST": { feeUsdcMinor: 500_000n, eta: "Seconds", currencies: ["IDR"] },
   SEPA: { feeUsdcMinor: 800_000n, eta: "Same day", currencies: ["EUR"] },
   SPEI: { feeUsdcMinor: 800_000n, eta: "Minutes", currencies: ["MXN"] },
+  Internal: { feeUsdcMinor: 0n, eta: "Seconds", currencies: ["USDC"] },
 }
 
 /** The currency a rail pays out in by default (Wire follows the recipient's currency). */

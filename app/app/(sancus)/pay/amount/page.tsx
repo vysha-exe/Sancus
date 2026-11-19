@@ -6,6 +6,23 @@ import { usePayFlow } from "@/lib/sancus/pay-flow"
 import { formatUsdc, isPayRail, RAILS } from "@/lib/sancus/pay-quote"
 import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
 import { countryByCode } from "@/lib/sancus/countries"
+import type { CompanyNode } from "@/lib/sancus/companies"
+
+function sourceFundsLabel(account: CompanyNode): string {
+  if (account.parentId === null) {
+    return `$${displayMinor(BigInt(account.ownMinor || "0"), USDC_DECIMALS, "", 2)} USDC`
+  }
+  const bank = account.bankBalance
+  if (bank) {
+    const decimals = bank.currency === "IDR" ? 0 : 2
+    const amount = Number(bank.balanceMinor) / (bank.currency === "IDR" ? 1 : 100)
+    return `${new Intl.NumberFormat(bank.currency === "IDR" ? "id-ID" : "en-US", {
+      maximumFractionDigits: decimals,
+      minimumFractionDigits: decimals,
+    }).format(amount)} ${bank.currency} bank`
+  }
+  return `$${displayMinor(BigInt(account.ownMinor || "0"), USDC_DECIMALS, "", 2)} wallet`
+}
 
 export default function PayAmountPage() {
   const {
@@ -53,9 +70,7 @@ export default function PayAmountPage() {
               {sourceAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.parentId === null ? `Parent treasury · ${account.name}` : `↳ ${account.name}`}
-                  {sourceBalancesReady
-                    ? ` · $${displayMinor(BigInt(account.ownMinor || "0"), USDC_DECIMALS, "", 2)}`
-                    : " · ***"}
+                  {sourceBalancesReady ? ` · ${sourceFundsLabel(account)}` : " · ***"}
                 </option>
               ))}
             </select>
@@ -63,7 +78,7 @@ export default function PayAmountPage() {
               {sourceAccount
                 ? sourceAccount.parentId === null
                   ? "Global USDC treasury · available to fund any branch payment"
-                  : `${countryByCode(sourceAccount.country)?.name ?? sourceAccount.country} operating account · settled from its USDC treasury`
+                  : `${countryByCode(sourceAccount.country)?.name ?? sourceAccount.country} operating bank · internal moves debit this balance`
                 : "Loading payment accounts…"}
             </span>
           </label>
