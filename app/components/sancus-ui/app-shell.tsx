@@ -28,6 +28,7 @@ import { SancusLockup } from "./logo"
 import { AccountMenu } from "./account-menu"
 import { WorkspaceSwitcher } from "./workspace-switcher"
 import { NotificationBell } from "./notification-bell"
+import { AgentCallButton } from "./agent-call"
 
 const nav = [
   { key: "home", href: "/home", label: "Home", icon: IconHome, match: (p: string) => p === "/home" || p.startsWith("/home/") },
@@ -114,6 +115,7 @@ export function AppShell({
             </label>
             {headerExtra}
             <div className="hdr-end push">
+              {account && can(account, "agent.use") ? <AgentCallButton /> : null}
               <NotificationBell />
               <AccountMenu name={actorName} role={actorRole} email={account?.email ?? null} signedIn={Boolean(account)} />
             </div>
