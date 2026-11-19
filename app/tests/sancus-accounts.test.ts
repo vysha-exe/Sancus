@@ -65,6 +65,13 @@ describe("permissions", () => {
     expect(branch.canAccessPath("/team")).toBe(true)
     expect(individual.canAccessPath("/team")).toBe(false)
     expect(admin.canAccessPath("/agents")).toBe(true)
+    expect(admin.canAccessPath("/treasury")).toBe(true)
+    expect(admin.can("treasury.manage")).toBe(true)
+    expect(branch.canAccessPath("/treasury")).toBe(false)
+    expect(individual.canAccessPath("/treasury")).toBe(false)
+    expect(admin.canAccessPath("/dev")).toBe(true)
+    expect(admin.canAccessPath("/process")).toBe(true)
+    expect(admin.toJSON().nav).toEqual(expect.arrayContaining(["dev", "devqa"]))
   })
 
   it("survives the trip to the browser", () => {
@@ -85,7 +92,7 @@ describe("canOpenPath (browser) matches canAccessPath (server)", () => {
     as("alex", []),
   ]
   const paths = ["/home", "/branch", "/me", "/pay", "/pay/review", "/receive", "/activity", "/activity/approvals", "/spending",
-    "/branches", "/team", "/invoices", "/agents", "/settings", "/notifications"]
+    "/branches", "/team", "/invoices", "/agents", "/treasury", "/dev", "/process", "/settings", "/notifications"]
   it.each(accounts.map((a) => [a.label, a] as const))("%s", (_label, account) => {
     const dto = account.toJSON()
     for (const p of paths) expect([p, canOpenPath(dto, p)]).toEqual([p, account.canAccessPath(p)])

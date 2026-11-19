@@ -47,7 +47,7 @@ describe("x402 payment terms", () => {
     const b = accountBalances(
       j.entries.map((e) => ({ account: e.account, direction: e.direction, amount_minor: e.amountMinor.toString() }))
     )
-    expect(b["treasury:available"]).toBe(10_000n)
+    expect(b["treasury:gateway_usdc"]).toBe(10_000n)
     expect(b["revenue:x402"]).toBe(-10_000n)
   })
 })
