@@ -85,7 +85,10 @@ export default function TeamPage() {
         }
         await loadMembers(id)
       } catch {
-        if (!cancelled) setMode("demo")
+        if (!cancelled) {
+          setError("Could not reach the server")
+          setMode("live")
+        }
       }
     })()
     return () => {
@@ -374,7 +377,11 @@ export default function TeamPage() {
           inviteRoles={data.inviteRoles}
           localCurrency={ws.activeNode?.currency ?? "BRL"}
           onSent={(acceptPath) => {
-            setInviteMsg(acceptPath ? `Invite sent. Accept path: ${acceptPath}` : "Invite sent.")
+            setInviteMsg(
+              acceptPath
+                ? `Invite sent. Share this accept path: ${acceptPath}`
+                : "Invite sent, but no accept link came back from the server. Check Team for pending invites."
+            )
             void loadMembers(companyId)
           }}
         />

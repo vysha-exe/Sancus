@@ -1,13 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { RisingColumn } from "@/components/sancus-ui/logo"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
 import { DemoReadiness } from "@/components/sancus/demo-readiness"
 import type { Payment } from "@/lib/sancus/demo-data"
 import type { SancusCardDto } from "@/lib/sancus/cards"
+import type { EmployeeCardPurchaseDto } from "@/lib/sancus/employee-spending"
 import type { SpendingMethodDto } from "@/lib/sancus/local-rails"
 import { displayMinor } from "@/lib/sancus/money"
 
@@ -31,48 +32,10 @@ type Method = {
   frozenNote?: string
   frozen: boolean
   simulated?: boolean
-  source: "demo" | "local" | "marqeta"
+  source: "local" | "marqeta"
 }
-
-const initialMethods: Method[] = [
-  {
-    id: "ana-card", kind: "card", rail: "Card", holder: "Ana Souza", holderUpper: "ANA SOUZA",
-    label: "Office and supplies", currency: "BRL", monthlyLimitMinor: "270000", usedMinor: "54123", limit: "R$ 2.700,00", used: "R$ 541,23", pct: 20,
-    last4: "4021", monthly: "R$ 2.700 / MONTH", heldNote: "$398.86 held",
-    frozenNote: "Frozen by Admin · today", frozen: false, simulated: true, source: "demo",
-  },
-  {
-    id: "rafael-card", kind: "card", rail: "Card", holder: "Rafael Lima", holderUpper: "RAFAEL LIMA",
-    label: "Travel", currency: "BRL", monthlyLimitMinor: "1080000", usedMinor: "0", limit: "R$ 10.800,00", used: "R$ 0,00", pct: 0,
-    last4: "7310", monthly: "R$ 10.800 / MONTH", heldNote: "No hold",
-    frozenNote: "Frozen by Admin · Nov 12", frozen: true, simulated: true, source: "demo",
-  },
-]
-
-const baseSpending: Payment[] = [
-  { id: "padaria", who: "Padaria Bela Vista · Ana", amount: "−$10.00", meta: "R$ 54,12 · Today, 10:02", rail: "Pix QR", status: "Settled", simulated: true, href: "/activity" },
-  { id: "papelaria", who: "Papelaria Central · Ana", amount: "−$100.00", meta: "Held 9:10, settled 9:12", rail: "Card", status: "Settled", simulated: true, href: "/activity" },
-]
 
 type Filter = "all" | "cards" | "qr" | "frozen"
-const deletedDemoCardsKey = "sancus-deleted-demo-cards"
-const demoCardLimitsKey = "sancus-demo-card-limits"
-
-function deletedDemoCards() {
-  try {
-    return new Set(JSON.parse(window.localStorage.getItem(deletedDemoCardsKey) || "[]") as string[])
-  } catch {
-    return new Set<string>()
-  }
-}
-
-function demoCardLimits(): Record<string, string> {
-  try {
-    return JSON.parse(window.localStorage.getItem(demoCardLimitsKey) || "{}") as Record<string, string>
-  } catch {
-    return {}
-  }
-}
 
 function formatMethodMoney(currency: string, minor: string) {
   const divisor = currency === "JPY" ? 1 : 100
@@ -94,6 +57,16 @@ function withMonthlyLimit(method: Method, monthlyLimitMinor: string): Method {
     limit: formatted,
     monthly: `${formatted} / MONTH`,
     pct,
+  }
+}
+
+function withUsed(method: Method, usedMinor: bigint): Method {
+  const limit = BigInt(method.monthlyLimitMinor)
+  return {
+    ...method,
+    usedMinor: String(usedMinor),
+    used: formatMethodMoney(method.currency, String(usedMinor)),
+    pct: limit > 0n ? Math.min(100, Number((usedMinor * 100n) / limit)) : 0,
   }
 }
 
@@ -173,14 +146,7 @@ function liveToMethod(m: SpendingMethodDto): Method {
 }
 
 function cardToMethod(card: SancusCardDto): Method {
-  const divisor = card.currency === "JPY" ? 1 : 100
-  const limitValue = Number(card.monthlyLimitMinor) / divisor
-  const money = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: card.currency,
-    maximumFractionDigits: card.currency === "JPY" ? 0 : 2,
-  })
-  const limit = money.format(limitValue)
+  const limit = formatMethodMoney(card.currency, card.monthlyLimitMinor)
   return {
     id: card.id,
     kind: "card",
@@ -192,7 +158,7 @@ function cardToMethod(card: SancusCardDto): Method {
     monthlyLimitMinor: card.monthlyLimitMinor,
     usedMinor: "0",
     limit,
-    used: money.format(0),
+    used: formatMethodMoney(card.currency, "0"),
     pct: 0,
     last4: card.lastFour,
     monthly: `${limit} / MONTH`,
@@ -206,23 +172,60 @@ function cardToMethod(card: SancusCardDto): Method {
 
 type HoldRow = {
   id: string
+  cardId: string | null
   merchant: string
   amount: string
   status: "Held" | "Settled" | "Released"
   when: string
 }
 
+function whenLabel(iso: string) {
+  const date = new Date(iso)
+  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  const now = new Date()
+  if (date.toDateString() === now.toDateString()) return `Today, ${time}`
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`
+  return `${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`
+}
+
+function purchaseToPayment(p: EmployeeCardPurchaseDto, simulated: boolean): Payment {
+  const status = p.status === "SETTLED" ? "Settled" : p.status === "HELD" ? "Held" : "Failed"
+  return {
+    id: p.id,
+    who: `${p.merchantName} · ${p.employeeName.split(" ")[0]}`,
+    amount: `−${formatMethodMoney(p.currency, p.amountMinor)}`,
+    meta: p.settledAt ? `Held, settled ${whenLabel(p.settledAt)}` : `Held ${whenLabel(p.authorizedAt)}`,
+    rail: "Card",
+    status,
+    simulated,
+    href: "/activity",
+  }
+}
+
+function purchaseToHold(p: EmployeeCardPurchaseDto): HoldRow {
+  return {
+    id: p.id,
+    cardId: p.cardId,
+    merchant: p.merchantName,
+    amount: formatMethodMoney(p.currency, p.amountMinor),
+    status: p.status === "SETTLED" ? "Settled" : p.status === "HELD" ? "Held" : "Released",
+    when: whenLabel(p.settledAt ?? p.authorizedAt),
+  }
+}
+
+async function readError(response: Response, fallback: string) {
+  const body = await response.json().catch(() => ({}))
+  return (body as { error?: string }).error || fallback
+}
+
 export default function SpendingPage() {
-  const [methods, setMethods] = useState(initialMethods)
+  const [methods, setMethods] = useState<Method[]>([])
   const [filter, setFilter] = useState<Filter>("all")
-  const [purchases, setPurchases] = useState<Payment[]>([])
+  const [rawPurchases, setRawPurchases] = useState<EmployeeCardPurchaseDto[]>([])
   const [liveNote, setLiveNote] = useState<string | null>(null)
-  const [holds, setHolds] = useState<HoldRow[]>([
-    { id: "h1", merchant: "Papelaria Central", amount: "$100.00", status: "Settled", when: "Today, 9:12" },
-    { id: "h2", merchant: "Padaria Bela Vista", amount: "$48.50", status: "Held", when: "Today, 8:40" },
-    { id: "h3", merchant: "Uber Trip", amount: "$12.20", status: "Released", when: "Yesterday" },
-  ])
-  const [selectedCard, setSelectedCard] = useState("ana-card")
+  const [selectedCard, setSelectedCard] = useState("")
   const [cardToDelete, setCardToDelete] = useState<Method | null>(null)
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null)
   const [cardError, setCardError] = useState<string | null>(null)
@@ -230,7 +233,9 @@ export default function SpendingPage() {
   const [limitAmount, setLimitAmount] = useState("")
   const [savingLimit, setSavingLimit] = useState(false)
   const [limitError, setLimitError] = useState<string | null>(null)
-  const counter = useRef(0)
+  const [freezingId, setFreezingId] = useState<string | null>(null)
+  const [simulating, setSimulating] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const loadCards = useCallback(async () => {
     try {
@@ -240,7 +245,7 @@ export default function SpendingPage() {
       const cards = (body.cards ?? []).map(cardToMethod)
       setMethods((prev) => [...prev.filter((method) => method.source !== "marqeta"), ...cards])
     } catch {
-      /* keep demo cards */
+      /* leave cards as they are */
     }
   }, [])
 
@@ -253,22 +258,29 @@ export default function SpendingPage() {
       setMethods((prev) => [...prev.filter((method) => method.source !== "local"), ...live])
       setLiveNote(`${live.length} live ${live.length === 1 ? "method" : "methods"}`)
     } catch {
-      /* keep demo cards */
+      /* leave methods as they are */
+    }
+  }, [])
+
+  const loadPurchases = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sancus/card-purchases", { cache: "no-store" })
+      if (!res.ok) return
+      const body = (await res.json()) as { purchases?: EmployeeCardPurchaseDto[] }
+      setRawPurchases(body.purchases ?? [])
+    } catch {
+      /* leave purchases as they are */
     }
   }, [])
 
   useEffect(() => {
-    const deleted = deletedDemoCards()
-    const limits = demoCardLimits()
     const timer = window.setTimeout(() => {
-      setMethods((current) => current
-        .filter((method) => method.source !== "demo" || !deleted.has(method.id))
-        .map((method) => limits[method.id] ? withMonthlyLimit(method, limits[method.id]!) : method))
       void loadLive()
       void loadCards()
+      void loadPurchases()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadCards, loadLive])
+  }, [loadCards, loadLive, loadPurchases])
 
   useEffect(() => {
     if (!cardToDelete) return
@@ -288,11 +300,34 @@ export default function SpendingPage() {
     return () => window.removeEventListener("keydown", closeOnEscape)
   }, [limitCard, savingLimit])
 
-  const frozenCount = methods.filter((m) => m.frozen).length
-  const cardCount = methods.filter((m) => m.kind === "card").length
-  const qrCount = methods.length - cardCount
+  const cardMethods = useMemo(() => methods.filter((m) => m.kind === "card"), [methods])
+  const activeCardId = cardMethods.some((m) => m.id === selectedCard) ? selectedCard : cardMethods[0]?.id ?? ""
+  const selected = cardMethods.find((m) => m.id === activeCardId)
 
-  const shown = methods.filter((m) => {
+  const displayMethods = useMemo(() => {
+    const used = new Map<string, bigint>()
+    for (const p of rawPurchases) {
+      if (!p.cardId || (p.status !== "HELD" && p.status !== "SETTLED")) continue
+      used.set(p.cardId, (used.get(p.cardId) ?? 0n) + BigInt(p.amountMinor))
+    }
+    return methods.map((m) => m.source === "marqeta" && used.has(m.id) ? withUsed(m, used.get(m.id)!) : m)
+  }, [methods, rawPurchases])
+
+  const simulatedCardIds = useMemo(() => new Set(methods.filter((m) => m.simulated).map((m) => m.id)), [methods])
+  const payments = useMemo(
+    () => rawPurchases.map((p) => purchaseToPayment(p, Boolean(p.cardId && simulatedCardIds.has(p.cardId)))),
+    [rawPurchases, simulatedCardIds],
+  )
+  const holds = useMemo(
+    () => rawPurchases.filter((p) => p.cardId === activeCardId).map(purchaseToHold),
+    [rawPurchases, activeCardId],
+  )
+
+  const frozenCount = displayMethods.filter((m) => m.frozen).length
+  const cardCount = displayMethods.filter((m) => m.kind === "card").length
+  const qrCount = displayMethods.length - cardCount
+
+  const shown = displayMethods.filter((m) => {
     if (filter === "cards") return m.kind === "card"
     if (filter === "qr") return m.kind === "qr"
     if (filter === "frozen") return m.frozen
@@ -303,31 +338,48 @@ export default function SpendingPage() {
     setDeletingCardId(method.id)
     setCardError(null)
     try {
-      if (method.source === "demo") {
-        const deleted = deletedDemoCards()
-        deleted.add(method.id)
-        window.localStorage.setItem(deletedDemoCardsKey, JSON.stringify([...deleted]))
-      } else if (method.source === "marqeta") {
+      if (method.source === "marqeta") {
         const response = await fetch(`/api/sancus/cards?id=${encodeURIComponent(method.id)}`, { method: "DELETE" })
-        const body = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(body.error || "Could not delete card")
-      } else if (method.source === "local") {
+        if (!response.ok) throw new Error(await readError(response, "Could not delete card"))
+      } else {
         const response = await fetch(`/api/sancus/spending-methods/${method.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "revoke" }),
         })
-        const body = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(body.error || "Could not delete card")
+        if (!response.ok) throw new Error(await readError(response, "Could not delete card"))
       }
 
       setMethods((current) => current.filter((item) => item.id !== method.id))
-      setSelectedCard((current) => current === method.id ? "" : current)
       setCardToDelete(null)
     } catch (caught) {
       setCardError(caught instanceof Error ? caught.message : "Could not delete card")
     } finally {
       setDeletingCardId(null)
+    }
+  }
+
+  async function toggleFreeze(method: Method) {
+    setFreezingId(method.id)
+    setActionError(null)
+    try {
+      const response = method.source === "marqeta"
+        ? await fetch("/api/sancus/cards", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: method.id, status: method.frozen ? "ACTIVE" : "SUSPENDED" }),
+          })
+        : await fetch(`/api/sancus/spending-methods/${method.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: method.frozen ? "resume" : "pause" }),
+          })
+      if (!response.ok) throw new Error(await readError(response, method.frozen ? "Could not unfreeze" : "Could not freeze"))
+      setMethods((current) => current.map((item) => item.id === method.id ? { ...item, frozen: !method.frozen } : item))
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Could not update status")
+    } finally {
+      setFreezingId(null)
     }
   }
 
@@ -354,25 +406,18 @@ export default function SpendingPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: limitCard.id, monthlyLimit: amount }),
         })
-        const body = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(body.error || "Could not save card limit")
-      } else if (limitCard.source === "local") {
+        if (!response.ok) throw new Error(await readError(response, "Could not save card limit"))
+      } else {
         const response = await fetch(`/api/sancus/spending-methods/${limitCard.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update_limit", monthlyLimit: amount }),
         })
-        const body = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(body.error || "Could not save card limit")
+        if (!response.ok) throw new Error(await readError(response, "Could not save card limit"))
       }
 
       const scale = limitCard.currency === "JPY" ? 1 : 100
       const nextMinor = String(Math.round(amount * scale))
-      if (limitCard.source === "demo") {
-        const limits = demoCardLimits()
-        limits[limitCard.id] = nextMinor
-        window.localStorage.setItem(demoCardLimitsKey, JSON.stringify(limits))
-      }
       setMethods((current) => current.map((method) => method.id === limitCard.id ? withMonthlyLimit(method, nextMinor) : method))
       setLimitCard(null)
     } catch (caught) {
@@ -382,35 +427,40 @@ export default function SpendingPage() {
     }
   }
 
-  function simulatePurchase() {
-    counter.current += 1
-    const id = `sim-${counter.current}`
-    const holdId = `hold-${counter.current}`
-    const base: Payment = {
-      id,
-      who: "Livraria Cultura · Ana",
-      amount: "−$25.00",
-      meta: "Held now",
-      rail: "Card",
-      status: "Held",
-      simulated: true,
-      href: "/activity",
+  async function simulatePurchase() {
+    if (!selected) {
+      setActionError("Add a card first, then simulate a purchase on it.")
+      return
     }
-    setPurchases((prev) => [base, ...prev])
-    setHolds((prev) => [
-      { id: holdId, merchant: "Livraria Cultura", amount: "$25.00", status: "Held", when: "Just now" },
-      ...prev,
-    ])
-    setSelectedCard("ana-card")
-    window.setTimeout(() => {
-      setPurchases((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: "Settled", meta: "Held, then settled just now" } : p)),
-      )
-      setHolds((prev) => prev.map((h) => (h.id === holdId ? { ...h, status: "Settled", when: "Just now" } : h)))
-    }, 1500)
+    if (selected.source !== "marqeta") {
+      setActionError("Purchases can only be simulated on issued cards.")
+      return
+    }
+    setSimulating(true)
+    setActionError(null)
+    try {
+      const created = await fetch("/api/sancus/card-purchases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId: selected.id, merchantName: "Livraria Cultura", amount: 25 }),
+      })
+      if (!created.ok) throw new Error(await readError(created, "Could not create the purchase"))
+      const { purchase } = (await created.json()) as { purchase: EmployeeCardPurchaseDto }
+      await loadPurchases()
+      await new Promise((resolve) => window.setTimeout(resolve, 1500))
+      const settled = await fetch(`/api/sancus/card-purchases/${purchase.id}/settle`, { method: "POST" })
+      if (!settled.ok) throw new Error(await readError(settled, "Could not settle the purchase"))
+      await loadPurchases()
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Could not simulate the purchase")
+      await loadPurchases()
+    } finally {
+      setSimulating(false)
+    }
   }
+
   const filterList: { id: Filter; label: string }[] = [
-    { id: "all", label: `All · ${methods.length}` },
+    { id: "all", label: `All · ${displayMethods.length}` },
     { id: "cards", label: `Cards · ${cardCount}` },
     { id: "qr", label: `Pix access · ${qrCount}` },
     { id: "frozen", label: `Frozen · ${frozenCount}` },
@@ -427,12 +477,14 @@ export default function SpendingPage() {
             {liveNote ? ` · ${liveNote}` : ""}
           </p>
         </div>
-        <Link href="/team/ana/methods/new" className="sx-btn sx-btn--primary">
+        <Link href="/team" className="sx-btn sx-btn--primary">
           Give someone a card or Pix access
         </Link>
       </header>
 
       <DemoReadiness />
+
+      {actionError ? <p className="body-s card-delete-error" role="alert">{actionError}</p> : null}
 
       <div className="filters" role="group" aria-label="Filter">
         {filterList.map((f) => (
@@ -493,20 +545,30 @@ export default function SpendingPage() {
               </div>
               <div className="tile-foot">
                 <span className="body-s muted">{note}</span>
-                <button
-                  type="button"
-                  className="sx-btn sx-btn--secondary sx-btn--sm"
-                  onClick={() => openLimit(m)}
-                >
-                  Limit
-                </button>
+                <span style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="sx-btn sx-btn--secondary sx-btn--sm"
+                    disabled={freezingId === m.id}
+                    onClick={() => void toggleFreeze(m)}
+                  >
+                    {freezingId === m.id ? "Saving…" : m.frozen ? "Unfreeze" : "Freeze"}
+                  </button>
+                  <button
+                    type="button"
+                    className="sx-btn sx-btn--secondary sx-btn--sm"
+                    onClick={() => openLimit(m)}
+                  >
+                    Limit
+                  </button>
+                </span>
               </div>
             </section>
           )
         })}
 
         <Link
-          href="/team/ana/methods/new"
+          href="/team"
           className="tile tile--dashed"
           style={{ textDecoration: "none", color: "var(--ink)", minHeight: 200 }}
         >
@@ -528,13 +590,20 @@ export default function SpendingPage() {
             </Link>
           </div>
           <div className="sx-rows">
-            {[...purchases, ...baseSpending].map((p) => (
-              <PaymentRow key={p.id} payment={p} />
-            ))}
+            {payments.length ? (
+              payments.map((p) => <PaymentRow key={p.id} payment={p} />)
+            ) : (
+              <p className="body-s muted" style={{ margin: 0 }}>No card purchases yet.</p>
+            )}
           </div>
           <div className="tile-foot">
-            <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={simulatePurchase}>
-              Simulate a purchase
+            <button
+              type="button"
+              className="sx-btn sx-btn--secondary sx-btn--sm"
+              disabled={simulating || !selected}
+              onClick={() => void simulatePurchase()}
+            >
+              {simulating ? "Simulating…" : "Simulate a purchase"}
             </button>
             <span className="body-s muted">Runs hold → settle so you can see the card lifecycle.</span>
           </div>
@@ -543,27 +612,25 @@ export default function SpendingPage() {
         <section className="tile s5" aria-labelledby="holds">
           <div className="tile-head">
             <h2 className="tile-title" id="holds">
-              Holds on card {methods.find((m) => m.id === selectedCard)?.last4 ?? "4021"}
+              {selected?.last4 ? `Holds on card ${selected.last4}` : "Holds"}
             </h2>
             <span className="sx-pill sx-pill--settled">Marqeta</span>
           </div>
           <div className="filters" role="group" aria-label="Card" style={{ marginBottom: 8 }}>
-            {methods
-              .filter((m) => m.kind === "card")
-              .map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className="chip"
-                  aria-pressed={selectedCard === m.id}
-                  onClick={() => setSelectedCard(m.id)}
-                >
-                  {m.holder.split(" ")[0]} · {m.last4}
-                </button>
-              ))}
+            {cardMethods.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className="chip"
+                aria-pressed={activeCardId === m.id}
+                onClick={() => setSelectedCard(m.id)}
+              >
+                {m.holder.split(" ")[0]} · {m.last4}
+              </button>
+            ))}
           </div>
           <div className="holds">
-            {holds.map((h) => (
+            {holds.length ? holds.map((h) => (
               <div key={h.id} className="hold">
                 <div>
                   <span className="body-strong">{h.merchant}</span>
@@ -588,7 +655,9 @@ export default function SpendingPage() {
                   </span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <p className="body-s muted" style={{ margin: 0 }}>No holds on this card.</p>
+            )}
           </div>
           <div className="tile-foot">
             <span className="body-s muted">
@@ -597,6 +666,7 @@ export default function SpendingPage() {
           </div>
         </section>
       </div>
+
       {limitCard ? (
         <div
           className="card-delete-backdrop"

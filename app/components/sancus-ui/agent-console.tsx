@@ -9,6 +9,7 @@
 // browser voice) and listens again. A waiting card can be confirmed or cancelled by voice.
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
+import { PROGRESS, VOICE_GREETINGS } from "@/lib/sancus/agent/progress"
 
 type Step = { tool: string; label: string; ok: boolean; costLabel?: string }
 type Proposal = {
@@ -65,14 +66,51 @@ const EXIT_RE = /\b(exit|leave|stop|end|close)\s+voice( mode)?\b/i
 const forSpeech = (t: string) => t.replace(/^\s*-\s+/gm, "").replace(/\*\*/g, "").replace(/\n+/g, ". ").replace(/\.\s*\./g, ".").trim()
 
 const SUGGESTIONS = [
+  "What's due this week?",
   "How much do we have across all branches?",
-  "What's the cheapest way to send 5,000 SGD to Singapore right now?",
   "Pay Lim Trading S$250 for invoice INV-88",
-  "Collect 500 baht from a customer in Bangkok",
   "What did we pay out recently?",
 ]
 
-function useAgentStatus() {
+const IconChat = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+  </svg>
+)
+const IconMic = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+  </svg>
+)
+const IconMicLg = () => (
+  <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+  </svg>
+)
+const IconStar = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" />
+  </svg>
+)
+const IconCheck = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 12l4 4 10-10" />
+  </svg>
+)
+const IconSend = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </svg>
+)
+const IconEnd = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" aria-hidden="true">
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+)
+
+export function useAgentStatus() {
   const [status, setStatus] = useState<Status | null>(null)
   const load = useCallback(async () => {
     try {
@@ -127,7 +165,9 @@ async function runAgentStream(messages: { role: string; content: string }[], voi
   return done
 }
 
-export function AgentConsole() {
+type AgentConsoleProps = { paused?: boolean }
+
+export function AgentConsole({ paused = false }: AgentConsoleProps) {
   const status = useAgentStatus()
   const [turns, setTurns] = useState<Turn[]>([])
   const [draft, setDraft] = useState("")
@@ -148,6 +188,7 @@ export function AgentConsole() {
   const recRef = useRef<Recognition | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const speakChain = useRef<Promise<void>>(Promise.resolve())
+  const speakGen = useRef(0)
   const listenRef = useRef<() => void>(() => {})
 
   const setPhaseBoth = (p: Phase) => {
@@ -178,6 +219,7 @@ export function AgentConsole() {
   // ---------- speaking ----------
 
   const stopSpeaking = useCallback(() => {
+    speakGen.current++ // anything still queued is skipped
     audioRef.current?.pause()
     audioRef.current = null
     if (typeof window !== "undefined") window.speechSynthesis?.cancel()
@@ -195,31 +237,81 @@ export function AgentConsole() {
       synth.speak(u)
     })
 
+  /** Pre-recorded fixed phrases (progress lines, greetings) → object URLs, so they play instantly. */
+  const phraseCache = useRef<Map<string, string>>(new Map())
+  const prefetchPhrases = useCallback(async () => {
+    if (!eleven) return
+    const phrases = [...VOICE_GREETINGS, ...Object.values(PROGRESS).map((p) => `${p}.`)]
+    await Promise.all(
+      phrases
+        .filter((p) => !phraseCache.current.has(p))
+        .map(async (p) => {
+          try {
+            const res = await fetch("/api/sancus/agent/speak", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: p }),
+            })
+            if (res.ok) phraseCache.current.set(p, URL.createObjectURL(await res.blob()))
+          } catch {
+            /* that phrase streams live instead */
+          }
+        })
+    )
+  }, [eleven])
+
+  /** Plays an audio URL until it ends or is stopped. Resolves false if it never played. */
+  const playUrl = (url: string) =>
+    new Promise<boolean>((resolve) => {
+      const a = new Audio(url)
+      audioRef.current = a
+      let started = false
+      a.onplaying = () => {
+        started = true
+      }
+      a.onended = () => resolve(true)
+      a.onpause = () => resolve(true) // stopped by stopSpeaking()
+      a.onerror = () => resolve(started)
+      void a.play().catch(() => resolve(false))
+    })
+
   const speakOnce = useCallback(
     async (text: string) => {
       if (phaseRef.current === "off" || !text.trim()) return
       if (eleven) {
-        try {
-          const res = await fetch("/api/sancus/agent/speak", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: text.slice(0, 1400) }),
+        // Fixed phrases play from the cache.
+        const cached = phraseCache.current.get(text)
+        if (cached) {
+          if (await playUrl(cached)) return
+        } else {
+          // Anything else: split into sentences so the short first one starts sooner, and start
+          // downloading every sentence at once so they play back to back without gaps.
+          const gen = speakGen.current
+          const parts = (text.slice(0, 1400).match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [text]).map((s) => s.trim()).filter(Boolean)
+          const audios = parts.map((p) => {
+            const a = new Audio(`/api/sancus/agent/speak?text=${encodeURIComponent(p)}`)
+            a.preload = "auto"
+            return a
           })
-          if (!res.ok) throw new Error("voice")
-          const url = URL.createObjectURL(await res.blob())
-          if ((phaseRef.current as Phase) === "off") return // voice mode may have been exited meanwhile
-          await new Promise<void>((resolve) => {
-            const a = new Audio(url)
-            audioRef.current = a
-            a.onended = () => resolve()
-            a.onerror = () => resolve()
-            a.onpause = () => resolve()
-            void a.play().catch(() => resolve())
-          })
-          URL.revokeObjectURL(url)
-          return
-        } catch {
-          /* fall back to the browser voice */
+          let playedAny = false
+          for (const a of audios) {
+            if (gen !== speakGen.current) break // interrupted or voice mode exited
+            const ok = await new Promise<boolean>((resolve) => {
+              audioRef.current = a
+              let started = false
+              a.onplaying = () => {
+                started = true
+              }
+              a.onended = () => resolve(true)
+              a.onpause = () => resolve(true)
+              a.onerror = () => resolve(started)
+              void a.play().catch(() => resolve(false))
+            })
+            playedAny ||= ok
+            if (!ok && !playedAny) break
+          }
+          audios.forEach((a) => a.removeAttribute("src"))
+          if (playedAny) return
         }
       }
       await speakBrowser(text)
@@ -227,14 +319,19 @@ export function AgentConsole() {
     [eleven]
   )
 
-  /** Queue speech so lines never talk over each other. */
+  /**
+   * Queue speech so lines never talk over each other. `interrupt` (used for the actual answer)
+   * cuts off whatever is playing or queued, so a progress line never delays the reply.
+   */
   const say = useCallback(
-    (text: string) => {
-      const next = speakChain.current.then(() => speakOnce(forSpeech(text)))
+    (text: string, opts: { interrupt?: boolean } = {}) => {
+      if (opts.interrupt) stopSpeaking()
+      const gen = speakGen.current
+      const next = speakChain.current.then(() => (gen === speakGen.current ? speakOnce(forSpeech(text)) : undefined))
       speakChain.current = next.catch(() => {})
       return next
     },
-    [speakOnce]
+    [speakOnce, stopSpeaking]
   )
 
   // ---------- the agent ----------
@@ -242,7 +339,7 @@ export function AgentConsole() {
   const ask = useCallback(
     async (text: string, spoken = false) => {
       const content = text.trim()
-      if (!content) return
+      if (!content || paused) return
       const next: Turn[] = [...turnsRef.current, { role: "user", content, spoken }]
       turnsRef.current = next
       setTurns(next)
@@ -275,7 +372,7 @@ export function AgentConsole() {
         if ((done.steps ?? []).some((s) => s.costLabel)) window.dispatchEvent(new Event(CHANGED))
         if (voice) {
           setPhaseBoth("speaking")
-          await say(done.reply)
+          await say(done.reply, { interrupt: true }) // the answer cuts off any progress line
           if (phaseRef.current === "speaking") listenRef.current()
         }
       } catch (e) {
@@ -289,7 +386,7 @@ export function AgentConsole() {
         if (!spoken) setDraft(content)
         if (voice) {
           setPhaseBoth("speaking")
-          await say(`Sorry, ${msg}`)
+          await say(`Sorry, ${msg}`, { interrupt: true })
           if (phaseRef.current === "speaking") listenRef.current()
         }
       } finally {
@@ -297,7 +394,7 @@ export function AgentConsole() {
         setLiveSteps([])
       }
     },
-    [say]
+    [paused, say]
   )
 
   const confirm = useCallback(async (p: Proposal): Promise<string> => {
@@ -348,6 +445,7 @@ export function AgentConsole() {
   const handleUtterance = useCallback(
     async (text: string) => {
       setInterim("")
+      if (paused) return
       if (EXIT_RE.test(text)) return exitVoice()
       const waiting = waitingProposal()
       if (waiting && CONFIRM_RE.test(text.trim())) {
@@ -355,7 +453,7 @@ export function AgentConsole() {
         setPhaseBoth("thinking")
         const outcome = await confirm(waiting)
         setPhaseBoth("speaking")
-        await say(outcome)
+        await say(outcome, { interrupt: true })
         if (phaseRef.current === "speaking") listenRef.current()
         return
       }
@@ -363,13 +461,13 @@ export function AgentConsole() {
         setTurns((prev) => [...prev, { role: "user", content: text, spoken: true }])
         setOutcomes((o) => ({ ...o, [waiting.id]: { state: "dismissed", text: "Cancelled." } }))
         setPhaseBoth("speaking")
-        await say("Okay, I won't do that.")
+        await say("Okay, I won't do that.", { interrupt: true })
         if (phaseRef.current === "speaking") listenRef.current()
         return
       }
       await ask(text, true)
     },
-    [ask, confirm, exitVoice, say, waitingProposal]
+    [ask, confirm, exitVoice, paused, say, waitingProposal]
   )
 
   const listen = useCallback(() => {
@@ -417,11 +515,18 @@ export function AgentConsole() {
   }, [listen])
 
   useEffect(() => () => exitVoice(), [exitVoice])
+  useEffect(() => {
+    if (!paused) return
+    const timer = window.setTimeout(() => exitVoice(), 0)
+    return () => window.clearTimeout(timer)
+  }, [paused, exitVoice])
 
   async function enterVoice() {
+    if (paused) return
     setVoiceNote(recognitionCtor() ? null : "This browser can't listen (use Chrome or Edge). You can still type, and replies will be spoken.")
     setPhaseBoth("speaking")
-    await say(turnsRef.current.length ? "I'm listening." : "Hi, I'm listening. What should I do?")
+    void prefetchPhrases() // record progress lines now so they play instantly later
+    await say(turnsRef.current.length ? VOICE_GREETINGS[1]! : VOICE_GREETINGS[0]!)
     if (phaseRef.current !== "off") {
       if (recognitionCtor()) listenRef.current()
       else setPhaseBoth("paused")
@@ -455,190 +560,248 @@ export function AgentConsole() {
   }
 
   const voiceOn = phase !== "off"
-  const orbLabel = { off: "", listening: "Listening… tap to pause", thinking: "Working on it…", speaking: "Speaking… tap to interrupt", paused: "Paused · tap to listen" }[phase]
+  const phaseLabel = { off: "", listening: "Listening", thinking: "Working", speaking: "Speaking", paused: "Paused" }[phase]
+  const recentVoice = turns.slice(-4)
+
+  function clearChat() {
+    setTurns([])
+    turnsRef.current = []
+    setOutcomes({})
+    setError(null)
+  }
+
+  function switchToChat() {
+    if (voiceOn) exitVoice()
+  }
+
+  function switchToVoice() {
+    if (!voiceOn) void enterVoice()
+  }
 
   return (
-    <section className="tile s7 r2" aria-labelledby="ask">
-      <div className="tile-head">
-        <h2 className="tile-title" id="ask">
-          Ask Sancus to do it
-        </h2>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            type="button"
-            className={`sx-btn sx-btn--sm ${voiceOn ? "sx-btn--primary" : "sx-btn--secondary"}`}
-            aria-pressed={voiceOn}
-            onClick={() => (voiceOn ? exitVoice() : void enterVoice())}
-            disabled={status?.aiConfigured === false}
-          >
-            {voiceOn ? "Exit voice mode" : "🎙 Voice mode"}
+    <section className="ag" aria-label="Ask Sancus">
+      <div className="ag-top">
+        <div className="ag-seg" role="group" aria-label="Mode">
+          <button type="button" aria-pressed={!voiceOn} onClick={switchToChat}>
+            <IconChat />
+            Chat
           </button>
-          <button
-            type="button"
-            className="sx-btn sx-btn--quiet sx-btn--sm"
-            onClick={() => {
-              setTurns([])
-              turnsRef.current = []
-              setOutcomes({})
-              setError(null)
-            }}
-            disabled={busy}
-          >
-            New chat
+          <button type="button" aria-pressed={voiceOn} onClick={switchToVoice} disabled={status?.aiConfigured === false || paused}>
+            <IconMic />
+            Voice
           </button>
         </div>
+        <button type="button" className="sx-btn sx-btn--quiet" onClick={clearChat} disabled={busy}>
+          New chat
+        </button>
       </div>
 
-      {voiceOn ? (
-        <div style={{ display: "grid", justifyItems: "center", gap: 8, padding: "12px 0" }} aria-live="polite">
-          <button
-            type="button"
-            onClick={onOrb}
-            disabled={phase === "thinking"}
-            aria-label={orbLabel}
-            style={{
-              width: 88,
-              height: 88,
-              borderRadius: "50%",
-              border: "none",
-              cursor: phase === "thinking" ? "default" : "pointer",
-              fontSize: 34,
-              color: "#fff",
-              background: phase === "listening" ? "var(--accent, #1f7a4d)" : phase === "speaking" ? "#3b6fd8" : phase === "thinking" ? "#8a8f98" : "#5c6470",
-              boxShadow: phase === "listening" ? "0 0 0 10px color-mix(in srgb, var(--accent, #1f7a4d) 22%, transparent)" : "0 4px 14px rgba(0,0,0,.18)",
-              transition: "box-shadow .3s, background .3s",
-            }}
-          >
-            {phase === "speaking" ? "🔊" : phase === "thinking" ? "…" : "🎙"}
+      <div className={`ag-pane pane-chat${!voiceOn ? " is-on" : ""}`}>
+        <div ref={logRef} className="ag-thread" role="log" aria-live="polite">
+          {turns.length === 0 ? <div className="empty">Ask about payments, spending or bills.</div> : null}
+
+          {turns.map((t, i) =>
+            t.role === "user" ? (
+              <div key={i} className="ag-me">
+                {t.content}
+              </div>
+            ) : (
+              <div key={i} className="ag-us">
+                <span className="ag-av">
+                  <IconStar />
+                </span>
+                <div className="ag-body">
+                  {t.steps.length ? <StepList steps={t.steps} title="What it did" /> : null}
+                  <span style={{ whiteSpace: "pre-wrap" }}>{t.content}</span>
+                  {t.proposals.map((p) => {
+                    const o = outcomes[p.id]
+                    return (
+                      <div key={p.id} className="ag-card">
+                        <b>{p.title}</b>
+                        {p.lines.map((l) => (
+                          <div className="kv" key={l.label}>
+                            <span className="body-s">{l.label}</span>
+                            <span className="body-s">{l.value}</span>
+                          </div>
+                        ))}
+                        {p.note ? <span className="body-s muted">{p.note}</span> : null}
+                        {o?.state === "done" || o?.state === "dismissed" ? (
+                          <span className="body-s" role="status">
+                            {o.state === "done" ? "✓ " : ""}
+                            {o.text}
+                          </span>
+                        ) : (
+                          <div className="ag-acts">
+                            <button type="button" className="sx-btn sx-btn--primary sx-btn--sm" onClick={() => void confirm(p)} disabled={paused || o?.state === "running"}>
+                              {o?.state === "running" ? "Working…" : "Confirm"}
+                            </button>
+                            <span className="body-s muted">Nothing is sent until you confirm</span>
+                            {o?.state === "error" ? (
+                              <span className="body-s" role="alert" style={{ color: "var(--failed)" }}>
+                                {o.text}
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ),
+          )}
+
+          {busy ? (
+            <div className="ag-us">
+              <span className="ag-av">
+                <IconStar />
+              </span>
+              <div className="ag-body">
+                <StepList steps={liveSteps} title="Working on it" running />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {paused || status?.aiConfigured === false || error ? (
+          <div className="ag-status">
+            {paused ? (
+              <span className="body-s" role="status">
+                Agent is paused. Resume from the Payments agent card below to send messages or use voice.
+              </span>
+            ) : null}
+            {status?.aiConfigured === false ? (
+              <span className="body-s" role="alert">
+                The agent needs an Anthropic API key: add <code>ANTHROPIC_API_KEY</code> to <code>.env.local</code> and restart the app.
+              </span>
+            ) : null}
+            {error ? (
+              <span className="body-s" role="alert" style={{ color: "var(--failed)" }}>
+                {error}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {turns.length === 0 ? (
+          <div className="ag-sugg" role="group" aria-label="Try one">
+            {SUGGESTIONS.map((s) => (
+              <button key={s} type="button" className="chip" onClick={() => void ask(s)} disabled={busy || paused || status?.aiConfigured === false}>
+                {s}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <form className="ag-comp" onSubmit={submit}>
+          <label style={{ flex: 1, display: "flex" }}>
+            <span className="vh">Message</span>
+            <input
+              id="agent-input"
+              placeholder="Ask about payments, spending or bills"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              disabled={busy || paused}
+            />
+          </label>
+          <button type="button" className="ag-rb" aria-label="Switch to voice" onClick={switchToVoice} disabled={status?.aiConfigured === false || paused}>
+            <IconMic />
           </button>
-          <span className="body-s muted">{orbLabel}</span>
-          {interim ? <span className="body-s" style={{ fontStyle: "italic" }}>“{interim}”</span> : null}
-          <span className="body-s muted">
-            Voice: {eleven ? "ElevenLabs" : "browser"} · say “confirm” or “cancel” for a waiting card · “exit voice” to stop
+          <button type="submit" className="ag-rb ag-rb--go" aria-label="Send" disabled={busy || paused || !draft.trim()}>
+            <IconSend />
+          </button>
+        </form>
+      </div>
+
+      <div className={`ag-pane pane-voice${voiceOn ? " is-on" : ""}`}>
+        <div className="ag-vc">
+          <span className="ag-live">
+            <i aria-hidden="true" />
+            {phaseLabel}
+            {eleven ? " · ElevenLabs" : ""}
           </span>
+          <div className="ag-orb" data-phase={phase}>
+            <button type="button" onClick={onOrb} disabled={phase === "thinking"} aria-label={phase === "paused" ? "Resume listening" : phase === "speaking" ? "Interrupt" : "Pause listening"}>
+              <IconMicLg />
+            </button>
+          </div>
+          {interim ? (
+            <span className="body-s" style={{ fontStyle: "italic" }}>
+              “{interim}”
+            </span>
+          ) : null}
           {voiceNote ? (
             <span className="body-s" role="alert">
               {voiceNote}
             </span>
           ) : null}
+          <div className="ag-vctl">
+            <button type="button" className="ag-cb" aria-label={phase === "paused" ? "Resume" : "Pause"} onClick={onOrb} disabled={phase === "thinking"}>
+              <IconMic />
+            </button>
+            <button type="button" className="ag-cb ag-cb--end" onClick={exitVoice}>
+              <IconEnd />
+              End
+            </button>
+            <button type="button" className="ag-cb" aria-label="Switch to chat" onClick={switchToChat}>
+              <IconChat />
+            </button>
+          </div>
         </div>
-      ) : null}
-
-      <div ref={logRef} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", maxHeight: voiceOn ? 360 : 520 }} role="log" aria-live="polite">
-        {turns.length === 0 && !voiceOn ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <span className="body-s muted">
-              Say what you want done. The agent checks balances, gets live quotes, buys route data for a cent when it helps, and
-              prepares payments for you to confirm. Or press Voice mode and just talk.
-            </span>
-            <div className="filters" role="group" aria-label="Try one">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" className="chip" onClick={() => void ask(s)} disabled={busy || status?.aiConfigured === false}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+        {recentVoice.length ? (
+          <ol className="ag-vturns" aria-label="Voice transcript">
+            {recentVoice.map((t, i) => (
+              <li key={i} className={i === recentVoice.length - 1 && t.role === "user" ? "now" : undefined}>
+                <span className="sx-label">{t.role === "user" ? "You" : "Sancus"}</span>
+                <span>{t.role === "user" ? t.content : t.content}</span>
+              </li>
+            ))}
+          </ol>
         ) : null}
-
-        {turns.map((t, i) =>
-          t.role === "user" ? (
-            <span key={i} className="bubble bubble--me">
-              {t.spoken ? "🎙 " : ""}
-              {t.content}
-            </span>
-          ) : (
-            <div key={i} className="bubble bubble--us" style={{ display: "grid", gap: 10 }}>
-              {t.steps.length ? <StepList steps={t.steps} /> : null}
-              <span style={{ whiteSpace: "pre-wrap" }}>{t.content}</span>
-              {t.proposals.map((p) => {
-                const o = outcomes[p.id]
-                return (
-                  <div key={p.id} style={{ display: "grid", gap: 6, padding: 12, border: "1px solid var(--line)", borderRadius: 10 }}>
-                    <span className="body-strong">{p.title}</span>
-                    {p.lines.map((l) => (
-                      <div className="kv" key={l.label}>
-                        <span className="body-s">{l.label}</span>
-                        <span className="body-s">{l.value}</span>
-                      </div>
-                    ))}
-                    {p.note ? <span className="body-s muted">{p.note}</span> : null}
-                    {o?.state === "done" || o?.state === "dismissed" ? (
-                      <span className="body-s" role="status">
-                        {o.state === "done" ? "✓ " : ""}
-                        {o.text}
-                      </span>
-                    ) : (
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <button type="button" className="sx-btn sx-btn--primary sx-btn--sm" onClick={() => void confirm(p)} disabled={o?.state === "running"}>
-                          {o?.state === "running" ? "Working…" : "Confirm"}
-                        </button>
-                        <span className="body-s muted">Nothing happens until you confirm.</span>
-                        {o?.state === "error" ? (
-                          <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>
-                            {o.text}
-                          </span>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          ),
-        )}
-        {busy ? (
-          <div className="bubble bubble--us" style={{ display: "grid", gap: 6 }}>
-            {liveSteps.length ? <StepList steps={liveSteps} /> : null}
-            <span className="body-s muted">Working on it…</span>
-          </div>
-        ) : null}
+        <div className="ag-vnote">
+          <span className="body-s muted">Payments still need a tap to confirm · say “confirm”, “cancel”, or “exit voice”</span>
+        </div>
       </div>
-
-      {status?.aiConfigured === false ? (
-        <span className="body-s" role="alert">
-          The agent needs an Anthropic API key: add <code>ANTHROPIC_API_KEY</code> to <code>.env.local</code> and restart the app.
-        </span>
-      ) : null}
-      {error ? (
-        <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>
-          {error}
-        </span>
-      ) : null}
-
-      <form className="tile-foot" style={{ flexWrap: "nowrap" }} onSubmit={submit}>
-        <label style={{ flex: 1 }}>
-          <span className="vh">What do you want done?</span>
-          <input
-            id="agent-input"
-            className="sx-field__input"
-            placeholder={voiceOn ? "Or type here" : "e.g. Pay Tan Logistics S$120 by PayNow"}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            disabled={busy}
-          />
-        </label>
-        <button type="submit" className="sx-btn sx-btn--primary" disabled={busy || !draft.trim()}>
-          {busy ? "Working…" : "Go"}
-        </button>
-      </form>
-      <span className="body-s muted">Payments, collections and limit changes always wait for your Confirm.</span>
     </section>
   )
 }
 
-function StepList({ steps }: { steps: Step[] }) {
+function StepList({ steps, title, running = false }: { steps: Step[]; title: string; running?: boolean }) {
+  if (!steps.length && !running) return null
   return (
-    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }} aria-label="What the agent did">
-      {steps.map((s, j) => (
-        <li key={j} className="body-s muted" style={{ display: "flex", gap: 8, justifyContent: "space-between" }}>
-          <span>
-            {s.ok ? "✓" : "✗"} {s.label}
+    <div className="ag-flow" role="status" aria-label={title}>
+      <div className="ag-flow-h">
+        <b>{title}</b>
+        {running ? (
+          <span className="ag-live">
+            <i aria-hidden="true" />
+            Working
           </span>
-          {s.costLabel ? <span className="sx-pill sx-pill--pending">x402 · {s.costLabel}</span> : null}
-        </li>
-      ))}
-    </ol>
+        ) : null}
+      </div>
+      <ol className="ag-flow-steps">
+        {steps.map((s, j) => (
+          <li key={j} className={s.ok ? "ok" : "todo"}>
+            <span className="ag-dot">{s.ok ? <IconCheck /> : null}</span>
+            <span className="ag-st">
+              {s.label}
+              {s.costLabel ? <small>x402 · {s.costLabel}</small> : null}
+            </span>
+            <span className="ag-tm" />
+          </li>
+        ))}
+        {running ? (
+          <li className="run">
+            <span className="ag-dot" />
+            <span className="ag-st">Working on it</span>
+            <span className="ag-tm">…</span>
+          </li>
+        ) : null}
+      </ol>
+      <div className="ag-flow-f">
+        <span className="body-s muted">Nothing is sent until you confirm</span>
+      </div>
+    </div>
   )
 }
 
@@ -698,10 +861,10 @@ export function AgentActivity() {
     <section className="tile s12" aria-labelledby="ap">
       <div className="tile-head">
         <h2 className="tile-title" id="ap">
-          Agent activity
+          Agent payments
         </h2>
         <Link href="/activity" className="sx-btn sx-btn--quiet">
-          All activity
+          See all
         </Link>
       </div>
       {actions.length ? (
