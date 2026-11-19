@@ -45,7 +45,7 @@ export const GET = withAuth(async (req, { user, supabase }) => {
   const ids = visibleNodes.map((node) => node.id as string).filter((id) => access.get(id)?.canSee)
   await Promise.all(
     visibleNodes
-      .filter((node) => node.parent_id !== null && access.get(node.id as string)?.canSee)
+      .filter((node) => access.get(node.id as string)?.canSee)
       .map((node) => ensureCompanyReceiveAccount(db, node))
   )
   const wallets = await withBalances(await listCompanyWallets(supabase, ids))
