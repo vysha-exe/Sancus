@@ -93,6 +93,86 @@
 .home-network__metric > span { font: 400 48px/1 var(--font-serif); font-variant-numeric: tabular-nums; }
 .home-network__metric small { color: var(--ink-muted); font-size: 13px; }
 .home-network__rows { display: grid; gap: 10px; }
+
+/* Treasury: one capital overview, one allocation workspace, and one secondary
+   account rail. Actions use progressive disclosure so holdings stay scannable. */
+.treasury-page { gap: 24px; }
+.treasury-grid { gap: 18px; align-items: start; }
+.treasury-overview { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(250px, .85fr) minmax(0, 2fr); gap: 32px; align-items: end; padding: 26px 28px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-100); }
+.treasury-overview__lead { display: grid; gap: 8px; }
+.treasury-overview__lead .amount-xl { font-size: clamp(44px, 5vw, 68px); }
+.treasury-overview__balances { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.treasury-overview__balances > div { display: grid; gap: 4px; min-width: 0; padding: 14px 16px; border-right: 1px solid var(--line); }
+.treasury-overview__balances > div:first-child { padding-left: 0; }
+.treasury-overview__balances > div:last-child { padding-right: 0; border-right: 0; }
+.treasury-overview__balances span { color: var(--ink-muted); font: 500 11px/16px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.treasury-overview__balances strong { overflow: hidden; text-overflow: ellipsis; color: var(--ink); font: 400 23px/1.15 var(--font-serif); font-variant-numeric: tabular-nums; }
+.treasury-overview__balances small { color: var(--ink-muted); font-size: 12px; line-height: 17px; }
+.treasury-workspace, .treasury-rail, .treasury-activity { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-100); }
+.treasury-workspace { display: grid; gap: 0; }
+.treasury-rail { display: grid; gap: 20px; padding: 22px; }
+.treasury-activity { padding: 22px; }
+.treasury-section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 22px 24px; }
+.treasury-rail > .treasury-section-head, .treasury-activity > .treasury-section-head { padding: 0 0 16px; }
+.treasury-section-head > div { display: grid; gap: 4px; }
+.treasury-section-head h2 { margin: 0; font: 400 25px/1.15 var(--font-serif); letter-spacing: -.01em; }
+.treasury-position-group { border-top: 1px solid var(--line); }
+.treasury-position-group__head { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 18px 24px 12px; }
+.treasury-position-group__head h3 { margin: 0 0 3px; font: 600 15px/20px var(--font-sans); }
+.treasury-position-group__head p { margin: 0; color: var(--ink-muted); font-size: 13px; line-height: 18px; }
+.treasury-position { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(110px, .8fr) minmax(90px, .6fr); align-items: center; gap: 16px; min-height: 58px; padding: 10px 24px; border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent); }
+.treasury-position > div { display: grid; min-width: 0; }
+.treasury-position strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 14px/19px var(--font-sans); }
+.treasury-position span { color: var(--ink-muted); font-size: 13px; line-height: 18px; }
+.treasury-position > .data { color: var(--ink); text-align: right; }
+.treasury-position--empty { display: block; min-height: 0; color: var(--ink-muted); font-size: 13px; }
+.treasury-action { border-top: 1px solid var(--line); }
+.treasury-action summary { min-height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; color: var(--accent); font: 600 13px/18px var(--font-sans); cursor: pointer; list-style: none; }
+.treasury-action summary::-webkit-details-marker { display: none; }
+.treasury-action summary::after { content: "+"; color: var(--ink-muted); font: 400 19px/1 var(--font-sans); }
+.treasury-action[open] summary::after { content: "−"; }
+.treasury-action summary:hover { background: var(--surface-200); }
+.treasury-action__body { display: grid; grid-template-columns: minmax(150px, 1fr) auto; gap: 12px 16px; padding: 16px 24px 22px; background: var(--surface-000); border-top: 1px solid var(--line); }
+.treasury-field { display: grid; gap: 6px; }
+.treasury-field label { color: var(--ink-muted); font: 500 11px/14px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.treasury-field small { color: var(--ink-muted); font-size: 12px; line-height: 17px; }
+.treasury-action__body .form-row { align-items: end; }
+.treasury-account { display: grid; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.treasury-account > div { display: flex; justify-content: space-between; gap: 16px; }
+.treasury-account span { color: var(--ink-muted); font-size: 13px; }
+.treasury-account strong { max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.treasury-readiness { display: grid; gap: 10px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.treasury-readiness > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; }
+.treasury-gateway { display: grid; gap: 14px; }
+.treasury-gateway > div:first-child { display: grid; gap: 4px; }
+.treasury-gateway > div:first-child strong { font: 400 34px/1.1 var(--font-serif); font-variant-numeric: tabular-nums; }
+.treasury-gateway > div:first-child small { color: var(--ink-muted); font-size: 12px; line-height: 17px; }
+.treasury-activity__row { display: grid; grid-template-columns: 100px minmax(0, 1fr) minmax(110px, auto) auto; align-items: center; gap: 14px; min-height: 64px; border-top: 1px solid var(--line); }
+.treasury-activity__row > span:nth-child(2) { display: grid; min-width: 0; }
+.treasury-activity__row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 14px/19px var(--font-sans); }
+.treasury-activity__row small { color: var(--ink-muted); font-size: 12px; line-height: 17px; }
+
+@media (max-width: 1000px) {
+  .treasury-overview { grid-template-columns: 1fr; align-items: start; }
+  .treasury-overview__balances { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .treasury-overview__balances > div:nth-child(2) { border-right: 0; }
+  .treasury-overview__balances > div:first-child, .treasury-overview__balances > div:nth-child(2) { border-bottom: 1px solid var(--line); }
+}
+
+@media (max-width: 720px) {
+  .treasury-overview { padding: 22px 20px; gap: 24px; }
+  .treasury-overview__balances { grid-template-columns: 1fr; }
+  .treasury-overview__balances > div { padding: 12px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+  .treasury-overview__balances > div:last-child { border-bottom: 0; }
+  .treasury-position { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding-inline: 18px; }
+  .treasury-position > span:nth-child(2) { grid-column: 1; }
+  .treasury-position > .data { grid-column: 2; grid-row: 1 / span 2; }
+  .treasury-action__body { grid-template-columns: 1fr; padding-inline: 18px; }
+  .treasury-activity__row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 12px 0; }
+  .treasury-activity__row > .sx-label { grid-column: 1; }
+  .treasury-activity__row > span:nth-child(2) { grid-column: 1; }
+  .treasury-activity__row > .data, .treasury-activity__row > .sx-pill { grid-column: 2; }
+}
 .spending-method-tile { position: relative; }
 .card-delete { position: absolute; top: 8px; right: 8px; z-index: 2; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(228, 234, 230, .28); border-radius: var(--radius-full); background: rgba(6, 20, 29, .76); color: #E4EAE6; font: 400 22px/1 var(--font-sans); cursor: pointer; backdrop-filter: blur(8px); transition: background-color .15s ease-out, transform .15s ease-out; }
 .card-delete:hover { background: var(--failed); transform: scale(1.04); }
