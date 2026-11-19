@@ -137,6 +137,8 @@
 .treasury-field label { color: var(--ink-muted); font: 500 11px/14px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
 .treasury-field small { color: var(--ink-muted); font-size: 12px; line-height: 17px; }
 .treasury-action__body .form-row { align-items: end; }
+.treasury-action__buttons { grid-column: 1 / -1; justify-content: flex-end; padding-top: 2px; }
+.treasury-action select.sx-input { padding-right: 38px; }
 .treasury-account { display: grid; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 .treasury-account > div { display: flex; justify-content: space-between; gap: 16px; }
 .treasury-account span { color: var(--ink-muted); font-size: 13px; }

@@ -49,7 +49,8 @@ export default function TreasuryPage() {
   const [tradeAmount, setTradeAmount] = useState("25")
   const [sellAmount, setSellAmount] = useState("0.1")
   const [yieldAmount, setYieldAmount] = useState("5")
-  const [gatewayAmount, setGatewayAmount] = useState("3")
+  const [yieldVaultAddress, setYieldVaultAddress] = useState("")
+  const [gatewayAmount, setGatewayAmount] = useState("")
 
   const load = useCallback(async () => {
     const response = await fetch("/api/sancus/treasury/root", { cache: "no-store" })
@@ -71,6 +72,7 @@ export default function TreasuryPage() {
     const body = await response.json()
     if (!response.ok) throw new Error(body.userMessage || body.error || "Could not load yield vaults")
     setYieldData(body)
+    setYieldVaultAddress((current) => current && body.vaults.some((vault: YieldData["vaults"][number]) => vault.vaultAddress === current) ? current : body.vaults[0]?.vaultAddress ?? "")
   }, [])
 
   const refresh = useCallback(async () => {
@@ -140,6 +142,10 @@ export default function TreasuryPage() {
   const yieldValueMinor = BigInt(Math.round((yieldData?.positions.reduce((total, position) => total + Number(position.currentBalance || 0), 0) ?? 0) * 10 ** USDC_DECIMALS))
   const liquidValueMinor = data ? BigInt(data.assets.usdcMinor) + BigInt(data.assets.gatewayUsdcMinor) + BigInt(data.assets.fUsdcMinor) : 0n
   const totalValueMinor = liquidValueMinor + equityValueMinor + yieldValueMinor
+  const selectedYieldVault = yieldData?.vaults.find((vault) => vault.vaultAddress === yieldVaultAddress)
+  const gatewayAvailable = data ? Number(data.assets.gatewayUsdcMinor) / 10 ** USDC_DECIMALS : 0
+  const gatewayTransferAmount = Number(gatewayAmount)
+  const gatewayTransferValid = gatewayTransferAmount > 2.01 && gatewayTransferAmount <= gatewayAvailable
 
   return (
     <div className="page treasury-page">
@@ -198,8 +204,9 @@ export default function TreasuryPage() {
             <details className="treasury-action">
               <summary>Manage yield position</summary>
               <div className="treasury-action__body">
-                <div className="treasury-field"><label htmlFor="yield-amount">Canonical USDC amount</label><input id="yield-amount" className="sx-input" inputMode="decimal" value={yieldAmount} disabled={!yieldData?.vaults[0]} onChange={(event) => setYieldAmount(event.target.value)} /></div>
-                <div className="form-row"><button className="sx-btn sx-btn--secondary" type="button" disabled={busy !== null || !yieldData?.vaults[0]} onClick={() => yieldData?.vaults[0] && void post("/api/sancus/treasury/yield", { action: "DEPOSIT", vaultAddress: yieldData.vaults[0].vaultAddress, amount: yieldAmount }, "yield")}>{busy === "yield" ? "Depositing…" : "Deposit"}</button><button className="sx-btn sx-btn--quiet" type="button" disabled={busy !== null || !yieldData?.vaults[0]} onClick={() => yieldData?.vaults[0] && void post("/api/sancus/treasury/yield", { action: "WITHDRAW", vaultAddress: yieldData.vaults[0].vaultAddress, amount: yieldAmount }, "withdraw-yield")}>{busy === "withdraw-yield" ? "Withdrawing…" : "Withdraw"}</button></div>
+                <div className="treasury-field"><label htmlFor="yield-vault">Vault</label><select id="yield-vault" className="sx-input" value={yieldVaultAddress} disabled={!yieldData?.vaults.length} onChange={(event) => setYieldVaultAddress(event.target.value)}>{yieldData?.vaults.map((vault) => <option key={vault.vaultAddress} value={vault.vaultAddress}>{vault.name} · {Number(vault.currentApy).toFixed(2)}% APY</option>)}</select></div>
+                <div className="treasury-field"><label htmlFor="yield-amount">Canonical USDC amount</label><input id="yield-amount" className="sx-input" inputMode="decimal" value={yieldAmount} disabled={!selectedYieldVault} onChange={(event) => setYieldAmount(event.target.value)} /></div>
+                <div className="form-row treasury-action__buttons"><button className="sx-btn sx-btn--secondary" type="button" disabled={busy !== null || !selectedYieldVault} onClick={() => selectedYieldVault && void post("/api/sancus/treasury/yield", { action: "DEPOSIT", vaultAddress: selectedYieldVault.vaultAddress, amount: yieldAmount }, "yield")}>{busy === "yield" ? "Depositing…" : "Deposit"}</button><button className="sx-btn sx-btn--quiet" type="button" disabled={busy !== null || !selectedYieldVault} onClick={() => selectedYieldVault && void post("/api/sancus/treasury/yield", { action: "WITHDRAW", vaultAddress: selectedYieldVault.vaultAddress, amount: yieldAmount }, "withdraw-yield")}>{busy === "withdraw-yield" ? "Withdrawing…" : "Withdraw"}</button></div>
               </div>
             </details>
           </div>
@@ -218,8 +225,8 @@ export default function TreasuryPage() {
 
           <div className="treasury-gateway">
             <div><span className="sx-label">Agent revenue</span><strong>{data ? usd(data.assets.gatewayUsdcMinor) : "—"}</strong><small>{data?.earnings.calls ?? 0} paid requests · {data ? usd(data.earnings.totalMinor) : "—"} recorded</small></div>
-            <div className="treasury-field"><label htmlFor="gateway-amount">USDC to move</label><input id="gateway-amount" className="sx-input" inputMode="decimal" value={gatewayAmount} disabled={!data?.wallet} onChange={(event) => setGatewayAmount(event.target.value)} /><small>Minimum 2.01 USDC covers the Gateway fee.</small></div>
-            <button className="sx-btn sx-btn--secondary" type="button" disabled={busy !== null || !data?.wallet || Number(gatewayAmount) <= 2.01} onClick={() => void post("/api/sancus/treasury/gateway", { amount: gatewayAmount }, "gateway")}>{busy === "gateway" ? "Moving…" : "Move to treasury"}</button>
+            <div className="treasury-field"><label htmlFor="gateway-amount">USDC to move</label><input id="gateway-amount" className="sx-input" inputMode="decimal" placeholder="0.00" value={gatewayAmount} disabled={!data?.wallet || gatewayAvailable <= 2.01} onChange={(event) => setGatewayAmount(event.target.value)} /><small>{gatewayAvailable <= 2.01 ? "Revenue becomes movable after it covers the 2.01 USDC Gateway fee." : `${usd(data?.assets.gatewayUsdcMinor ?? "0")} available · fee included.`}</small></div>
+            <button className="sx-btn sx-btn--secondary" type="button" disabled={busy !== null || !data?.wallet || !gatewayTransferValid} onClick={() => void post("/api/sancus/treasury/gateway", { amount: gatewayAmount }, "gateway")}>{busy === "gateway" ? "Moving…" : "Move to treasury"}</button>
           </div>
           {data?.warnings.map((warning) => <span className="body-s muted" key={warning}>{warning}</span>)}
         </aside>
