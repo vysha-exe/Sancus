@@ -5,11 +5,20 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { getLiveRates, toRateMicro } from "./live-fx"
 import { BALANCE_SINCE, simulatedSpend, type SimSpendInputs } from "./treasury"
 import { isTerminal, type PayoutStatus } from "./payout-provider"
+import { serviceClient } from "./service-client"
+import { loadRootTransferPositions } from "./transfer-positions"
 
-/** companyId → USDC minor units to take off that node's onchain balance (payments in progress). */
+/**
+ * companyId → USDC minor units to take off that node's onchain balance (payments in progress).
+ * Negative for HQ when internal transfers brought in more than they sent out (see transfer-positions).
+ */
 export async function loadNodeDeductions(supabase: SupabaseClient, companyIds: string[]): Promise<Map<string, bigint>> {
   const out = new Map<string, bigint>()
   if (!companyIds.length) return out
+  const { data: nodes } = await supabase.from("sancus_companies").select("id, parent_id").in("id", companyIds)
+  const rootIds = (nodes ?? []).filter((node) => node.parent_id === null).map((node) => node.id as string)
+  // Service client: a transfer's other end may be a branch this user can't read through RLS.
+  const positions = await loadRootTransferPositions(serviceClient() ?? supabase, rootIds)
   const [payouts, ach, pix, live] = await Promise.all([
     supabase.from("sancus_payouts").select("company_id, status, usdc_amount_minor, tx_hash, simulated, created_at").in("company_id", companyIds),
     supabase.from("sancus_ach_payments").select("company_id, status, usdc_amount_minor, funded_onchain, created_at").in("company_id", companyIds).gte("created_at", BALANCE_SINCE),
@@ -32,8 +41,8 @@ export async function loadNodeDeductions(supabase: SupabaseClient, companyIds: s
     // Same rule as Available on the dashboard: only payments still in progress are taken off.
     // Settled simulated spends aren't (that USDC never left onchain).
     void spentMinor
-    const total = heldMinor + reserved
-    if (total > 0n) out.set(id, total)
+    const total = heldMinor + reserved - (positions.get(id) ?? 0n)
+    if (total !== 0n) out.set(id, total)
   }
   return out
 }
