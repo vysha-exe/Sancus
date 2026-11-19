@@ -14,6 +14,8 @@ import {
   type XenditCreateInput,
   type XenditPayout,
 } from "@/lib/sancus/rails/xendit"
+import { fundLocalRailOnchain } from "@/lib/sancus/local-rail-onchain"
+import { workspaceCompany } from "@/lib/sancus/workspace-server"
 import { maskAccountNumber, toXenditPayoutDto, type XenditPayoutRow } from "@/lib/sancus/xendit-payouts"
 
 const railConfig = {
@@ -87,7 +89,24 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     description: parsed.data.description,
   }
 
+  const companyId = await workspaceCompany(req, supabase, user.id)
   try {
+    // Arc fUSDC leg first so Process shows an explorer hash for every account type.
+    let onchain: Awaited<ReturnType<typeof fundLocalRailOnchain>> = null
+    try {
+      onchain = await fundLocalRailOnchain(supabase, user.id, companyId, {
+        currency: c.currency,
+        amountMinor,
+        decimals: c.decimals,
+        ref: reference,
+      })
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "On-chain settlement failed" },
+        { status: 502 }
+      )
+    }
+
     let payout: XenditPayout
     if (!isXenditConfigured()) {
       payout = simulatedXenditPayout(request)
@@ -122,6 +141,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       provider_payload: sanitizeXenditPayout(payout),
       simulated: true,
       settled_at: status === "SETTLED" ? payout.updated || new Date().toISOString() : null,
+      tx_hash: onchain?.txHash ?? null,
+      source_address: onchain?.sourceAddress ?? null,
+      settlement_address: onchain?.settlementAddress ?? null,
     }).select("*").single()
     if (error || !data) {
       return NextResponse.json({ error: "The payout was created, but it could not be saved" }, { status: 500 })

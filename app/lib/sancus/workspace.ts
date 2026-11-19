@@ -48,10 +48,10 @@ export function setWorkspaceCompany(companyId: string) {
 
 /** Map sign-up country names to ISO codes for company create. */
 export const SIGNUP_COUNTRY_TO_CODE: Record<string, string> = {
+  "United States": "US",
   Brazil: "BR",
   Mexico: "MX",
   Indonesia: "ID",
   Thailand: "TH",
   Portugal: "PT",
-  "United States": "US",
 }

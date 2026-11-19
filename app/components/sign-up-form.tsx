@@ -44,6 +44,7 @@ export function SignUpForm({
   const [repeatPassword, setRepeatPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [checkEmail, setCheckEmail] = useState(false);
   const router = useRouter();
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -59,20 +60,25 @@ export function SignUpForm({
     }
 
     try {
-      // Step 1: Sign up the user
+      const confirmUrl = `${window.location.origin}/auth/confirm?next=${encodeURIComponent("/home")}`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/home`,
+          emailRedirectTo: confirmUrl,
         },
       });
       
       if (error) throw error;
+
+      // Email confirmation required: no session until the user clicks the link.
+      if (data.user && !data.session) {
+        setCheckEmail(true);
+        toast.success("Check your email to confirm your account.");
+        return;
+      }
       
-      // Step 2: Create the account's Arc treasury wallets automatically
-      // (Treasury + Settlement + Gateway signer). Modified by the Sancus team, 2026.
-      // If email confirmation is on there's no session yet; the app provisions on first visit instead.
+      // Immediate session (confirmations off): provision wallets and go home.
       if (data.user && data.session) {
         toast.loading("Setting up your account...", { id: "wallet-setup" });
 
@@ -95,7 +101,6 @@ export function SignUpForm({
               }
             );
           } else {
-            // Wallet creation failed but signup succeeded
             toast.warning(
               "Account created, but wallet setup encountered an issue. You can set them up later.",
               { 
@@ -106,7 +111,6 @@ export function SignUpForm({
             console.error("Gateway wallet creation error:", walletData);
           }
         } catch (walletError) {
-          // Wallet creation failed but signup succeeded
           toast.warning(
             "Account created successfully! Wallet setup will complete shortly.",
             { 
@@ -135,6 +139,22 @@ export function SignUpForm({
           <CardDescription>Create a new account</CardDescription>
         </CardHeader>
         <CardContent>
+          {checkEmail ? (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-muted-foreground">
+                We sent a confirmation link to <strong>{email}</strong>. Open it to finish creating your account.
+              </p>
+              <Button type="button" variant="outline" className="w-full" onClick={() => setCheckEmail(false)}>
+                Use a different email
+              </Button>
+              <div className="text-center text-sm">
+                Already confirmed?{" "}
+                <Link href="/auth/login" className="underline underline-offset-4">
+                  Login
+                </Link>
+              </div>
+            </div>
+          ) : (
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
@@ -184,6 +204,7 @@ export function SignUpForm({
               </Link>
             </div>
           </form>
+          )}
         </CardContent>
       </Card>
     </div>

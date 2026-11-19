@@ -7,6 +7,8 @@ import { requirePermission } from "@/lib/sancus/accounts-server"
 import { useDemoFallback } from "@/lib/sancus/demo-fallback"
 import { maskPixKey, toPixPaymentDto } from "@/lib/sancus/local-rails"
 import { mapPayZuStatus, payPix, simulatedPixPayment } from "@/lib/sancus/rails/payzu"
+import { faceUsdcEnabled } from "@/lib/sancus/face-usdc"
+import { fundLocalRailOnchain } from "@/lib/sancus/local-rail-onchain"
 import { releaseSpendFunds, reserveSpendFunds, settleSpendFunds } from "@/lib/sancus/spend-funding"
 import { workspaceCompany } from "@/lib/sancus/workspace-server"
 
@@ -58,20 +60,42 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     : companyId
       ? (await supabase.from("sancus_receive_accounts").select("id").eq("company_id", companyId).maybeSingle()).data?.id ?? null
       : null
-  if (!fundingAccountId) {
+  // Personal / individual can settle Pix via fUSDC without a branch bank account.
+  if (!fundingAccountId && !faceUsdcEnabled()) {
     return NextResponse.json({ error: "This payment needs a branch operating bank account" }, { status: 409 })
   }
   try {
     const reference = `sancus-pay-${randomUUID()}`
-    const requestedMinor = BigInt(Math.round(parsed.data.amountBrl * 100))
+    const amountBrlMinor = Math.round(parsed.data.amountBrl * 100)
+    const requestedMinor = BigInt(amountBrlMinor)
     const holdRef = `pix:${reference}`
-    await reserveSpendFunds(supabase, {
-      accountId: fundingAccountId,
-      amountMinor: requestedMinor,
-      ref: holdRef,
-      sourceType: "PIX_PAYMENT",
-      sourceId: reference,
-    })
+
+    let onchain: Awaited<ReturnType<typeof fundLocalRailOnchain>> = null
+    try {
+      onchain = await fundLocalRailOnchain(supabase, user.id, companyId, {
+        currency: "BRL",
+        amountMinor: amountBrlMinor,
+        decimals: 2,
+        ref: reference,
+      })
+    } catch (error) {
+      if (!fundingAccountId) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : "On-chain settlement failed" },
+          { status: 502 }
+        )
+      }
+    }
+
+    if (fundingAccountId) {
+      await reserveSpendFunds(supabase, {
+        accountId: fundingAccountId,
+        amountMinor: requestedMinor,
+        ref: holdRef,
+        sourceType: "PIX_PAYMENT",
+        sourceId: reference,
+      })
+    }
     const simulated = useDemoFallback("PAYZU_SANDBOX_TOKEN")
     let transaction
     try {
@@ -79,14 +103,16 @@ export const POST = withAuth(async (req, { user, supabase }) => {
         ? simulatedPixPayment({ amountBrl: parsed.data.amountBrl, reference })
         : await payPix({ ...parsed.data, reference })
     } catch (error) {
-      await releaseSpendFunds(supabase, { ref: holdRef })
+      if (fundingAccountId) await releaseSpendFunds(supabase, { ref: holdRef })
       throw error
     }
     const providerStatus = transaction.status || "PENDING"
     const status = mapPayZuStatus(providerStatus)
     const terminalFailure = ["FAILED", "EXPIRED", "CANCELLED"].includes(status)
-    if (status === "SETTLED") await settleSpendFunds(supabase, { ref: holdRef })
-    else if (terminalFailure) await releaseSpendFunds(supabase, { ref: holdRef })
+    if (fundingAccountId) {
+      if (status === "SETTLED") await settleSpendFunds(supabase, { ref: holdRef })
+      else if (terminalFailure) await releaseSpendFunds(supabase, { ref: holdRef })
+    }
     const { data, error } = await supabase.from("sancus_pix_payments").insert({
       user_id: user.id, company_id: companyId, idempotency_key: key, purpose: parsed.data.purpose,
       funding_account_id: fundingAccountId,
@@ -94,13 +120,19 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       employee_id: spendingMethod?.employee_id || parsed.data.employeeId || null,
       employee_name: spendingMethod?.employee_name || parsed.data.employeeName || null,
       recipient_name: parsed.data.recipientName, pix_method: parsed.data.qrPayload ? "QR" : "KEY",
-      pix_key_masked: maskPixKey(parsed.data.pixKey), amount_brl_minor: Math.round(parsed.data.amountBrl * 100),
+      pix_key_masked: maskPixKey(parsed.data.pixKey), amount_brl_minor: amountBrlMinor,
       provider_transaction_id: transaction.id, provider_status: providerStatus, status,
       end_to_end_id: transaction.endToEndId || null,
       provider_payload: transaction, simulated,
       settled_at: status === "SETTLED" ? transaction.paidAt || new Date().toISOString() : null,
-      funding_status: status === "SETTLED" ? "SETTLED" : terminalFailure ? "RELEASED" : "HELD",
-      funding_amount_minor: requestedMinor.toString(), funding_hold_tx_hash: holdRef,
+      funding_status: fundingAccountId
+        ? (status === "SETTLED" ? "SETTLED" : terminalFailure ? "RELEASED" : "HELD")
+        : (onchain ? "SETTLED" : null),
+      funding_amount_minor: requestedMinor.toString(),
+      funding_hold_tx_hash: fundingAccountId ? holdRef : onchain?.txHash ?? null,
+      tx_hash: onchain?.txHash ?? null,
+      source_address: onchain?.sourceAddress ?? null,
+      settlement_address: onchain?.settlementAddress ?? null,
     }).select("*").single()
     if (error || !data) return NextResponse.json({ error: "Pix payment was created, but Sancus could not save it" }, { status: 500 })
     return NextResponse.json({ payment: toPixPaymentDto(data) }, { status: 201 })
