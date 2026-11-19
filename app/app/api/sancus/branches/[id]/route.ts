@@ -5,6 +5,7 @@ import { listCompanyWallets, withBalances } from "@/lib/sancus/company-wallets"
 import { toInternalTransferDto, type InternalTransferRow } from "@/lib/sancus/internal-transfers"
 import { toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
 import { serviceClient } from "@/lib/sancus/service-client"
+import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
 
 export const GET = withAuth(async (req, { user, supabase }) => {
   const companyId = idFromPath(req.nextUrl.pathname, "branches")
@@ -42,6 +43,11 @@ export const GET = withAuth(async (req, { user, supabase }) => {
     )
   )
   const ids = visibleNodes.map((node) => node.id as string).filter((id) => access.get(id)?.canSee)
+  await Promise.all(
+    visibleNodes
+      .filter((node) => node.parent_id !== null && access.get(node.id as string)?.canSee)
+      .map((node) => ensureCompanyReceiveAccount(db, node))
+  )
   const wallets = await withBalances(await listCompanyWallets(supabase, ids))
   const [{ data: bankAccounts }, { data: bankHolds }] = await Promise.all([
     supabase.from("sancus_receive_accounts").select("id, company_id, bank_name, account_type, account_number, currency, balance_minor").in("company_id", ids),

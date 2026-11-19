@@ -12,6 +12,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { createCompanyForUser, createError, getCompany, resolveNodeInput } from "@/lib/sancus/company-api"
 import { createCompanyWallet } from "@/lib/sancus/company-wallets"
+import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
 
 const createSchema = z.object({
   type: z.enum(["BRANCH", "EMPLOYEE"]),
@@ -114,6 +115,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const secret = process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
   if (!url || !secret) return NextResponse.json({ error: "Creating logins needs SUPABASE_SECRET_KEY on the server" }, { status: 503 })
+  const admin = createAdminClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } })
 
   // 1. Where the login goes. A new country branch can be created first by the
   // global admin, either for its first employee or its branch admin.
@@ -134,6 +136,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     }
     const company = await getCompany(supabase, created.id)
     if (!company) return NextResponse.json({ error: "Branch created but couldn't be read back" }, { status: 500 })
+    await ensureCompanyReceiveAccount(admin, company)
     const wallet = await createCompanyWallet(supabase, user.id, company, `${company.name} wallet`)
     branchCreated = { id: company.id, name: company.name, walletAddress: wallet.ok ? wallet.wallet.address : null }
     companyId = company.id
@@ -149,7 +152,6 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
 
   // 2. The login itself (confirmed, with a one-time temporary password).
-  const admin = createAdminClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } })
   const tempPassword = `Sx-${randomBytes(9).toString("base64url")}`
   const created = await admin.auth.admin.createUser({
     email: input.email,

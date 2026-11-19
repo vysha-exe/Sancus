@@ -4,6 +4,8 @@ import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { createCompanyForUser, createError, getCompany, idFromPath, nodeSchema, resolveNodeInput } from "@/lib/sancus/company-api"
 import { createCompanyWallet } from "@/lib/sancus/company-wallets"
+import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
+import { serviceClient } from "@/lib/sancus/service-client"
 
 export const POST = withAuth(async (req, { user, supabase }) => {
   const parentId = idFromPath(req.nextUrl.pathname, "companies")
@@ -29,10 +31,11 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const company = await getCompany(supabase, created.id)
   if (!company) return NextResponse.json({ error: "Created, but couldn't read it back" }, { status: 500 })
 
-  // The branch's wallet is created automatically with it, named after the branch.
+  // Every operating branch gets its bank account and separate wallet immediately.
+  const bankAccount = await ensureCompanyReceiveAccount(serviceClient() ?? supabase, company)
   const wallet = await createCompanyWallet(supabase, user.id, company, `${company.name} wallet`)
   return NextResponse.json(
-    { company, wallet: wallet.ok ? wallet.wallet : null, walletError: wallet.ok ? null : wallet.error },
+    { company, bankAccountId: bankAccount.id, wallet: wallet.ok ? wallet.wallet : null, walletError: wallet.ok ? null : wallet.error },
     { status: 201 }
   )
 })
