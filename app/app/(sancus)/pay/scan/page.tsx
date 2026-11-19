@@ -1,29 +1,32 @@
 "use client"
 
-// Pay › Scan a QR: point the camera at (or upload) a PayNow, PromptPay, Pix or QRIS code and pay it
-// from your USDC balance. PayNow goes out through the live Singapore payout rail, PromptPay through
+// Pay › Scan a QR: point the camera at (or upload) a PromptPay, Pix or QRIS code and pay it
+// from your USDC balance at the live rate. PromptPay goes out through
 // Xendit, Pix through Payzu. Built for personal accounts; business accounts can use it too.
 import jsQR from "jsqr"
 import Link from "next/link"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   buildPaymentQr,
   parsePaymentQr,
-  payNowMobile,
   promptPayMobileDigits,
   SCHEME_LABEL,
   type ParsedQr,
 } from "@/lib/sancus/emv-qr"
 
 const SAMPLES: { label: string; payload: string }[] = [
-  { label: "Kopi & Co. (PayNow, S$6.80)", payload: buildPaymentQr({ scheme: "PAYNOW", proxy: "202012345A", proxyKind: "UEN", name: "KOPI AND CO", city: "SINGAPORE", amount: "6.80" }) },
-  { label: "Hawker stall (PayNow, any amount)", payload: buildPaymentQr({ scheme: "PAYNOW", proxy: "+6591234567", proxyKind: "MOBILE", name: "AH HOCK CHICKEN RICE", city: "SINGAPORE" }) },
+  { label: "Street food stall (PromptPay, any amount)", payload: buildPaymentQr({ scheme: "PROMPTPAY", proxy: "0066898765432", proxyKind: "MOBILE", name: "JAY FAI NOODLES", city: "BANGKOK" }) },
   { label: "Bangkok café (PromptPay, ฿250)", payload: buildPaymentQr({ scheme: "PROMPTPAY", proxy: "0066812345678", proxyKind: "MOBILE", name: "BANGKOK CAFE", city: "BANGKOK", amount: "250.00" }) },
   { label: "São Paulo shop (Pix, R$50)", payload: buildPaymentQr({ scheme: "PIX", proxy: "loja@example.com", name: "LOJA PAULISTA", city: "SAO PAULO", amount: "50.00" }) },
   { label: "Jakarta warung (QRIS)", payload: buildPaymentQr({ scheme: "QRIS", proxy: "ID1020012345678", name: "WARUNG BU SRI", city: "JAKARTA", amount: "45000" }) },
 ]
 
-const SYMBOL: Record<string, string> = { SGD: "S$", THB: "฿", BRL: "R$", IDR: "Rp", USD: "$" }
+const SYMBOL: Record<string, string> = { THB: "฿", BRL: "R$", IDR: "Rp", USD: "$" }
+/** The pay-quote rail and currency for a scanned code we can pay. */
+const QUOTE_RAIL: Partial<Record<ParsedQr["scheme"], { rail: string; currency: string }>> = {
+  PROMPTPAY: { rail: "PromptPay", currency: "THB" },
+  PIX: { rail: "Pix", currency: "BRL" },
+}
 
 function mask(v: string) {
   return v.length <= 4 ? v : `${"•".repeat(4)}${v.slice(-4)}`
@@ -119,32 +122,22 @@ export default function PayScanPage() {
     img.src = url
   }
 
-  const payNowRecipient = useMemo(() => {
-    if (qr?.scheme !== "PAYNOW" || !qr.proxy) return null
-    return {
-      name: qr.merchantName ?? "PayNow payee",
-      proxyType: qr.proxy.type === "UEN" ? ("UEN" as const) : ("MOBILE" as const),
-      proxyValue: qr.proxy.type === "UEN" ? qr.proxy.value : payNowMobile(qr.proxy.value),
-    }
-  }, [qr])
-
-  // Live quote for PayNow: what the payee gets in SGD vs what leaves your balance in USDC.
+  // Live quote: what the payee gets locally vs what leaves your balance in USDC.
   useEffect(() => {
     const t = setTimeout(async () => {
       setQuote(null)
-      if (!payNowRecipient || !(Number(amount) > 0)) return
-      const res = await fetch("/api/sancus/payouts/quote", {
+      const q = qr ? QUOTE_RAIL[qr.scheme] : undefined
+      if (!q || !(Number(amount) > 0)) return
+      const res = await fetch("/api/sancus/pay/quote", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ recipient: payNowRecipient, sgdAmount: Number(amount).toFixed(2) }),
+        body: JSON.stringify({ rail: q.rail, currency: q.currency, side: "receive", amount: String(Number(amount)) }),
       }).catch(() => null)
       const body = await res?.json().catch(() => null)
-      const usdc = body?.quote?.usdcAmountMinor
-      const rate = body?.quote?.clientRate as string | undefined
-      if (usdc) setQuote(`$${(Number(usdc) / 1e6).toFixed(2)} USDC from your balance${rate ? ` · 1 USDC = S$${rate}` : ""}`)
+      if (body?.quote) setQuote(`${body.quote.sendLabel} USDC from your balance · ${body.quote.rateLabel}`)
     }, 350)
     return () => clearTimeout(t)
-  }, [payNowRecipient, amount])
+  }, [qr, amount])
 
   async function pay() {
     if (!qr) return
@@ -155,13 +148,7 @@ export default function PayScanPage() {
     setResult(null)
     try {
       let res: Response
-      if (qr.scheme === "PAYNOW" && payNowRecipient) {
-        res = await fetch("/api/sancus/payouts", {
-          method: "POST",
-          headers: { "content-type": "application/json", "Idempotency-Key": key.current },
-          body: JSON.stringify({ recipient: payNowRecipient, sgdAmount: value.toFixed(2), reference: "QR payment" }),
-        })
-      } else if (qr.scheme === "PROMPTPAY" && qr.proxy) {
+      if (qr.scheme === "PROMPTPAY" && qr.proxy) {
         const digits = qr.proxy.type === "MOBILE" ? promptPayMobileDigits(qr.proxy.value) : qr.proxy.value.replace(/\D/g, "")
         res = await fetch("/api/sancus/xendit/payouts", {
           method: "POST",
@@ -184,7 +171,10 @@ export default function PayScanPage() {
           body: JSON.stringify({ purpose: "SUPPLIER_PAYMENT", recipientName: qr.merchantName ?? "Pix payee", amountBrl: value, qrPayload: qr.raw, description: "QR payment" }),
         })
       } else {
-        setResult({ ok: false, message: "Paying QRIS codes isn't available yet. Ask the merchant for bank details instead." })
+        setResult({
+          ok: false,
+          message: qr.scheme === "PAYNOW" ? "Singapore PayNow codes aren't supported." : "Paying QRIS codes isn't available yet. Ask the merchant for bank details instead.",
+        })
         return
       }
       const body = await res.json().catch(() => ({}))
@@ -215,7 +205,7 @@ export default function PayScanPage() {
           </Link>
           <h1 className="sx-h heading-2">Scan a QR code</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            PayNow, PromptPay and Pix codes are paid from your USDC balance, converted at the live rate.
+            PromptPay and Pix codes are paid from your USDC balance, converted at the live rate.
           </p>
         </div>
       </header>

@@ -59,7 +59,7 @@ async function ensureDemoCompany(admin: SupabaseClient, adminId: string): Promis
   if (!rootId) {
     const { data: root, error } = await admin
       .from("sancus_companies")
-      .insert({ parent_id: null, root_id: "00000000-0000-0000-0000-000000000000", name: "Lion City Trading", country: "SG", base_currency: "SGD", created_by: adminId })
+      .insert({ parent_id: null, root_id: "00000000-0000-0000-0000-000000000000", name: "Lion City Trading", country: "US", base_currency: "USD", created_by: adminId })
       .select("id")
       .single()
     if (error || !root) throw new Error(`couldn't create demo company: ${error?.message}`)

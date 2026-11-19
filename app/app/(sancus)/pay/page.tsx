@@ -49,7 +49,7 @@ function QuickPay() {
     <div className="grid" style={{ marginBottom: 16 }}>
       <Link href="/pay/scan" className="tile s6" style={{ display: "grid", gap: 6, textDecoration: "none", color: "inherit" }}>
         <span className="body-strong">Scan a QR code</span>
-        <span className="body-s muted">PayNow, PromptPay, QRIS or Pix: point your camera or upload a picture of the code.</span>
+        <span className="body-s muted">PromptPay or Pix: point your camera or upload a picture of the code.</span>
       </Link>
       <Link href="/pay/us-bank" className="tile s6" style={{ display: "grid", gap: 6, textDecoration: "none", color: "inherit" }}>
         <span className="body-strong">Enter bank details</span>

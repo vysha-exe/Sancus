@@ -2,7 +2,7 @@
 
 // The agent button at the top right of every page. Tapping it starts a voice call: Sancus greets
 // you and listens. Ask about the page you're on ("what am I looking at?", "why is this pending?")
-// and it answers aloud; tell it to do something ("pay Mei Lin twenty dollars", "take me to scan a
+// and it answers aloud; tell it to do something ("pay Siam Packaging five thousand baht", "take me to scan a
 // QR") and it opens the right page and prepares the action as a card you confirm by tapping or
 // saying "confirm". Everything said is kept in the Agents chat (shared conversation).
 import Link from "next/link"
@@ -16,6 +16,7 @@ import {
   currentPageContext,
   dismissProposal,
   EXIT_RE,
+  openProposals,
   ProposalCard,
   recognitionCtor,
   setChat,
@@ -220,7 +221,8 @@ export function AgentCallButton() {
   const label = { off: "", listening: "Listening", thinking: "Working", speaking: "Speaking", paused: "Paused" }[phase]
   const last = [...turns].reverse().find((t) => t.role === "assistant")
   const lastUser = [...turns].reverse().find((t) => t.role === "user")
-  const cards = last && last.role === "assistant" ? last.proposals.filter((p) => outcomes[p.id]?.state !== "dismissed") : []
+  // Every card still waiting, even if a later question or a page change came after it.
+  const cards = openProposals({ turns, outcomes })
 
   return (
     <>

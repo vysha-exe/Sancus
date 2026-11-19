@@ -77,11 +77,11 @@ export const approvalsTotalLabel = "$2,620.05"
 
 /** Jayden's (personal account) recent payments, shown until he has live ones. */
 export const personalLatestPayments: Payment[] = [
-  { id: "p-kopi", who: "Kopi & Co. Tiong Bahru · PayNow QR", amount: "−$5.05", meta: "S$6.80 · Today, 8:12", rail: "PayNow", status: "Settled", simulated: true, href: "/activity" },
-  { id: "p-mei-lin", who: "Mei Lin Tan", amount: "−$18.20", meta: "S$24.50 · Yesterday · dinner split", rail: "PayNow", status: "Settled", simulated: true, href: "/activity" },
-  { id: "p-mum", who: "Grace Lee (Mum)", amount: "−$222.80", meta: "S$300.00 · Nov 15 · allowance", rail: "PayNow", status: "Settled", simulated: true, href: "/activity" },
+  { id: "p-somchai", who: "Baan Somchai Guesthouse · PromptPay QR", amount: "−$34.40", meta: "฿ 1,200.00 · Today, 8:12", rail: "PromptPay", status: "Settled", simulated: true, href: "/activity" },
+  { id: "p-bia", who: "Bia Oliveira", amount: "−$27.70", meta: "R$ 150,00 · Yesterday · concert tickets", rail: "Pix", status: "Settled", simulated: true, href: "/activity" },
+  { id: "p-mum", who: "Mum (Bangkok)", amount: "−$286.50", meta: "฿ 10,000.00 · Nov 15 · allowance", rail: "PromptPay", status: "Settled", simulated: true, href: "/activity" },
   { id: "p-bluebird", who: "Bluebird Studio LLC", amount: "−$120.00", meta: "$120.00 by ACH · Nov 12", rail: "ACH", status: "Settled", simulated: true, href: "/activity" },
-  { id: "p-ryan", who: "From Ryan Ong", amount: "+$44.55", meta: "S$60.00 · Nov 10 · concert tickets", rail: "PayNow", status: "Settled", simulated: true, href: "/activity" },
+  { id: "p-dimas", who: "From Dimas Pratama", amount: "+$46.90", meta: "Rp 750.000 · Nov 10 · birthday", rail: "BI-FAST", status: "Settled", simulated: true, href: "/activity" },
 ]
 
 export const latestPayments: Payment[] = [
@@ -273,43 +273,66 @@ export type Recipient = {
   history: string
   /** Who sees this payee: business accounts (default) or a personal account like Jayden's. */
   audience?: "business" | "personal"
-  /**
-   * Set for recipients the backend can actually pay (Singapore PayNow / FAST).
-   * The Pay flow then uses live quotes and creates a real payout
-   * (POST /api/sancus/payouts). Recipients without it stay demo-only.
-   */
-  payout?: {
-    proxyType: "MOBILE" | "UEN" | "BANK"
-    proxyValue: string
-    bankCode?: string
-    currency: "SGD"
+  /** Thailand (PromptPay) / Indonesia (BI-FAST) payees paid live through Xendit. */
+  xendit?: {
+    rail: "PROMPTPAY" | "BI_FAST"
+    accountNumber: string
+    routingType: "SWIFT" | "MOBILE_NO" | "NATIONAL_ID"
+    routingValue: string
+    currency: "THB" | "IDR"
   }
+  /** Brazil payees paid live by Pix. */
+  pixKey?: string
 }
 
 export const recipients: Recipient[] = [
   {
-    id: "lim-trading",
-    name: "Lim Trading Pte Ltd",
-    initials: "LT",
+    id: "sumber-makmur",
+    name: "PT Sumber Makmur",
+    initials: "SM",
     kind: "Supplier",
-    detail: "Supplier · Singapore · PayNow UEN 201912345K",
-    rail: "PayNow",
-    country: "Singapore",
-    methods: [{ rail: "PayNow", detail: "UEN 201912345K", tag: "Default" }],
-    history: "Live: paid through the Sancus backend",
-    payout: { proxyType: "UEN", proxyValue: "201912345K", currency: "SGD" },
+    detail: "Supplier · Indonesia · BI-FAST BCA •••• 4421",
+    rail: "BI-FAST",
+    country: "Jakarta, Indonesia",
+    methods: [{ rail: "BI-FAST", detail: "BCA •••• 4421", tag: "Default" }],
+    history: "Live: paid through Xendit",
+    xendit: { rail: "BI_FAST", accountNumber: "1234564421", routingType: "SWIFT", routingValue: "CENAIDJA", currency: "IDR" },
   },
   {
-    id: "tan-logistics",
-    name: "Tan Logistics",
-    initials: "TL",
+    id: "siam-packaging",
+    name: "Siam Packaging Co.",
+    initials: "SP",
+    kind: "Supplier",
+    detail: "Supplier · Thailand · PromptPay •••• 5678",
+    rail: "PromptPay",
+    country: "Bangkok, Thailand",
+    methods: [{ rail: "PromptPay", detail: "mobile •••• 5678", tag: "Default" }],
+    history: "Live: paid through Xendit",
+    xendit: { rail: "PROMPTPAY", accountNumber: "66812345678", routingType: "MOBILE_NO", routingValue: "66812345678", currency: "THB" },
+  },
+  {
+    id: "wayan-putra",
+    name: "Wayan Putra",
+    initials: "WP",
     kind: "Contractor",
-    detail: "Contractor · Singapore · PayNow mobile •••• 4567",
-    rail: "PayNow",
-    country: "Singapore",
-    methods: [{ rail: "PayNow", detail: "mobile •••• 4567", tag: "Default" }],
-    history: "Live: paid through the Sancus backend",
-    payout: { proxyType: "MOBILE", proxyValue: "+6591234567", currency: "SGD" },
+    detail: "Contractor · Indonesia · BI-FAST BNI •••• 7310",
+    rail: "BI-FAST",
+    country: "Bali, Indonesia",
+    methods: [{ rail: "BI-FAST", detail: "BNI •••• 7310", tag: "Default" }],
+    history: "Last paid Rp 1.500.000 · Friday",
+    xendit: { rail: "BI_FAST", accountNumber: "0987657310", routingType: "SWIFT", routingValue: "BNINIDJA", currency: "IDR" },
+  },
+  {
+    id: "kittipong",
+    name: "Kittipong Design Studio",
+    initials: "KD",
+    kind: "Contractor",
+    detail: "Contractor · Thailand · PromptPay •••• 9012",
+    rail: "PromptPay",
+    country: "Chiang Mai, Thailand",
+    methods: [{ rail: "PromptPay", detail: "mobile •••• 9012", tag: "Default" }],
+    history: "Last paid ฿ 12,000 · Monday",
+    xendit: { rail: "PROMPTPAY", accountNumber: "66898769012", routingType: "MOBILE_NO", routingValue: "66898769012", currency: "THB" },
   },
   {
     id: "juliana",
@@ -319,11 +342,21 @@ export const recipients: Recipient[] = [
     detail: "Contractor · Brazil · Pix key ju•••@gmail.com",
     rail: "Pix",
     country: "São Paulo, Brazil",
-    methods: [
-      { rail: "Pix", detail: "ju•••@gmail.com", tag: "Default" },
-      { rail: "Wire", detail: "bank account ••• 2290", tag: "Backup" },
-    ],
+    methods: [{ rail: "Pix", detail: "ju•••@gmail.com", tag: "Default" }],
     history: "Last paid $100.80 · Today",
+    pixKey: "juliana.sandbox@example.com",
+  },
+  {
+    id: "cafe-sertao",
+    name: "Café do Sertão Ltda",
+    initials: "CS",
+    kind: "Supplier",
+    detail: "Supplier · Brazil · Pix CNPJ ••• 0001-90",
+    rail: "Pix",
+    country: "Minas Gerais, Brazil",
+    methods: [{ rail: "Pix", detail: "CNPJ ••• 0001-90", tag: "Default" }],
+    history: "Last paid R$ 4.800,00 · Nov 12",
+    pixKey: "12345678000190",
   },
   {
     id: "northwind",
@@ -348,28 +381,6 @@ export const recipients: Recipient[] = [
     history: "Last paid $1,000.00 · Friday",
   },
   {
-    id: "torrefacao",
-    name: "Torrefação Lisboa",
-    initials: "TL",
-    kind: "Roaster",
-    detail: "Roaster · Portugal · IBAN PT50 ••• 7731",
-    rail: "SEPA",
-    country: "Portugal",
-    methods: [{ rail: "SEPA", detail: "IBAN PT50 ••• 7731", tag: "Default" }],
-    history: "No payments yet",
-  },
-  {
-    id: "oaxaca",
-    name: "Café Oaxaca SA de CV",
-    initials: "CO",
-    kind: "Grower",
-    detail: "Grower · Mexico · CLABE ••• 0453",
-    rail: "SPEI",
-    country: "Mexico",
-    methods: [{ rail: "SPEI", detail: "CLABE ••• 0453", tag: "Default" }],
-    history: "No payments yet",
-  },
-  {
     id: "ana-souza",
     name: "Ana Souza",
     initials: "AS",
@@ -390,62 +401,50 @@ export const recipients: Recipient[] = [
     country: "Brazil",
     methods: [{ rail: "Pix", detail: "rafael•••@sancus.app", tag: "Default" }],
     history: "Last paid $1,200.00 · Friday",
+    pixKey: "rafael.sandbox@example.com",
   },
 ]
 
-/** Jayden's own payees (personal account): friends, family and places he pays. No suppliers. */
+/** Jayden's own payees (personal account, US-based): family and friends abroad, and places he pays. No suppliers. */
 export const personalRecipients: Recipient[] = [
   {
-    id: "p-mei-lin",
-    name: "Mei Lin Tan",
-    initials: "MT",
-    kind: "Friend",
-    detail: "Friend · Singapore · PayNow mobile •••• 5432",
-    rail: "PayNow",
-    country: "Singapore",
-    methods: [{ rail: "PayNow", detail: "mobile •••• 5432", tag: "Default" }],
-    history: "Last paid S$24.50 · dinner split",
-    audience: "personal",
-    payout: { proxyType: "MOBILE", proxyValue: "+6598765432", currency: "SGD" },
-  },
-  {
-    id: "p-ryan-ong",
-    name: "Ryan Ong",
-    initials: "RO",
-    kind: "Friend",
-    detail: "Friend · Singapore · PayNow mobile •••• 2222",
-    rail: "PayNow",
-    country: "Singapore",
-    methods: [{ rail: "PayNow", detail: "mobile •••• 2222", tag: "Default" }],
-    history: "Last paid S$60.00 · concert tickets",
-    audience: "personal",
-    payout: { proxyType: "MOBILE", proxyValue: "+6581112222", currency: "SGD" },
-  },
-  {
     id: "p-mum",
-    name: "Grace Lee (Mum)",
-    initials: "GL",
+    name: "Mum (Bangkok)",
+    initials: "MB",
     kind: "Family",
-    detail: "Family · Singapore · PayNow mobile •••• 7788",
-    rail: "PayNow",
-    country: "Singapore",
-    methods: [{ rail: "PayNow", detail: "mobile •••• 7788", tag: "Default" }],
-    history: "Monthly allowance S$300.00",
+    detail: "Family · Thailand · PromptPay •••• 7788",
+    rail: "PromptPay",
+    country: "Bangkok, Thailand",
+    methods: [{ rail: "PromptPay", detail: "mobile •••• 7788", tag: "Default" }],
+    history: "Monthly allowance ฿ 10,000",
     audience: "personal",
-    payout: { proxyType: "MOBILE", proxyValue: "+6590007788", currency: "SGD" },
+    xendit: { rail: "PROMPTPAY", accountNumber: "66890007788", routingType: "MOBILE_NO", routingValue: "66890007788", currency: "THB" },
   },
   {
-    id: "p-kopi",
-    name: "Kopi & Co. Tiong Bahru",
-    initials: "KC",
-    kind: "Shop",
-    detail: "Shop · Singapore · PayNow UEN 202012345A",
-    rail: "PayNow",
-    country: "Singapore",
-    methods: [{ rail: "PayNow", detail: "UEN 202012345A", tag: "Default" }],
-    history: "Last paid S$6.80",
+    id: "p-dimas",
+    name: "Dimas Pratama",
+    initials: "DP",
+    kind: "Family",
+    detail: "Cousin · Indonesia · BI-FAST Mandiri •••• 2210",
+    rail: "BI-FAST",
+    country: "Jakarta, Indonesia",
+    methods: [{ rail: "BI-FAST", detail: "Mandiri •••• 2210", tag: "Default" }],
+    history: "Last paid Rp 750.000 · birthday",
     audience: "personal",
-    payout: { proxyType: "UEN", proxyValue: "202012345A", currency: "SGD" },
+    xendit: { rail: "BI_FAST", accountNumber: "1310002210", routingType: "SWIFT", routingValue: "BMRIIDJA", currency: "IDR" },
+  },
+  {
+    id: "p-bia",
+    name: "Bia Oliveira",
+    initials: "BO",
+    kind: "Friend",
+    detail: "Friend · Brazil · Pix bia•••@gmail.com",
+    rail: "Pix",
+    country: "São Paulo, Brazil",
+    methods: [{ rail: "Pix", detail: "bia•••@gmail.com", tag: "Default" }],
+    history: "Last paid R$ 150,00 · concert tickets",
+    audience: "personal",
+    pixKey: "bia.sandbox@example.com",
   },
   {
     id: "p-somchai",
@@ -458,6 +457,7 @@ export const personalRecipients: Recipient[] = [
     methods: [{ rail: "PromptPay", detail: "mobile •••• 5678", tag: "Default" }],
     history: "Booked for December",
     audience: "personal",
+    xendit: { rail: "PROMPTPAY", accountNumber: "66855555678", routingType: "MOBILE_NO", routingValue: "66855555678", currency: "THB" },
   },
   {
     id: "p-bluebird",
@@ -515,7 +515,7 @@ export function getRecipient(id: string): Recipient | undefined {
   return recipients.find((r) => r.id === id) ?? personalRecipients.find((r) => r.id === id)
 }
 
-/** Singapore PayNow / FAST recipients with backend payout config. */
+/** Payees the backend can actually pay: PromptPay / BI-FAST (Xendit) and Pix. */
 export function recipientIsLive(r: Recipient): boolean {
-  return Boolean(r.payout)
+  return Boolean(r.xendit || r.pixKey)
 }

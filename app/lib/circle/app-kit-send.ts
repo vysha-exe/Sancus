@@ -183,6 +183,26 @@ export async function sendUsdcOnSameChainWithAppKit(
   input: AppKitSendInput,
   dependencies: SendDependencies = defaultDependencies
 ): Promise<AppKitSendResult> {
+  // Test mode: move Face USDC via the rail bot (burn treasury → mint recipient) instead of Circle App Kit.
+  if ((input.token ?? "USDC") === "USDC" && input.sourceBlockchain === "ARC-TESTNET") {
+    try {
+      const { faceUsdcEnabled, sendFaceUsdc } = await import("@/lib/sancus/face-usdc");
+      if (faceUsdcEnabled()) {
+        const sent = await sendFaceUsdc({
+          from: input.sourceWalletAddress as `0x${string}`,
+          to: input.recipientAddress as `0x${string}`,
+          amount: input.amount,
+          ref: `${input.sourceWalletAddress.slice(0, 10)}-${Date.now()}`,
+        });
+        return { txId: sent.txId, txHash: sent.txHash, estimatedFee: "0" };
+      }
+    } catch (error) {
+      // If face USDC path fails hard, surface it — don't silently spend real USDC.
+      const { faceUsdcEnabled } = await import("@/lib/sancus/face-usdc");
+      if (faceUsdcEnabled()) throw error;
+    }
+  }
+
   const adapter = withResolvedAddress(
     dependencies.createAdapter(),
     input.sourceWalletAddress

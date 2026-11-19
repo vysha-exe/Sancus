@@ -21,6 +21,7 @@ import {
   confirmProposal,
   dismissProposal,
   EXIT_RE,
+  openProposals,
   ProposalCard,
   recognitionCtor,
   setChat,
@@ -316,8 +317,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
   const voiceOn = phase !== "off"
   const phaseLabel = { off: "", listening: "Listening", thinking: "Working", speaking: "Speaking", paused: "Paused" }[phase]
   const recentVoice = turns.slice(-4)
-  const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant")
-  const voiceCards = lastAssistant && lastAssistant.role === "assistant" ? lastAssistant.proposals : []
+  const voiceCards = openProposals({ turns, outcomes })
 
   function clearChat() {
     clearAgentChat()

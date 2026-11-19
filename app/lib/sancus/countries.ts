@@ -2,7 +2,6 @@
 export type CountryOption = { code: string; name: string; currency: string; flag: string }
 
 export const COUNTRIES: CountryOption[] = [
-  { code: "SG", name: "Singapore", currency: "SGD", flag: "🇸🇬" },
   { code: "ID", name: "Indonesia", currency: "IDR", flag: "🇮🇩" },
   { code: "TH", name: "Thailand", currency: "THB", flag: "🇹🇭" },
   { code: "MY", name: "Malaysia", currency: "MYR", flag: "🇲🇾" },

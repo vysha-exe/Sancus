@@ -9,7 +9,7 @@ import { defaultCurrency, isPayRail, quotePay, serializePayQuote, type PayCurren
 
 const schema = z.object({
   rail: z.string().refine(isPayRail, "Unsupported rail"),
-  currency: z.enum(["USDC", "USD", "BRL", "EUR", "MXN"]).optional(),
+  currency: z.enum(["USDC", "USD", "BRL", "THB", "IDR", "EUR", "MXN"]).optional(),
   side: z.enum(["send", "receive"]),
   amount: z.string().max(24),
 })

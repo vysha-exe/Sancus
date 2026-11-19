@@ -16,7 +16,6 @@ export default function PayAmountPage() {
     setRail,
     setMemo,
     view,
-    liveQuote,
     quoteLoading,
     quoteError,
     sourceAccounts,
@@ -25,27 +24,16 @@ export default function PayAmountPage() {
     setSourceCompanyId,
   } = usePayFlow()
 
-  // Live Singapore recipients use PayNow; USDC is shown only when available.
-  const railOptions = view.live
-    ? [
-        {
-          id: "PayNow",
-          label: "PayNow",
-          meta: liveQuote ? `${view.arrival} · ${view.feeLabel} fee` : "Seconds",
-          on: true,
-        },
-        { id: "USDC", label: "USDC", meta: "Not available for this recipient", on: false },
-      ]
-    : // Other recipients: the rails they actually have, with each rail's speed and fee.
-      recipient.methods.map((m) => ({
+  // The rails this payee actually has, with each rail's speed and fee.
+  const railOptions = recipient.methods.map((m) => ({
         id: m.rail,
         label: m.rail,
         meta: isPayRail(m.rail) ? `${RAILS[m.rail].eta} · ${formatUsdc(RAILS[m.rail].feeUsdcMinor)} fee` : m.detail,
         on: isPayRail(m.rail),
       }))
 
-  // Review needs a current quote, live or not.
-  const canReview = view.live ? Boolean(liveQuote) && !quoteError : view.localLabel !== "–" && !quoteError && !quoteLoading
+  // Review needs a current quote.
+  const canReview = view.localLabel !== "–" && !quoteError && !quoteLoading
 
   return (
     <div className="page">
@@ -192,7 +180,7 @@ export default function PayAmountPage() {
           </div>
           <div className="tile-foot">
             <span className="body-s muted">
-              {view.live ? "Fixed hackathon demo rate" : "Fixed demo rate"}
+              {view.rateLabel}
             </span>
           </div>
         </aside>

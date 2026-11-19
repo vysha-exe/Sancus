@@ -26,7 +26,7 @@ const flag = (code: string) => countryByCode(code)?.flag ?? "🏳️"
 const demoTree: CompanyNode[] = (() => {
   const t = (n: number) => `2026-11-18T00:00:0${n}Z`
   const rows: CompanyRow[] = [
-    { id: "hq", parent_id: null, root_id: "hq", name: "Lion City Trading (Global)", country: "SG", base_currency: "SGD", created_at: t(0) },
+    { id: "hq", parent_id: null, root_id: "hq", name: "Lion City Trading (Global)", country: "US", base_currency: "USD", created_at: t(0) },
     { id: "id", parent_id: "hq", root_id: "hq", name: "Indonesia", country: "ID", base_currency: "IDR", created_at: t(1) },
     { id: "th", parent_id: "hq", root_id: "hq", name: "Thailand", country: "TH", base_currency: "THB", created_at: t(2) },
   ]

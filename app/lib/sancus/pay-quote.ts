@@ -1,15 +1,14 @@
-// Sancus: quotes for the pay flow's "You send / They get", for every rail except Singapore
-// (PayNow/FAST have their own live quote at /api/sancus/payouts/quote).
+// Sancus: quotes for the pay flow's "You send / They get", for every rail.
 //
 // Everything starts from USDC, the balance the business actually holds:
 //   USDC → USDC        1:1, no conversion, no fee (onchain)
 //   USDC → USD         1:1 redemption (ACH, US wire), rail fee only
-//   USDC → BRL/EUR/MXN converted at the corridor rate (Pix, SEPA, SPEI, wire abroad)
+//   USDC → BRL/THB/IDR converted at the live rate (Pix, PromptPay, BI-FAST); EUR/MXN likewise
 // Integer math only: USDC in 6-decimal minor units, local currency in its own minor units,
 // rates as local-per-USDC × 1e6. Rates are indicative (configured), like the other simulated rails.
 
-export type PayCurrency = "USDC" | "USD" | "BRL" | "EUR" | "MXN"
-export type PayRail = "USDC" | "ACH" | "Wire" | "Pix" | "SEPA" | "SPEI"
+export type PayCurrency = "USDC" | "USD" | "BRL" | "THB" | "IDR" | "EUR" | "MXN"
+export type PayRail = "USDC" | "ACH" | "Wire" | "Pix" | "PromptPay" | "BI-FAST" | "SEPA" | "SPEI"
 export type QuoteSide = "send" | "receive"
 
 const USDC_DP = 6
@@ -19,6 +18,8 @@ export const CURRENCIES: Record<PayCurrency, { symbol: string; decimals: number;
   USDC: { symbol: "", decimals: 6, rateMicro: 1_000_000n, locale: "en-US" },
   USD: { symbol: "$", decimals: 2, rateMicro: 1_000_000n, locale: "en-US" },
   BRL: { symbol: "R$ ", decimals: 2, rateMicro: 5_412_300n, locale: "pt-BR" },
+  THB: { symbol: "฿ ", decimals: 2, rateMicro: 35_000_000n, locale: "th-TH" },
+  IDR: { symbol: "Rp ", decimals: 0, rateMicro: 16_000_000_000n, locale: "id-ID" },
   EUR: { symbol: "€ ", decimals: 2, rateMicro: 921_000n, locale: "de-DE" }, // € 1.840,00
   MXN: { symbol: "MX$ ", decimals: 2, rateMicro: 17_050_000n, locale: "es-MX" },
 }
@@ -28,6 +29,8 @@ export const RAILS: Record<PayRail, { feeUsdcMinor: bigint; eta: string; currenc
   ACH: { feeUsdcMinor: 0n, eta: "1–2 days", currencies: ["USD"] },
   Wire: { feeUsdcMinor: 3_500_000n, eta: "Same or next day", currencies: ["USD", "BRL", "EUR", "MXN"] },
   Pix: { feeUsdcMinor: 800_000n, eta: "Seconds", currencies: ["BRL"] },
+  PromptPay: { feeUsdcMinor: 500_000n, eta: "Seconds", currencies: ["THB"] },
+  "BI-FAST": { feeUsdcMinor: 500_000n, eta: "Seconds", currencies: ["IDR"] },
   SEPA: { feeUsdcMinor: 800_000n, eta: "Same day", currencies: ["EUR"] },
   SPEI: { feeUsdcMinor: 800_000n, eta: "Minutes", currencies: ["MXN"] },
 }
@@ -57,7 +60,7 @@ const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b
 export function formatAmount(minor: bigint, currency: PayCurrency, maxFraction = 2): string {
   const c = CURRENCIES[currency]
   const value = Number(minor) / 10 ** c.decimals
-  const n = value.toLocaleString(c.locale, { minimumFractionDigits: 2, maximumFractionDigits: maxFraction })
+  const n = value.toLocaleString(c.locale, { minimumFractionDigits: Math.min(2, c.decimals), maximumFractionDigits: Math.min(maxFraction, Math.max(c.decimals, 2)) })
   return currency === "USDC" ? `${n} USDC` : `${c.symbol}${n}`
 }
 

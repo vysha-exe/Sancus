@@ -53,6 +53,5 @@ export const SIGNUP_COUNTRY_TO_CODE: Record<string, string> = {
   Indonesia: "ID",
   Thailand: "TH",
   Portugal: "PT",
-  Singapore: "SG",
   "United States": "US",
 }

@@ -2,18 +2,17 @@
 
 import Link from "next/link"
 import { useState, type FormEvent } from "react"
-import type { ProxyType } from "@/lib/sancus/paynow"
-import type { NewPayeeInput } from "@/lib/sancus/custom-payees"
+import { ID_BANKS, type NewPayeeInput, type PayeeMethod } from "@/lib/sancus/custom-payees"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
 import { useAccount } from "@/lib/sancus/use-account"
 
 type Kind = NewPayeeInput["kind"]
 const BUSINESS_KINDS: Kind[] = ["Supplier", "Contractor", "Team"]
 const PERSONAL_KINDS: Kind[] = ["Friend", "Family", "Business"]
-const PROXY: { id: ProxyType; label: string; placeholder: string; help: string }[] = [
-  { id: "MOBILE", label: "PayNow mobile", placeholder: "+65 9123 4567", help: "Singapore mobile registered with PayNow" },
-  { id: "UEN", label: "PayNow UEN", placeholder: "201912345K", help: "Business UEN registered with PayNow" },
-  { id: "BANK", label: "Bank account (FAST)", placeholder: "0123456789", help: "Account number at a Singapore bank" },
+const METHODS: { id: PayeeMethod; label: string; field: string; placeholder: string; help: string }[] = [
+  { id: "PROMPTPAY", label: "PromptPay · Thailand", field: "Thai mobile number", placeholder: "081 234 5678", help: "The mobile number registered with PromptPay" },
+  { id: "BI_FAST", label: "Bank · Indonesia", field: "Account number", placeholder: "1234567890", help: "Paid by BI-FAST, usually within seconds" },
+  { id: "PIX", label: "Pix · Brazil", field: "Pix key", placeholder: "email, phone, CPF/CNPJ or random key", help: "Paid by Pix, usually within seconds" },
 ]
 
 export function AddPayeeSheet({ onClose }: { onClose: () => void }) {
@@ -22,24 +21,18 @@ export function AddPayeeSheet({ onClose }: { onClose: () => void }) {
   const KINDS = account?.type === "INDIVIDUAL" ? PERSONAL_KINDS : BUSINESS_KINDS
   const [name, setName] = useState("")
   const [kind, setKind] = useState<Kind>(KINDS[0]!)
-  const [proxyType, setProxyType] = useState<ProxyType>("MOBILE")
-  const [proxyValue, setProxyValue] = useState("")
-  const [bankCode, setBankCode] = useState("")
+  const [method, setMethod] = useState<PayeeMethod>("PROMPTPAY")
+  const [value, setValue] = useState("")
+  const [bankSwift, setBankSwift] = useState<string>(ID_BANKS[0].swift)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const proxy = PROXY.find((p) => p.id === proxyType) ?? PROXY[0]!
+  const m = METHODS.find((x) => x.id === method) ?? METHODS[0]!
 
   function submit(e: FormEvent) {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const result = addPayee({
-      name,
-      kind,
-      proxyType,
-      proxyValue,
-      bankCode: proxyType === "BANK" ? bankCode : undefined,
-    })
+    const result = addPayee({ name, kind, method, value, bankSwift: method === "BI_FAST" ? bankSwift : undefined })
     setBusy(false)
     if (!result.ok) {
       setError(result.error)
@@ -67,7 +60,7 @@ export function AddPayeeSheet({ onClose }: { onClose: () => void }) {
               className="sx-field__input"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Tan Logistics"
+              placeholder="Siam Packaging Co."
               required
               autoFocus
             />
@@ -87,45 +80,32 @@ export function AddPayeeSheet({ onClose }: { onClose: () => void }) {
           <div className="sx-field">
             <span className="sx-label">How to pay them</span>
             <div className="filters" role="group" aria-label="Payment method">
-              {PROXY.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className="chip"
-                  aria-pressed={proxyType === p.id}
-                  onClick={() => setProxyType(p.id)}
-                >
-                  {p.label}
+              {METHODS.map((x) => (
+                <button key={x.id} type="button" className="chip" aria-pressed={method === x.id} onClick={() => setMethod(x.id)}>
+                  {x.label}
                 </button>
               ))}
             </div>
           </div>
 
-          <label className="sx-field">
-            <span className="sx-label">{proxy.label}</span>
-            <input
-              className="sx-field__input"
-              value={proxyValue}
-              onChange={(e) => setProxyValue(e.target.value)}
-              placeholder={proxy.placeholder}
-              required
-            />
-            <span className="sx-field__help">{proxy.help}</span>
-          </label>
-
-          {proxyType === "BANK" ? (
+          {method === "BI_FAST" ? (
             <label className="sx-field">
-              <span className="sx-label">Bank SWIFT</span>
-              <input
-                className="sx-field__input"
-                value={bankCode}
-                onChange={(e) => setBankCode(e.target.value.toUpperCase())}
-                placeholder="DBSSSGSG"
-                required
-              />
-              <span className="sx-field__help">Singapore bank SWIFT / BIC, e.g. DBSSSGSG</span>
+              <span className="sx-label">Bank</span>
+              <select className="sx-field__input" value={bankSwift} onChange={(e) => setBankSwift(e.target.value)}>
+                {ID_BANKS.map((b) => (
+                  <option key={b.swift} value={b.swift}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             </label>
           ) : null}
+
+          <label className="sx-field">
+            <span className="sx-label">{m.field}</span>
+            <input className="sx-field__input" value={value} onChange={(e) => setValue(e.target.value)} placeholder={m.placeholder} required />
+            <span className="sx-field__help">{m.help}</span>
+          </label>
 
           {error ? (
             <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>
