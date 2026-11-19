@@ -6,18 +6,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { serviceClient } from "./service-client"
 
-/** Owners/admins of the company's global account (the only accounts that can approve). */
+/**
+ * Everyone who can approve for this company: owners/admins of its global account, plus Finance
+ * members on the global account or on the company itself.
+ */
 export async function approverIds(db: SupabaseClient, companyId: string, excludeUserId?: string): Promise<string[]> {
   const { data: company } = await db.from("sancus_companies").select("root_id").eq("id", companyId).maybeSingle()
   const rootId = (company?.root_id as string | undefined) ?? companyId
   const { data } = await db
     .from("sancus_memberships")
-    .select("user_id")
-    .eq("company_id", rootId)
-    .in("role", ["OWNER", "ADMIN"])
+    .select("user_id, company_id, role")
+    .in("company_id", [...new Set([rootId, companyId])])
+    .in("role", ["OWNER", "ADMIN", "FINANCE"])
     .eq("status", "ACTIVE")
     .not("user_id", "is", null)
-  const ids = (data ?? []).map((m) => m.user_id as string).filter((id) => id !== excludeUserId)
+  const ids = (data ?? [])
+    .filter((m) => m.role === "FINANCE" || m.company_id === rootId)
+    .map((m) => m.user_id as string)
+    .filter((id) => id !== excludeUserId)
   return [...new Set(ids)]
 }
 
