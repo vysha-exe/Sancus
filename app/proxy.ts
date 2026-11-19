@@ -29,6 +29,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseReqResClient } from "@/lib/supabase/server-client";
+import { isDemoUserEmail } from "@/lib/sancus/demo-accounts";
 import { DEMO_GUEST_COOKIE, DEMO_LOGIN_PATH, isDemoLoginEnabled } from "@/lib/sancus/demo-login";
 import { SANCUS_ADMIN_COOKIE, SANCUS_EMPLOYEE_COOKIE, verifyAdminSession, verifyEmployeeSession } from "@/lib/sancus/simple-auth";
 import { hasEnvVars } from "@/lib/utils";
@@ -147,9 +148,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Authenticated users hitting login/signup get bounced to the Sancus app.
-  // Marketing site and mock /sign-in, /sign-up routes stay public.
+  // Real accounts hitting login/signup bounce into the app. Demo sessions are
+  // signed out instead — no need to remember / auto-reenter a throwaway demo.
   if (user && isAuthForm) {
+    if (isDemoUserEmail(user.email)) {
+      await supabase.auth.signOut();
+      response.cookies.delete(DEMO_GUEST_COOKIE);
+      return response;
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/home";
     return NextResponse.redirect(url);

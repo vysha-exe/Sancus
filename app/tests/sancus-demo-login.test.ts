@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { isDemoUserEmail } from "@/lib/sancus/demo-accounts"
 import { demoCredentials, isDemoLoginEnabled, safeNextPath } from "@/lib/sancus/demo-login"
 
 describe("demo login", () => {
@@ -29,5 +30,16 @@ describe("demo login", () => {
     expect(safeNextPath("//evil.example")).toBe("/home")
     expect(safeNextPath("/api/sancus/payouts")).toBe("/home")
     expect(safeNextPath(null)).toBe("/home")
+  })
+
+  it("recognises every canned demo identity email", () => {
+    const base = "demo@sancus.test"
+    expect(isDemoUserEmail("demo@sancus.test", base)).toBe(true)
+    expect(isDemoUserEmail("demo+finance@sancus.test", base)).toBe(true)
+    expect(isDemoUserEmail("demo+branch@sancus.test", base)).toBe(true)
+    expect(isDemoUserEmail("demo+employee@sancus.test", base)).toBe(true)
+    expect(isDemoUserEmail("demo+individual@sancus.test", base)).toBe(true)
+    expect(isDemoUserEmail("real.user@company.com", base)).toBe(false)
+    expect(isDemoUserEmail(null, base)).toBe(false)
   })
 })
