@@ -1,9 +1,11 @@
 "use client"
 
+import Link from "next/link"
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import { VirtualCard } from "@/components/sancus-ui/virtual-card"
 import { countryByCode } from "@/lib/sancus/countries"
 import type { XenditPayoutDto } from "@/lib/sancus/xendit-payouts"
+import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
 
 type Method = {
   id: string
@@ -67,6 +69,9 @@ export default function EmployeePage() {
   const [promptPayBusy, setPromptPayBusy] = useState(false)
   const [promptPayMessage, setPromptPayMessage] = useState<string | null>(null)
   const [promptPayPayout, setPromptPayPayout] = useState<XenditPayoutDto | null>(null)
+  // Payments this employee asked for; an admin approves or declines each one.
+  const approvals = useLiveApprovals()
+  const requests = [...approvals.waiting, ...approvals.decided].filter((a) => a.live && a.mine)
 
   const load = useCallback(async () => {
     try {
@@ -219,6 +224,7 @@ export default function EmployeePage() {
           <h1 className="sx-h heading-2">{data ? `Hi, ${data.firstName}` : "Loading…"}</h1>
           <p className="body-s muted" style={{ margin: 0 }}>{where ? `${where} · ` : ""}Use only the card and Pix access assigned to you.</p>
         </div>
+        <Link href="/pay" className="sx-btn sx-btn--primary">Request a payment</Link>
       </header>
 
       <div className="grid">
@@ -286,6 +292,16 @@ export default function EmployeePage() {
           <div className="tile-head"><h2 className="tile-title" id="employee-limits">Your limits</h2><span className="body-s muted">Set by admin</span></div>
           <div className="kv"><span>Per payment</span><span className="body-strong">{usd6(data?.limits.perPaymentMinor ?? null)}</span></div>
           <div className="kv"><span>Per day</span><span className="body-strong">{usd6(data?.limits.dailyMinor ?? null)}</span></div>
+        </section>
+
+        <section className="tile s12" aria-labelledby="employee-requests">
+          <div className="tile-head"><h2 className="tile-title" id="employee-requests">Your payment requests</h2><span className="body-s muted">An admin approves each one before money moves</span></div>
+          {approvals.loading ? <div className="empty" aria-busy="true">Loading…</div> : requests.length ? requests.slice(0, 8).map((r) => (
+            <div className="kv" key={r.id}>
+              <span><span className="sx-rail">{r.rail}</span> {r.to}<span className="body-s muted" style={{ display: "block" }}>{r.when}</span></span>
+              <span style={{ textAlign: "right" }}>{r.amountLabel}<span className="body-s muted" style={{ display: "block" }}>{r.decision === "approved" ? "Approved" : r.decision === "declined" ? "Declined" : "Waiting for an admin"}</span></span>
+            </div>
+          )) : <div className="empty">No requests yet. Use Request a payment to pay a supplier; an admin approves it.</div>}
         </section>
 
         <section className="tile s8" aria-labelledby="employee-activity">

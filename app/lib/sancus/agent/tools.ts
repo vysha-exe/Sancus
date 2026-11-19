@@ -1,19 +1,38 @@
-// Sancus agent: the tools Claude can use. Every tool calls the app's own API routes as the
+// Sancus agent tools (OpenAI chat+tools). Every tool calls the app's own API routes as the
 // signed-in person (their session cookie), so account permissions, spending policy and approvals
 // apply exactly as in the UI. Tools that would change anything only create a signed proposal;
 // the person confirms it with a click (see proposals.ts and /api/sancus/agent/execute).
 // Server only.
 
-import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod"
-import type { BetaRunnableTool } from "@anthropic-ai/sdk/lib/tools/BetaRunnableTool"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod/v4"
 import type { SancusAccount } from "@/lib/sancus/accounts"
 import { applyCompanyBalances, type CompanyBalanceSnapshot, type CompanyNode } from "@/lib/sancus/companies"
-import { recipients as demoRecipients } from "@/lib/sancus/demo-data"
+import { recipientsFor } from "@/lib/sancus/demo-data"
 import { signProposal, type Proposal, type ProposalKind } from "./proposals"
 import { payX402 } from "./x402-wallet"
 import { PROGRESS } from "./progress"
+
+export type AgentTool = {
+  name: string
+  description: string
+  schema: z.ZodType
+  run: (input: unknown) => Promise<string>
+}
+
+function defineTool<S extends z.ZodType>(opts: {
+  name: string
+  description: string
+  inputSchema: S
+  run: (input: z.infer<S>) => Promise<string>
+}): AgentTool {
+  return {
+    name: opts.name,
+    description: opts.description,
+    schema: opts.inputSchema,
+    run: async (raw) => opts.run(raw as z.infer<S>),
+  }
+}
 
 export type AgentStep = { tool: string; label: string; ok: boolean; costLabel?: string }
 
@@ -26,11 +45,16 @@ export type AgentContext = {
   companyId: string | null
   steps: AgentStep[]
   proposals: Proposal[]
+  /** Things the browser should do (e.g. open a page), in order. */
+  actions?: AgentAction[]
   /** Live events for streaming clients (voice mode speaks the "start" ones). */
   emit?: (e: AgentEvent) => void
 }
 
+export type AgentAction = { type: "navigate"; path: string; label: string }
+
 export type AgentEvent =
+  | { type: "action"; action: AgentAction }
   | { type: "start"; tool: string; progress: string }
   | { type: "step"; step: AgentStep }
   | { type: "proposal"; proposal: Proposal }
@@ -54,13 +78,16 @@ async function api<T = Record<string, unknown>>(ctx: AgentContext, path: string,
   return { status: res.status, body }
 }
 
-const sgRecipients = demoRecipients.filter((r) => r.payout)
+/** PayNow/FAST payees for this account: a personal account has its own, never business suppliers. */
+function sgFor(ctx: AgentContext) {
+  return recipientsFor(ctx.account.type === "INDIVIDUAL").filter((r) => r.payout)
+}
 
 type AchRecipient = { id: string; name: string; bankName: string; accountMasked: string; accountType: string }
 
 async function findRecipient(ctx: AgentContext, id: string) {
   if (id.startsWith("sg:")) {
-    const r = sgRecipients.find((x) => x.id === id.slice(3))
+    const r = sgFor(ctx).find((x) => x.id === id.slice(3))
     return r ? ({ kind: "paynow", r } as const) : null
   }
   if (id.startsWith("ach:")) {
@@ -93,13 +120,83 @@ function step<I>(ctx: AgentContext, tool: string, label: (input: I) => string, r
   }
 }
 
-// Each tool has its own input type; the runner takes a mixed list.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyTool = BetaRunnableTool<any>
+/** Employees: their own cards, spending methods, limits and what they've spent. No money movement. */
+function employeeTools(ctx: AgentContext): AgentTool[] {
+  return [
+    defineTool({
+      name: "my_spending",
+      description:
+        "This employee's company and branch, per-payment and daily limits, cards and spending methods (with monthly limit and amount used). Use for any question about their card, limits or spending.",
+      inputSchema: z.object({}),
+      run: step(ctx, "my_spending", () => "Checked your card and limits", async () => {
+        type Method = { type: string; label: string; currency: string; monthlyLimitMinor: string; usedMinor?: string; status: string; lastFour?: string | null }
+        const { status, body } = await api<{
+          company?: { name: string; country: string; role: string } | null
+          limits?: { perPaymentMinor: string | null; dailyMinor: string | null }
+          methods?: Method[]
+          error?: string
+        }>(ctx, "/api/sancus/accounts/me/employee")
+        if (status !== 200) return "Couldn't load your spending: " + (body.error ?? String(status))
+        const money = (minor: string | null | undefined, cur: string) =>
+          minor == null ? "none" : (Number(minor) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " " + cur
+        const lim = body.limits
+        return [
+          body.company ? "Works at " + body.company.name + " (" + body.company.country + ") as " + body.company.role.toLowerCase() + "." : "No company.",
+          "Limits: per payment " + (lim?.perPaymentMinor ? usd6(lim.perPaymentMinor) : "none") + ", per day " + (lim?.dailyMinor ? usd6(lim.dailyMinor) : "none") + ".",
+          ...(body.methods ?? []).map(
+            (m) =>
+              "- " + m.label + " (" + m.type + (m.lastFour ? " •••• " + m.lastFour : "") + ", " + m.status.toLowerCase() + "): used " +
+              money(m.usedMinor ?? "0", m.currency) + " of " + money(m.monthlyLimitMinor, m.currency) + " this month"
+          ),
+        ].join("\n")
+      }),
+    }),
+  ]
+}
 
-export function buildTools(ctx: AgentContext): AnyTool[] {
-  const tools: AnyTool[] = [
-    betaZodTool({
+/** Pages the agent can open for the person (only those their account can reach). */
+const PAGES: { path: string; label: string }[] = [
+  { path: "/home", label: "Home dashboard" },
+  { path: "/branch", label: "Branch dashboard" },
+  { path: "/me", label: "My card and limits" },
+  { path: "/pay", label: "Make a payment (pick a payee)" },
+  { path: "/pay/scan", label: "Scan a QR code to pay" },
+  { path: "/pay/us-bank", label: "Pay a US bank account by ACH (enter bank details)" },
+  { path: "/receive", label: "Receive money / show my QR" },
+  { path: "/activity", label: "Activity (all payments)" },
+  { path: "/activity/approvals", label: "Approvals waiting" },
+  { path: "/spending", label: "Spending, cards and policies" },
+  { path: "/branches", label: "Branches and who works where" },
+  { path: "/team", label: "Team and logins" },
+  { path: "/invoices", label: "Invoices" },
+  { path: "/agents", label: "Agents" },
+  { path: "/settings", label: "Settings" },
+]
+
+function openPageTool(ctx: AgentContext): AgentTool {
+  const pages = PAGES.filter((p) => ctx.account.canAccessPath(p.path))
+  const paths = pages.map((p) => p.path) as [string, ...string[]]
+  return defineTool({
+    name: "open_page",
+    description:
+      "Open a page of the app for the person (the browser navigates there). Use when they ask to go somewhere, see something, or start a task that's done on a page (e.g. scanning a QR). Pages: " +
+      pages.map((p) => `${p.path} = ${p.label}`).join("; "),
+    inputSchema: z.object({ path: z.enum(paths) }),
+    run: step(ctx, "open_page", (i: { path: string }) => `Opened ${i.path}`, async (i: { path: string }) => {
+      const page = pages.find((p) => p.path === i.path)
+      if (!page) return "That page isn't available for this account."
+      const action: AgentAction = { type: "navigate", path: page.path, label: page.label }
+      ;(ctx.actions ??= []).push(action)
+      ctx.emit?.({ type: "action", action })
+      return `Opened ${page.label}. Tell the person it's open.`
+    }),
+  })
+}
+
+export function buildTools(ctx: AgentContext): AgentTool[] {
+  if (ctx.account.type === "EMPLOYEE") return [...employeeTools(ctx), openPageTool(ctx)]
+  const tools: AgentTool[] = [
+    defineTool({
       name: "get_balances",
       description:
         "Available USDC balance of the current workspace (the company and its branches, or personal), with each branch's own balance. Use for any balance question.",
@@ -125,20 +222,20 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
       }),
     }),
 
-    betaZodTool({
+    defineTool({
       name: "list_recipients",
       description:
         "People and businesses this account can pay, with the id to use in other tools. sg:* ids are Singapore PayNow/FAST payees (amounts in SGD); ach:* ids are US bank accounts (amounts in USD).",
       inputSchema: z.object({}),
       run: step(ctx, "list_recipients", () => "Looked up recipients", async () => {
         const { body } = await api<{ recipients?: AchRecipient[] }>(ctx, "/api/sancus/recipients")
-        const sg = sgRecipients.map((r) => `sg:${r.id} | ${r.name} | ${r.detail}`)
+        const sg = sgFor(ctx).map((r) => `sg:${r.id} | ${r.name} | ${r.detail}`)
         const ach = (body.recipients ?? []).map((r) => `ach:${r.id} | ${r.name} | US bank ${r.bankName} ${r.accountMasked} (${r.accountType.toLowerCase()})`)
         return [...sg, ...ach].join("\n") || "No recipients yet."
       }),
     }),
 
-    betaZodTool({
+    defineTool({
       name: "quote_payment",
       description: "Live quote for paying a recipient: what they receive, the fee, the USDC it costs, the FX rate and arrival. Quoting moves no money.",
       inputSchema: z.object({
@@ -168,7 +265,7 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
       }),
     }),
 
-    betaZodTool({
+    defineTool({
       name: "propose_payment",
       description:
         "Prepare a payment for the person to confirm. Does NOT send it: the person sees a confirm card. Always quote first. Payments at or over the approval rule go to Approvals after confirming.",
@@ -212,7 +309,7 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
       }),
     }),
 
-    betaZodTool({
+    defineTool({
       name: "buy_route_quote",
       description:
         "Buy a live best-route quote (rail, FX rate, fee, total USDC cost, arrival) for sending money into Singapore, Indonesia or Thailand. Costs about $0.01 per call, paid by the agent's own wallet with an x402 micropayment on Arc. Use when the person asks for the cheapest or best way to send money to SG/ID/TH, or to compare corridors.",
@@ -235,7 +332,7 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
       },
     }),
 
-    betaZodTool({
+    defineTool({
       name: "recent_activity",
       description: "The latest payments in and out (PayNow, ACH, Pix, local collections) with status.",
       inputSchema: z.object({ limit: z.number().int().min(1).max(20).optional() }),
@@ -252,7 +349,7 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
       }),
     }),
 
-    betaZodTool({
+    defineTool({
       name: "propose_collection",
       description:
         "Prepare a local QR collection for the person to confirm: a customer pays by QRIS (Indonesia, IDR), PromptPay (Thailand, THB) or Pix (Brazil, BRL); a matching local stablecoin is minted into that country's branch wallet.",
@@ -280,7 +377,7 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
   // People management for admins and branch admins.
   if (ctx.account.can("members.manage")) {
     tools.push(
-      betaZodTool({
+      defineTool({
         name: "list_people",
         description: "Employees and branch admins this account manages, with their membership id and spending limits.",
         inputSchema: z.object({}),
@@ -293,7 +390,7 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
           )
         }),
       }),
-      betaZodTool({
+      defineTool({
         name: "propose_limits",
         description: "Prepare new spending limits for an employee, for the person to confirm. Amounts in US dollars.",
         inputSchema: z.object({
@@ -323,5 +420,8 @@ export function buildTools(ctx: AgentContext): AnyTool[] {
       })
     )
   }
-  return tools
+  // Branch admins can't send money: they don't get the payment tools at all.
+  const payTools = new Set(["list_recipients", "quote_payment", "propose_payment"])
+  tools.push(openPageTool(ctx))
+  return ctx.account.can("money.send") ? tools : tools.filter((t) => !payTools.has(t.name))
 }

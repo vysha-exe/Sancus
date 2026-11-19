@@ -3,6 +3,7 @@
 // POST flow:
 //   1. Validate recipient + amount, compute a fresh quote server-side (never trust client numbers).
 //   2. Spending policy: blocked → 403; at/over the approval rule → PENDING_APPROVAL (funds reserved).
+//      Employees can only request: every payment they start waits for an admin (approval-rules.ts).
 //   3. Insert the payout (idempotent on the Idempotency-Key header) and reserve funds in the ledger.
 //   4. If allowed: executePayout() runs the USDC leg on Arc (when SANCUS_SETTLEMENT_ADDRESS is set)
 //      and hands off to the payout provider (simulated until StraitsX sandbox access).
@@ -10,7 +11,9 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { evmAddressSchema, validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
-import { requirePermission } from "@/lib/sancus/accounts-server"
+import { loadAccount } from "@/lib/sancus/accounts-server"
+import { EMPLOYEE_REQUEST_REASON, paymentMode } from "@/lib/sancus/approval-rules"
+import { notifyApprovers } from "@/lib/sancus/approval-notify"
 import { formatRate } from "@/lib/sancus/fx"
 import { getPayoutProvider } from "@/lib/sancus/payout-provider"
 import { evaluatePayout, isNewRecipient, loadCompanyPolicy, loadPolicy, spentToday } from "@/lib/sancus/policy"
@@ -51,14 +54,26 @@ export const GET = withAuth(async (req, { user, supabase }) => {
 })
 
 export const POST = withAuth(async (req, { user, supabase }) => {
-  const denied = await requirePermission(supabase, user, "money.send")
-  if (denied) return denied
+  const account = await loadAccount(supabase, user)
+  const mode = paymentMode(account)
+  if (!mode) {
+    return NextResponse.json(
+      { error: "Your account can't send money. Ask an admin to make this payment.", accountType: account.type, missing: "money.send" },
+      { status: 403 }
+    )
+  }
+  const requestOnly = mode === "REQUEST"
   const idempotencyKey = req.headers.get("idempotency-key")?.trim()
   if (!idempotencyKey || idempotencyKey.length > 100) {
     return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 })
   }
 
-  const companyId = companyIdFromRequest(req.headers, req.headers.get("cookie"))
+  // Requests are always for a company: the selected one, else the employee's own.
+  const companyId =
+    companyIdFromRequest(req.headers, req.headers.get("cookie")) ?? (requestOnly ? account.scopes[0]?.companyId ?? null : null)
+  if (requestOnly && !companyId) {
+    return NextResponse.json({ error: "You need to be part of a company to request a payment" }, { status: 403 })
+  }
   if (companyId) {
     const { data: allowed } = await supabase.rpc("sancus_can_access_company", {
       p_user: user.id,
@@ -76,6 +91,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const parsed = await validateJsonBody(req, createSchema)
   if (!parsed.ok) return parsed.response
   const { sourceWalletId, reference } = parsed.data
+  if (requestOnly && sourceWalletId) {
+    return NextResponse.json({ error: "Only admins can choose which wallet pays" }, { status: 403 })
+  }
 
   const prepared = preparePayout(parsed.data, await liveSgdFxConfig())
   if (!prepared.ok) {
@@ -84,19 +102,20 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const { recipient, quote } = prepared
 
   // Treasury and Settlement wallets: company node when scoped, else personal.
+  // A company's wallets may have been created by any admin, so match on the company, not the caller.
   let walletQuery = supabase
     .from("wallets")
     .select("address, blockchain, type")
-    .eq("user_id", user.id)
     .eq("blockchain", "ARC-TESTNET")
     .in("type", ["treasury", "payout"])
     .order("created_at", { ascending: true })
-  walletQuery = companyId ? walletQuery.eq("company_id", companyId) : walletQuery.is("company_id", null)
+  walletQuery = companyId ? walletQuery.eq("company_id", companyId) : walletQuery.eq("user_id", user.id).is("company_id", null)
   const { data: arcWallets } = await walletQuery
   // Fall back to personal treasury if the company node has none yet.
   let treasuryWallet = arcWallets?.find((w) => w.type === "treasury") ?? null
   let settlementWallet = arcWallets?.find((w) => w.type === "payout") ?? null
-  if (companyId && !treasuryWallet) {
+  // (Never for requests: an employee's personal wallet must not pay a company bill.)
+  if (companyId && !treasuryWallet && !requestOnly) {
     const { data: personal } = await supabase
       .from("wallets")
       .select("address, blockchain, type")
@@ -107,6 +126,23 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       .order("created_at", { ascending: true })
     treasuryWallet = personal?.find((w) => w.type === "treasury") ?? null
     settlementWallet = personal?.find((w) => w.type === "payout") ?? null
+  }
+
+  // Employee requests from a branch without its own treasury are paid by the global account's.
+  if (requestOnly && companyId && !treasuryWallet) {
+    const { data: node } = await supabase.from("sancus_companies").select("root_id").eq("id", companyId).maybeSingle()
+    const rootId = node?.root_id as string | undefined
+    if (rootId && rootId !== companyId) {
+      const { data: rootWallets } = await supabase
+        .from("wallets")
+        .select("address, blockchain, type")
+        .eq("company_id", rootId)
+        .eq("blockchain", "ARC-TESTNET")
+        .in("type", ["treasury", "payout"])
+        .order("created_at", { ascending: true })
+      treasuryWallet = rootWallets?.find((w) => w.type === "treasury") ?? null
+      settlementWallet = rootWallets?.find((w) => w.type === "payout") ?? null
+    }
   }
 
   // Partner deposit address: env override (e.g. StraitsX's address), else our Settlement wallet.
@@ -150,7 +186,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       { status: 403 }
     )
   }
-  const needsApproval = evaluation.decision === "NEEDS_APPROVAL"
+  const needsApproval = requestOnly || evaluation.decision === "NEEDS_APPROVAL"
+  const approvalReason = evaluation.reason ?? (requestOnly ? EMPLOYEE_REQUEST_REASON : null)
 
   const { data: inserted, error: insertError } = await supabase
     .from("sancus_payouts")
@@ -176,7 +213,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       settlement_address: settlementAddress,
       provider: provider.name,
       status: needsApproval ? "PENDING_APPROVAL" : "CREATED",
-      approval_reason: evaluation.reason,
+      approval_reason: approvalReason,
       // Fully real only when both the treasury leg is onchain and the partner is live.
       simulated: provider.simulated || !willSendOnchain,
     })
@@ -199,15 +236,11 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   // Over the approval rule: stop here. Money moves when someone approves it.
   if (needsApproval) {
-    await supabase.from("sancus_notifications").insert({
-      user_id: user.id,
-      company_id: companyId,
-      type: "approval.requested",
-      category: "approvals",
-      priority: "action",
+    await notifyApprovers({
+      requesterId: user.id,
+      companyId,
       title: `Approve payment to ${recipient.name}`,
-      body: evaluation.reason ?? "Needs your approval",
-      link: "/activity",
+      body: approvalReason ?? "Needs your approval",
       payload: { payoutId: row.id, companyId },
     })
     return NextResponse.json({ payout: toPayoutDto(row), needsApproval: true }, { status: 201 })

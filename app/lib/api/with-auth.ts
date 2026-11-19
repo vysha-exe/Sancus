@@ -66,7 +66,7 @@ export function createAdminContext(): Promise<AuthContext> {
             ...existing.user_metadata,
             source: "sancus-simple-auth",
             role,
-            ...(role === "admin" ? { first_name: "Admin" } : {}),
+            ...(role === "admin" ? { first_name: "Admin" } : { first_name: "Malee", last_name: "Srisuk" }),
           },
         })
         if (updated.error || !updated.data.user) throw updated.error || new Error(`Could not update the Sancus ${role} user`)
@@ -77,7 +77,7 @@ export function createAdminContext(): Promise<AuthContext> {
         email: account.email,
         password: account.password,
         email_confirm: true,
-        user_metadata: { source: "sancus-simple-auth", role, ...(role === "admin" ? { first_name: "Admin" } : {}) },
+        user_metadata: { source: "sancus-simple-auth", role, ...(role === "admin" ? { first_name: "Admin" } : { first_name: "Malee", last_name: "Srisuk" }) },
       })
       if (created.error || !created.data.user) throw created.error || new Error(`Could not create the Sancus ${role} user`)
       if (role === "admin") admin = created.data.user
@@ -90,6 +90,11 @@ export function createAdminContext(): Promise<AuthContext> {
       "employee",
       accounts.employee.email
     )
+    // The funded demo owner (SANCUS_DEMO_EMAIL) holds the company's Circle wallets, so the admin
+    // login acts as that user: same company, same money, payouts work end to end.
+    const demoEmail = process.env.SANCUS_DEMO_EMAIL?.trim().toLowerCase()
+    const owner = demoEmail ? listed.data.users.find((candidate) => candidate.email?.toLowerCase() === demoEmail) : undefined
+    if (owner) return { user: owner, supabase }
     return { user: admin, supabase }
   })().catch((error) => {
     adminContextPromise = null

@@ -6,6 +6,7 @@ import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { balance } from "@/lib/sancus/demo-data"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
+import { canOpenPath, useAccount } from "@/lib/sancus/use-account"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { fixedUsdRateLabel } from "@/lib/sancus/fixed-rates"
 import { isTerminal, type PayoutStatus } from "@/lib/sancus/payout-provider"
@@ -63,6 +64,7 @@ export default function PayDonePage() {
   const { recipient, quote, state, view, payout, pixPayment, sourceAccount } = usePayFlow()
   const fundingSource = sourceAccount?.parentId === null ? "parent treasury" : sourceAccount?.name ?? "selected account"
   const live = usePayoutStatus(payout)
+  const { account } = useAccount()
   const pix = usePixPaymentStatus(pixPayment)
   // Re-read the balance whenever the payout moves (reserved → released / delivered).
   const treasury = useLiveTreasury(live?.status)
@@ -124,7 +126,11 @@ export default function PayDonePage() {
             <span className="body-s">
               <b>Needs an approver.</b> {live.approvalReason ? `${live.approvalReason}.` : "This payment is over your approval rule."} The money is
               reserved and nothing leaves your balance until it&apos;s approved.{" "}
-              <Link href="/activity/approvals">Open Approvals →</Link>
+              {canOpenPath(account, "/activity/approvals") ? (
+                <Link href="/activity/approvals">Open Approvals →</Link>
+              ) : (
+                <Link href="/me">Your requests →</Link>
+              )}
             </span>
           </div>
         ) : null}
