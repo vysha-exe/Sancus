@@ -1,22 +1,20 @@
 // Sancus agent: tell the portal what you want and it does it.
 //   GET  → agent status: AI configured, the agent's x402 wallet, today's data spend vs its cap,
 //          and recent agent activity
-//   POST { messages: [{ role, content }] } → Claude (claude-opus-5-5) works out the steps with
-//          tools that call the app's own APIs as you. Anything that moves money or changes
-//          settings comes back as a signed proposal you confirm (POST /api/sancus/agent/execute).
-import Anthropic from "@anthropic-ai/sdk"
+//   POST { messages: [{ role, content }] } → OpenAI works out the steps with tools that call the
+//          app's own APIs as you. Anything that moves money or changes settings comes back as a
+//          signed proposal you confirm (POST /api/sancus/agent/execute).
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { buildTools, type AgentContext } from "@/lib/sancus/agent/tools"
+import { openaiConfigured, openaiModelName, runOpenAiAgent } from "@/lib/sancus/agent/openai-runner"
 import { agentWalletStatus } from "@/lib/sancus/agent/x402-wallet"
 import { workspaceCompany } from "@/lib/sancus/workspace-server"
 
 export const maxDuration = 120
-
-const MODEL = "claude-opus-5-5"
 
 const bodySchema = z.object({
   messages: z
@@ -27,7 +25,21 @@ const bodySchema = z.object({
   voice: z.boolean().optional(),
   /** Stream newline-delimited JSON events (start / step / proposal / done / error). */
   stream: z.boolean().optional(),
+  /** The page the person is looking at, so the agent can answer about it or act on it. */
+  page: z
+    .object({ path: z.string().max(200), title: z.string().max(200).optional(), text: z.string().max(6000).optional() })
+    .optional(),
 })
+
+function pageContext(page: { path: string; title?: string; text?: string } | undefined): string {
+  if (!page) return ""
+  return [
+    "",
+    `The person is on the page ${page.path}${page.title ? ` ("${page.title}")` : ""}.`,
+    "If they ask about \"this page\" or what they're looking at, answer from what's on it below (it may be cut off). If they ask you to do something, use your tools; use open_page to take them to the right page.",
+    page.text ? `What's on the page:\n"""\n${page.text}\n"""` : "",
+  ].join("\n")
+}
 
 const VOICE_RULES = [
   "",
@@ -38,7 +50,16 @@ const VOICE_RULES = [
   "- If you need a detail (who, how much), ask one short question.",
 ].join("\n")
 
-const aiConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY?.trim() || process.env.ANTHROPIC_AUTH_TOKEN?.trim())
+/** What each account type uses the agent for. */
+const ROLE_NOTES: Record<"ADMIN" | "BRANCH" | "EMPLOYEE" | "INDIVIDUAL", string> = {
+  ADMIN: "This is the business admin: they see every branch, pay suppliers and contractors, and manage everyone's limits.",
+  BRANCH:
+    "This is a branch admin: they run their own branch, collect money into it (propose_collection) and manage their own employees' limits. They can't send money or see other branches' people; for payments, tell them to ask the business admin.",
+  EMPLOYEE:
+    "This is an employee: help with their card, spending methods and limits using my_spending. They can't send money, change limits or see company balances; for a higher limit, tell them to ask their branch admin.",
+  INDIVIDUAL:
+    "This is a personal account (no business): they pay friends, family and shops, and companies by bank details. They have no suppliers, contractors or team. To pay a QR code, point them to Pay, then Scan a QR code.",
+}
 
 function systemPrompt(ctx: AgentContext, companyName: string | null): string {
   const today = new Date().toISOString().slice(0, 10)
@@ -56,6 +77,7 @@ function systemPrompt(ctx: AgentContext, companyName: string | null): string {
     "",
     `Signed in as: ${ctx.account.label}${companyName ? ` of ${companyName}` : ""}. Workspace: ${ctx.companyId ? "the company" : "personal"}. Today is ${today}.`,
     ctx.account.can("money.send") ? "" : "This account cannot send money; don't prepare payments.",
+    ROLE_NOTES[ctx.account.type],
   ].join("\n")
 }
 
@@ -64,12 +86,21 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
     agentWalletStatus(supabase, user.id),
     supabase.from("sancus_agent_actions").select("id, kind, summary, cost_minor, reference, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(15),
   ])
-  return NextResponse.json({ aiConfigured: aiConfigured(), model: MODEL, wallet, actions: actions ?? [] })
+  return NextResponse.json({
+    aiConfigured: openaiConfigured(),
+    model: openaiModelName(),
+    provider: "openai",
+    wallet,
+    actions: actions ?? [],
+  })
 })
 
 export const POST = withAuth(async (req, { user, supabase }) => {
-  if (!aiConfigured()) {
-    return NextResponse.json({ error: "The agent needs an Anthropic API key. Add ANTHROPIC_API_KEY to .env.local and restart." }, { status: 503 })
+  if (!openaiConfigured()) {
+    return NextResponse.json(
+      { error: "The agent needs an OpenAI API key. Add OPENAI_API_KEY to .env.local and restart." },
+      { status: 503 }
+    )
   }
   const parsed = await validateJsonBody(req, bodySchema)
   if (!parsed.ok) return parsed.response
@@ -86,32 +117,19 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     companyId,
     steps: [],
     proposals: [],
+    actions: [],
   }
   const companyName = account.scopes.find((s) => s.companyId === companyId)?.companyName ?? account.scopes.find((s) => s.isRoot)?.companyName ?? null
-  const { messages, voice, stream } = parsed.data
+  const { messages, voice, stream, page } = parsed.data
 
   async function run() {
-    const client = new Anthropic()
-    const final = await client.beta.messages.toolRunner({
-      model: MODEL,
-      max_tokens: 16000,
-      max_iterations: 12,
-      // Voice turns run lighter so the person isn't left waiting in silence.
-      output_config: { effort: voice ? "low" : "medium" },
-      // Server-side refusal fallback (on by default for this model).
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      system: systemPrompt(ctx, companyName) + (voice ? VOICE_RULES : ""),
-      tools: buildTools(ctx),
+    const { reply } = await runOpenAiAgent({
+      system: systemPrompt(ctx, companyName) + pageContext(page) + (voice ? VOICE_RULES : ""),
       messages,
+      tools: buildTools(ctx),
+      maxIterations: 12,
     })
-    if (final.stop_reason === "refusal") return { reply: "I can't help with that one.", steps: ctx.steps, proposals: ctx.proposals }
-    const reply = final.content
-      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim()
-    return { reply: reply || "Done.", steps: ctx.steps, proposals: ctx.proposals }
+    return { reply, steps: ctx.steps, proposals: ctx.proposals, actions: ctx.actions ?? [] }
   }
 
   if (!stream) {
@@ -142,11 +160,19 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 })
 
 function describeError(error: unknown): { status: number; error: string } {
-  if (error instanceof Anthropic.AuthenticationError) return { status: 503, error: "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY." }
-  if (error instanceof Anthropic.RateLimitError) return { status: 429, error: "The agent is busy right now. Try again in a moment." }
-  if (error instanceof Anthropic.APIError) {
-    console.error("Agent API error", error.status, error.message)
-    return { status: 502, error: `The agent hit an error (${error.status}). Try again.` }
+  if (error && typeof error === "object" && "status" in error) {
+    const status = Number((error as { status?: number }).status)
+    const msg = error instanceof Error ? error.message : "OpenAI error"
+    if (status === 401 || status === 403) {
+      return { status: 503, error: "The OpenAI API key was rejected. Check OPENAI_API_KEY." }
+    }
+    if (status === 429) {
+      return { status: 429, error: "The agent is busy right now. Try again in a moment." }
+    }
+    if (status >= 400) {
+      console.error("Agent API error", status, msg)
+      return { status: 502, error: `The agent hit an error (${status}). Try again.` }
+    }
   }
   console.error("Agent failed", error)
   return { status: 500, error: "The agent couldn't finish. Try again." }

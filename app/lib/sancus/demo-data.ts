@@ -75,6 +75,15 @@ export const approvals = [
 
 export const approvalsTotalLabel = "$2,620.05"
 
+/** Jayden's (personal account) recent payments, shown until he has live ones. */
+export const personalLatestPayments: Payment[] = [
+  { id: "p-kopi", who: "Kopi & Co. Tiong Bahru · PayNow QR", amount: "−$5.05", meta: "S$6.80 · Today, 8:12", rail: "PayNow", status: "Settled", simulated: true, href: "/activity" },
+  { id: "p-mei-lin", who: "Mei Lin Tan", amount: "−$18.20", meta: "S$24.50 · Yesterday · dinner split", rail: "PayNow", status: "Settled", simulated: true, href: "/activity" },
+  { id: "p-mum", who: "Grace Lee (Mum)", amount: "−$222.80", meta: "S$300.00 · Nov 15 · allowance", rail: "PayNow", status: "Settled", simulated: true, href: "/activity" },
+  { id: "p-bluebird", who: "Bluebird Studio LLC", amount: "−$120.00", meta: "$120.00 by ACH · Nov 12", rail: "ACH", status: "Settled", simulated: true, href: "/activity" },
+  { id: "p-ryan", who: "From Ryan Ong", amount: "+$44.55", meta: "S$60.00 · Nov 10 · concert tickets", rail: "PayNow", status: "Settled", simulated: true, href: "/activity" },
+]
+
 export const latestPayments: Payment[] = [
   {
     id: "padaria",
@@ -262,6 +271,8 @@ export type Recipient = {
   country: string
   methods: { rail: string; detail: string; tag: string }[]
   history: string
+  /** Who sees this payee: business accounts (default) or a personal account like Jayden's. */
+  audience?: "business" | "personal"
   /**
    * Set for recipients the backend can actually pay (Singapore PayNow / FAST).
    * The Pay flow then uses live quotes and creates a real payout
@@ -382,6 +393,91 @@ export const recipients: Recipient[] = [
   },
 ]
 
+/** Jayden's own payees (personal account): friends, family and places he pays. No suppliers. */
+export const personalRecipients: Recipient[] = [
+  {
+    id: "p-mei-lin",
+    name: "Mei Lin Tan",
+    initials: "MT",
+    kind: "Friend",
+    detail: "Friend · Singapore · PayNow mobile •••• 5432",
+    rail: "PayNow",
+    country: "Singapore",
+    methods: [{ rail: "PayNow", detail: "mobile •••• 5432", tag: "Default" }],
+    history: "Last paid S$24.50 · dinner split",
+    audience: "personal",
+    payout: { proxyType: "MOBILE", proxyValue: "+6598765432", currency: "SGD" },
+  },
+  {
+    id: "p-ryan-ong",
+    name: "Ryan Ong",
+    initials: "RO",
+    kind: "Friend",
+    detail: "Friend · Singapore · PayNow mobile •••• 2222",
+    rail: "PayNow",
+    country: "Singapore",
+    methods: [{ rail: "PayNow", detail: "mobile •••• 2222", tag: "Default" }],
+    history: "Last paid S$60.00 · concert tickets",
+    audience: "personal",
+    payout: { proxyType: "MOBILE", proxyValue: "+6581112222", currency: "SGD" },
+  },
+  {
+    id: "p-mum",
+    name: "Grace Lee (Mum)",
+    initials: "GL",
+    kind: "Family",
+    detail: "Family · Singapore · PayNow mobile •••• 7788",
+    rail: "PayNow",
+    country: "Singapore",
+    methods: [{ rail: "PayNow", detail: "mobile •••• 7788", tag: "Default" }],
+    history: "Monthly allowance S$300.00",
+    audience: "personal",
+    payout: { proxyType: "MOBILE", proxyValue: "+6590007788", currency: "SGD" },
+  },
+  {
+    id: "p-kopi",
+    name: "Kopi & Co. Tiong Bahru",
+    initials: "KC",
+    kind: "Shop",
+    detail: "Shop · Singapore · PayNow UEN 202012345A",
+    rail: "PayNow",
+    country: "Singapore",
+    methods: [{ rail: "PayNow", detail: "UEN 202012345A", tag: "Default" }],
+    history: "Last paid S$6.80",
+    audience: "personal",
+    payout: { proxyType: "UEN", proxyValue: "202012345A", currency: "SGD" },
+  },
+  {
+    id: "p-somchai",
+    name: "Baan Somchai Guesthouse",
+    initials: "BS",
+    kind: "Business",
+    detail: "Business · Thailand · PromptPay •••• 5678",
+    rail: "PromptPay",
+    country: "Chiang Mai, Thailand",
+    methods: [{ rail: "PromptPay", detail: "mobile •••• 5678", tag: "Default" }],
+    history: "Booked for December",
+    audience: "personal",
+  },
+  {
+    id: "p-bluebird",
+    name: "Bluebird Studio LLC",
+    initials: "BS",
+    kind: "Business",
+    detail: "Business · United States · ACH account ••• 4410",
+    rail: "ACH",
+    country: "United States",
+    methods: [{ rail: "ACH", detail: "account ••• 4410", tag: "Default" }],
+    history: "Design course · $120.00",
+    audience: "personal",
+  },
+]
+
+/** Payees for an account type: personal accounts never see business suppliers, and vice versa. */
+export function recipientsFor(personal: boolean): Recipient[] {
+  return personal ? personalRecipients : recipients
+}
+
 /** Juliana Pix quote used across Pay Amount / Review / Done */
 export const julianaQuote = {
   recipientId: "juliana",
@@ -416,7 +512,7 @@ export function getPerson(id: string): Person | undefined {
 }
 
 export function getRecipient(id: string): Recipient | undefined {
-  return recipients.find((r) => r.id === id)
+  return recipients.find((r) => r.id === id) ?? personalRecipients.find((r) => r.id === id)
 }
 
 /** Singapore PayNow / FAST recipients with backend payout config. */

@@ -37,6 +37,38 @@ type MemberRow = {
   created_at: string
 }
 
+/** Display names for people (from their login profile). Falls back to the email when unavailable. */
+async function displayNames(userIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const secret = process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (!url || !secret || !userIds.length) return out
+  try {
+    const admin = createAdminClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } })
+    const wanted = new Set(userIds)
+    for (let page = 1; page <= 5 && out.size < wanted.size; page++) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+      if (error) break
+      for (const u of data.users) {
+        if (!wanted.has(u.id)) continue
+        const m = u.user_metadata ?? {}
+        const name = [m.first_name, m.last_name].filter(Boolean).join(" ")
+        if (name) out.set(u.id, name)
+      }
+      if (data.users.length < 200) break
+    }
+  } catch {
+    /* names are cosmetic */
+  }
+  return out
+}
+
+function nameFromEmail(email: string | null): string {
+  if (!email) return "Invited"
+  const local = email.split("@")[0]!.split("+")[0]!
+  return local.split(/[._-]/).filter(Boolean).map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" ")
+}
+
 export const GET = withAuth(async (_req, { user, supabase }) => {
   const account = await loadAccount(supabase, user)
   const ids = account.manageableCompanyIds()
@@ -50,10 +82,12 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
       .order("created_at", { ascending: true }),
   ])
   const byId = new Map((companies ?? []).map((c) => [c.id as string, c]))
-  const people = ((members ?? []) as MemberRow[])
-    .filter((m) => m.user_id !== user.id)
+  const rows = ((members ?? []) as MemberRow[]).filter((m) => m.user_id !== user.id)
+  const names = await displayNames(rows.map((m) => m.user_id).filter((id): id is string => Boolean(id)))
+  const people = rows
     .map((m) => ({
       membershipId: m.id,
+      name: (m.user_id && names.get(m.user_id)) || nameFromEmail(m.invited_email),
       companyId: m.company_id,
       companyName: (byId.get(m.company_id)?.name as string | undefined) ?? "",
       email: m.invited_email,

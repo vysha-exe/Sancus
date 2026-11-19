@@ -4,12 +4,24 @@ import Link from "next/link"
 import { useCallback, useState } from "react"
 import { AgentActivity, AgentConsole, useAgentStatus } from "@/components/sancus-ui/agent-console"
 import { X402Earnings } from "@/components/sancus-ui/x402-earnings"
+import { can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
+
+const INTRO: Record<string, string> = {
+  ADMIN: "Ask about your money, let an agent pay for small things inside a budget, and charge other agents for your data. Every agent payment shows up in Activity.",
+  BRANCH: "Ask about your branch's balance, set up a local collection, or change your team's limits. Anything that changes money waits for your Confirm.",
+  EMPLOYEE: "Ask about your card, your spending limits and what you've spent this month.",
+  INDIVIDUAL: "Ask about your balance, pay a friend or a shop, or find the cheapest way to send money home. Every payment waits for your Confirm.",
+}
 
 const PAUSE_KEY = "sancus-agent-paused"
 const usd6 = (m: string | number) => `$${(Number(m) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
 
 export default function AgentsPage() {
   const status = useAgentStatus()
+  const { account } = useAccount()
+  const showBudget = can(account, "money.send")
+  const showEarnings = can(account, "agents.business")
+  const showActivityLink = canOpenPath(account, "/activity")
   const w = status?.wallet
   const spent = Number(w?.spentTodayMinor ?? 0)
   const cap = Number(w?.dailyCapMinor ?? 1)
@@ -42,17 +54,20 @@ export default function AgentsPage() {
         <div>
           <h1 className="sx-h heading-2">Agents</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            Ask about your money, let an agent pay for small things inside a budget, and charge other agents for your data. Every agent payment shows up in Activity.
+            {INTRO[account?.type ?? "ADMIN"]}
           </p>
         </div>
-        <Link href="/activity" className="sx-btn sx-btn--secondary sx-btn--sm">
-          Agent activity
-        </Link>
+        {showActivityLink ? (
+          <Link href="/activity" className="sx-btn sx-btn--secondary sx-btn--sm">
+            Agent activity
+          </Link>
+        ) : null}
       </header>
 
       <AgentConsole paused={paused} />
 
       <div className="grid">
+        {showBudget ? (
         <section className="tile s6" aria-labelledby="pa">
           <div className="tile-head">
             <h2 className="tile-title" id="pa">
@@ -104,8 +119,9 @@ export default function AgentsPage() {
             </span>
           </div>
         </section>
+        ) : null}
 
-        <X402Earnings />
+        {showEarnings ? <X402Earnings /> : null}
 
         <AgentActivity />
       </div>

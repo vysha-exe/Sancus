@@ -215,7 +215,7 @@ export class BranchAccount extends SancusAccount {
   readonly type = "BRANCH" as const
   readonly label = "Branch admin"
   readonly homePath = "/branch"
-  readonly nav: NavKey[] = ["branch", "team", "spending", "branches", "receive", "settings"]
+  readonly nav: NavKey[] = ["branch", "team", "spending", "branches", "receive", "agents", "settings"]
   protected readonly paths: NavKey[] = [...this.nav]
   protected readonly permissions = new Set<Permission>([
     "money.receive",
@@ -223,6 +223,8 @@ export class BranchAccount extends SancusAccount {
     "members.manage",
     "accounts.create.employee",
     "spending.manage",
+    "activity.view",
+    "agent.use",
     "settings",
   ])
 
@@ -240,7 +242,7 @@ export class EmployeeAccount extends SancusAccount {
   readonly type = "EMPLOYEE" as const
   readonly label = "Employee"
   readonly homePath = "/me"
-  readonly nav: NavKey[] = ["me", "settings"]
+  readonly nav: NavKey[] = ["me", "agents", "settings"]
   protected readonly paths: NavKey[] = [...this.nav]
   protected readonly permissions = new Set<Permission>(["card.view", "limits.view", "agent.use", "settings"])
 
@@ -253,7 +255,7 @@ export class IndividualAccount extends SancusAccount {
   readonly type = "INDIVIDUAL" as const
   readonly label = "Personal"
   readonly homePath = "/home"
-  readonly nav: NavKey[] = ["home", "pay", "activity", "settings"]
+  readonly nav: NavKey[] = ["home", "pay", "activity", "agents", "settings"]
   /** "branches" stays reachable so a person can open a business (and become its admin). */
   protected readonly paths: NavKey[] = [...this.nav, "receive", "branches"]
   protected readonly permissions = new Set<Permission>([
@@ -261,6 +263,7 @@ export class IndividualAccount extends SancusAccount {
     "money.receive",
     "approvals.decide",
     "activity.view",
+    "agent.use",
     "settings",
   ])
 
