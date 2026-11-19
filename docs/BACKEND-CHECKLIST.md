@@ -159,10 +159,12 @@
 
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
-| ◐ | Port QRIS (Midtrans) charge from `rails-demo` | `POST /api/sancus/collections` (rail `QRIS`) | 🟡 apply `app/supabase/migrations/20261117160000_sancus_local_rails.sql` | P1 | | QR returned; Midtrans simulator pays it; status → paid |
-| ◐ | Port PromptPay (Omise) charge | rail `PROMPTPAY` | 🟡 same migration as QRIS | P1 | | Same as above via Omise test dashboard |
-| ◐ | Port Pix (PayZu) charge | rail `PIX` | 🟡 same migration; PayZu token may be expired | P2 | | Auto-completes ~10s in PayZu sandbox |
-| ◐ | Collection status | `POST /api/sancus/collections/:id/refresh` | 🟡 needs the local-rails migration applied | P1 | | Polls provider and persists normalized status |
+| ☑ | QRIS (Midtrans) sandbox collections | `POST /api/sancus/collections` (rail `QRIS`) | ✅ | P1 | | QR returned; Midtrans simulator pays it; status → paid |
+| ☑ | PromptPay (Omise) sandbox collections | rail `PROMPTPAY` | ✅ | P1 | | Same as above via Omise test dashboard |
+| ☑ | Pix (PayZu) sandbox collections | rail `PIX` | ✅ | P2 | | PayZu sandbox creates and resolves the payment QR |
+| ☑ | Collection status | `POST /api/sancus/collections/:id/refresh` | ✅ | P1 | | Polls provider and persists normalized status |
+| ☑ | Permanent organization receive links | `GET /api/sancus/receive-links`, `/r/:token` | ✅ | P1 | | Local organizations create amount-bound provider QRs; USD treasuries expose their Arc USDC address |
+| ☑ | Dev payment run audit trail | `sancus_dev_runs`, `/api/sancus/dev/*` | ✅ | P1 | | Card/Pix spend and QR receive tests persist provider steps and terminal status |
 | ◐ | Xendit outbound payouts | `POST /api/sancus/xendit/payouts` | 🟡 apply `app/supabase/migrations/20261117170000_sancus_xendit_payouts.sql` | P1 | | Sandbox payout row is saved. Account verification still blocks live test payouts. |
 | ◐ | Provider webhooks (Midtrans / Omise / PayZu) | `POST /api/sancus/webhooks/{midtrans,omise,payzu}` | 🟡 implemented; registration pending | P2 | | Provider status re-read before DB update |
 | ☐ | USD deposit → USDC (Bridge virtual account) | `POST /api/sancus/deposits/bridge` | ⬜ (blocked on access) | P1 | | `simulate_deposit` credits treasury |
@@ -173,9 +175,9 @@
 | ☐ | Feature | Endpoint / file | Status | Pri | Owner | Done when |
 |---|---|---|---|---|---|---|
 | ☑ | Port Marqeta adapter from `rails-demo` | `lib/sancus/rails/marqeta.ts` | ✅ | P1 | | Uses `MARQETA_*` env in `app/` |
-| ◐ | Issue virtual card to an employee with a limit | `POST /api/sancus/cards` | 🟡 apply `app/supabase/migrations/20261118130000_sancus_cards.sql` | **P0** | | Card shows last 4 + limit |
+| ☑ | Issue virtual card to an employee with a limit | `POST /api/sancus/cards` | ✅ Marqeta sandbox when configured | **P0** | | Card shows last 4 + limit |
 | ☐ | List / freeze / change limit | `GET/PATCH /api/sancus/cards` (+ Spending UI Freeze) | 🟡 | P1 | | Status ACTIVE/SUSPENDED; methods pause/resume |
-| ☐ | Simulate purchase → authorization hold → settle / release | `POST /api/sancus/card-purchases`, `POST …/card-purchases/:id/settle` | 🟡 | P0 | | Spending “Simulate a purchase” hold → settle |
+| ☑ | Sandbox purchase → authorization hold → clearing | `POST /api/sancus/dev/spend` | ✅ Marqeta sandbox | P0 | | Dev dashboard records authorization, clearing, and persisted activity |
 | ☐ | Real-time auth decision (Marqeta Gateway JIT Funding) | `POST /api/sancus/webhooks/marqeta/jit` | ⬜ | P1 | | Policy engine decides approve/decline in < 2s |
 
 ## 9. Ledger & reconciliation
