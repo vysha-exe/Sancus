@@ -230,11 +230,12 @@ function ParentBranchBalances({
                 </div>
                 <div className="home-branch-card__identity">
                   <strong>{node.name}</strong>
-                  <span>{isParent ? "Global treasury · USDC" : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}</span>
+                  <span>{isParent ? `Global treasury · ${node.bankBalance?.currency ?? node.currency}` : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}</span>
                 </div>
                 <div className="home-branch-card__balance">
-                  <span>{isParent ? formatBalance(node.ownMinor) : bankMoney(node)}</span>
-                  <small>{isParent ? `${node.wallets.length} ${node.wallets.length === 1 ? "wallet" : "wallets"}` : `${node.bankBalance?.bankName ?? "Local bank"} operating account`}</small>
+                  <span>{bankMoney(node)}</span>
+                  <small>{node.bankBalance?.bankName ?? "Local bank"} operating account</small>
+                  <small className="home-branch-card__stablecoin">Stablecoin liquidity · {formatBalance(node.ownMinor)} USDC · {node.wallets.length} {node.wallets.length === 1 ? "wallet" : "wallets"}</small>
                 </div>
                 <span className="home-branch-card__open" aria-hidden>Open →</span>
               </Link>
