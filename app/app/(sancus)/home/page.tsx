@@ -15,6 +15,8 @@ import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { accountDisplayName, useAccount } from "@/lib/sancus/use-account"
 import { countryByCode } from "@/lib/sancus/countries"
 import type { CompanyNode } from "@/lib/sancus/companies"
+import { calculateCompanyNodeTotal } from "@/lib/sancus/company-total"
+import { useSancusPrefs } from "@/lib/sancus/prefs"
 
 function decimalUsdcMinor(value: string): string {
   const match = value.trim().match(/^(\d+)(?:\.(\d+))?$/)
@@ -244,6 +246,7 @@ function ParentBranchBalances({
   formatBalance: (minor: string) => string
   positions: HomeTreasuryPositions | null
 }) {
+  const { debugMode } = useSancusPrefs()
   const parent = tree.find((node) => node.parentId === null) ?? tree[0] ?? null
   const branches = parent?.children ?? []
   const rows = parent
@@ -256,6 +259,14 @@ function ParentBranchBalances({
       currency: node.bankBalance?.currency ?? node.currency,
       maximumFractionDigits: (node.bankBalance?.currency ?? node.currency) === "IDR" ? 0 : 2,
     }).format(Number(balanceMinor) / 100)
+  }
+  const combinedMoney = (node: CompanyNode) => {
+    const total = calculateCompanyNodeTotal(node)
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: total.currency,
+      maximumFractionDigits: total.currency === "IDR" ? 0 : 2,
+    }).format(Number(total.totalMinor) / 1_000_000)
   }
   const positionMoney = (minor: bigint | string) => new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -292,9 +303,14 @@ function ParentBranchBalances({
                   <span>{isParent ? `Global treasury · ${node.bankBalance?.currency ?? node.currency}` : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}</span>
                 </div>
                 <div className="home-branch-card__balance">
-                  <span>{bankMoney(node)}</span>
-                  <small>{node.bankBalance?.bankName ?? "Local bank"} operating account</small>
-                  <small className="home-branch-card__stablecoin">Stablecoin liquidity · {formatBalance(node.ownMinor)} USDC · {node.wallets.length} {node.wallets.length === 1 ? "wallet" : "wallets"}</small>
+                  <span>{combinedMoney(node)}</span>
+                  <small>Combined balance · bank + cross-border liquidity</small>
+                  {debugMode ? (
+                    <div className="home-branch-card__breakdown">
+                      <small>Bank · {bankMoney(node)} · {node.bankBalance?.bankName ?? "Local bank"}</small>
+                      <small>Wallet · {formatBalance(node.ownMinor)} USDC · {node.wallets.length} {node.wallets.length === 1 ? "wallet" : "wallets"}</small>
+                    </div>
+                  ) : null}
                 </div>
                 <span className="home-branch-card__open" aria-hidden>Open →</span>
               </Link>

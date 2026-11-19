@@ -14,15 +14,17 @@ export type SancusTheme = "day" | "night"
 type Prefs = {
   collapsed: boolean
   theme: SancusTheme
+  debugMode: boolean
   setCollapsed: (value: boolean) => void
   toggleCollapsed: () => void
   setTheme: (theme: SancusTheme) => void
+  setDebugMode: (value: boolean) => void
   ready: boolean
 }
 
 const STORAGE_KEY = "sancus.prefs"
 
-type Stored = { collapsed?: boolean; theme?: SancusTheme }
+type Stored = { collapsed?: boolean; theme?: SancusTheme; debugMode?: boolean }
 
 const PrefsContext = createContext<Prefs | null>(null)
 
@@ -48,13 +50,17 @@ function writeStored(next: Stored) {
 export function SancusPrefsProvider({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsedState] = useState(false)
   const [theme, setThemeState] = useState<SancusTheme>("day")
+  const [debugMode, setDebugModeState] = useState(false)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const stored = readStored()
+    /* eslint-disable react-hooks/set-state-in-effect -- Preferences hydrate after mount to avoid server/client markup mismatches. */
     if (typeof stored.collapsed === "boolean") setCollapsedState(stored.collapsed)
     if (stored.theme === "day" || stored.theme === "night") setThemeState(stored.theme)
+    if (typeof stored.debugMode === "boolean") setDebugModeState(stored.debugMode)
     setReady(true)
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [])
 
   const setCollapsed = useCallback((value: boolean) => {
@@ -75,9 +81,14 @@ export function SancusPrefsProvider({ children }: { children: ReactNode }) {
     writeStored({ ...readStored(), theme: next })
   }, [])
 
+  const setDebugMode = useCallback((value: boolean) => {
+    setDebugModeState(value)
+    writeStored({ ...readStored(), debugMode: value })
+  }, [])
+
   return (
     <PrefsContext.Provider
-      value={{ collapsed, theme, setCollapsed, toggleCollapsed, setTheme, ready }}
+      value={{ collapsed, theme, debugMode, setCollapsed, toggleCollapsed, setTheme, setDebugMode, ready }}
     >
       {children}
     </PrefsContext.Provider>

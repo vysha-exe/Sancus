@@ -18,6 +18,13 @@ export type CompanyTotal = {
   companies: number
 }
 
+export type CompanyNodeTotal = {
+  currency: string
+  totalMinor: string
+  bankMinor: string
+  walletMinor: string
+}
+
 const RATE_SCALE = 1_000_000n
 const REPORTING_SCALE = 1_000_000n
 
@@ -51,6 +58,21 @@ export function usdMinorToReportingMinor(minor: string | bigint, reportingCurren
   const reportingRate = scaledRate(reportingCurrency)
   if (reportingRate === null) return 0n
   return roundedDivide(BigInt(minor) * reportingRate, RATE_SCALE)
+}
+
+/** Combines one company's local bank balance and own wallet liquidity in its local currency. */
+export function calculateCompanyNodeTotal(node: CompanyNode): CompanyNodeTotal {
+  const bankMinor = node.bankBalance
+    ? localBankMinorToReportingMinor(node.bankBalance.balanceMinor, node.bankBalance.currency, node.currency)
+    : 0n
+  const walletMinor = usdMinorToReportingMinor(node.ownMinor, node.currency)
+
+  return {
+    currency: node.currency,
+    totalMinor: (bankMinor + walletMinor).toString(),
+    bankMinor: bankMinor.toString(),
+    walletMinor: walletMinor.toString(),
+  }
 }
 
 function flatten(root: CompanyNode): CompanyNode[] {
