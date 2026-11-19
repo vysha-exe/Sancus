@@ -21,11 +21,14 @@ import {
   confirmProposal,
   dismissProposal,
   EXIT_RE,
+  needsWhisperListen,
   openProposals,
   ProposalCard,
   recognitionCtor,
+  recordUtterance,
   setChat,
   StepList,
+  unlockAudioPlayback,
   useAgentChat,
   useSpeaker,
   useVoiceGlow,
@@ -106,9 +109,11 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
   const [phase, setPhase] = useState<Phase>("off")
   const [interim, setInterim] = useState("")
   const [voiceNote, setVoiceNote] = useState<string | null>(null)
+  const [whisperMode, setWhisperMode] = useState(false)
   const phaseRef = useRef<Phase>("off")
   const recRef = useRef<Recognition | null>(null)
   const listenRef = useRef<() => void>(() => {})
+  const whisperStopRef = useRef<{ stopped: boolean } | null>(null)
   const { orbRef, tapOutput } = useVoiceGlow(phase)
   const isActive = useCallback(() => phaseRef.current !== "off", [])
   const { eleven, say, stopSpeaking, prefetchPhrases } = useSpeaker(isActive, { onAudio: tapOutput })
@@ -117,6 +122,9 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
     phaseRef.current = p
     setPhase(p)
   }
+  useEffect(() => {
+    setWhisperMode(needsWhisperListen())
+  }, [])
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" })
   }, [turns, busy, liveSteps])
@@ -131,14 +139,14 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
       setError(null)
       const voice = phaseRef.current !== "off"
       if (voice) setPhaseBoth("thinking")
+      const speakProgress = voice && !needsWhisperListen()
       const spokenProgress = new Set<string>()
       try {
         const done = await askAgent(content, {
           spoken,
           voice,
           onEvent: (e) => {
-            // Fill the silence with what it's doing (at most two short lines a turn).
-            if (e.type === "start" && voice && spokenProgress.size < 2 && !spokenProgress.has(e.progress)) {
+            if (speakProgress && e.type === "start" && spokenProgress.size < 2 && !spokenProgress.has(e.progress)) {
               spokenProgress.add(e.progress)
               void say(`${e.progress}.`)
             }
@@ -170,6 +178,8 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
 
   const exitVoice = useCallback(() => {
     setPhaseBoth("off")
+    if (whisperStopRef.current) whisperStopRef.current.stopped = true
+    whisperStopRef.current = null
     recRef.current?.abort()
     recRef.current = null
     stopSpeaking()
@@ -226,8 +236,38 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
   )
 
   const listen = useCallback(() => {
+    if (phaseRef.current === "off") return
+
+    if (needsWhisperListen()) {
+      if (whisperStopRef.current) whisperStopRef.current.stopped = true
+      const signal = { stopped: false }
+      whisperStopRef.current = signal
+      setInterim("")
+      setVoiceNote("Listening… tap the orb when you're done speaking.")
+      setPhaseBoth("listening")
+      void (async () => {
+        const result = await recordUtterance({
+          maxMs: 15_000,
+          signal,
+          onStarted: () => setInterim("Recording…"),
+        })
+        if (phaseRef.current === "off") return
+        whisperStopRef.current = null
+        if ("error" in result) {
+          setVoiceNote(result.error)
+          setInterim("")
+          setPhaseBoth("paused")
+          return
+        }
+        setVoiceNote(null)
+        setInterim(result.text)
+        await handleUtterance(result.text)
+      })()
+      return
+    }
+
     const Ctor = recognitionCtor()
-    if (!Ctor || phaseRef.current === "off") return
+    if (!Ctor) return
     recRef.current?.abort()
     const rec = new Ctor()
     rec.lang = "en-US"
@@ -278,12 +318,20 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
 
   async function enterVoice() {
     if (paused) return
-    setVoiceNote(recognitionCtor() ? null : "This browser can't listen (use Chrome or Edge). You can still type, and replies will be spoken.")
+    await unlockAudioPlayback()
+    const canListen = Boolean(recognitionCtor()) || needsWhisperListen()
+    setVoiceNote(
+      canListen
+        ? needsWhisperListen()
+          ? "On this phone: tap the orb to stop when you're done speaking."
+          : null
+        : "This browser can't listen (use Chrome or Edge). You can still type, and replies will be spoken."
+    )
     setPhaseBoth("speaking")
     void prefetchPhrases() // record progress lines now so they play instantly later
     await say(turns.length ? VOICE_GREETINGS[1]! : VOICE_GREETINGS[0]!)
     if (phaseRef.current !== "off") {
-      if (recognitionCtor()) listenRef.current()
+      if (canListen) listenRef.current()
       else setPhaseBoth("paused")
     }
   }
@@ -294,6 +342,11 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
       stopSpeaking()
       listen()
     } else if (phase === "listening") {
+      if (whisperStopRef.current) {
+        whisperStopRef.current.stopped = true
+        setInterim("Got it — hearing you…")
+        return
+      }
       recRef.current?.abort()
       recRef.current = null
       setPhaseBoth("paused")
@@ -497,7 +550,11 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
           </ol>
         ) : null}
         <div className="ag-vnote">
-          <span className="body-s muted">Tap Confirm or say “confirm” to send · “cancel” to drop it · “exit voice” to stop</span>
+          <span className="body-s muted">
+            {whisperMode
+              ? "Tap orb to finish speaking · Confirm to send · exit voice to stop"
+              : "Tap Confirm or say “confirm” to send · “cancel” to drop it · “exit voice” to stop"}
+          </span>
         </div>
       </div>
     </section>

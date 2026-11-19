@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export type DemoAs = "admin" | "finance" | "branch" | "employee" | "individual"
 export const DEMO_AS: DemoAs[] = ["admin", "finance", "branch", "employee", "individual"]
 export const DEMO_HOME: Record<DemoAs, string> = { admin: "/home", finance: "/activity/approvals", branch: "/branch", employee: "/me", individual: "/home" }
-const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", finance: "Mei", branch: "Ploy", employee: "Niran", individual: "Jayden" }
+const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", finance: "Mei", branch: "Ploy", employee: "Niran", individual: "Vysha" }
 
 export function parseDemoAs(v: string | null | undefined): DemoAs {
   return DEMO_AS.includes(v as DemoAs) ? (v as DemoAs) : "admin"
@@ -44,10 +44,21 @@ async function findUserId(admin: SupabaseClient, email: string): Promise<string 
   return null
 }
 
-async function ensureUser(admin: SupabaseClient, email: string, password: string, firstName: string): Promise<string> {
+async function ensureUser(
+  admin: SupabaseClient,
+  email: string,
+  password: string,
+  firstName: string,
+  extraMeta: Record<string, string> = {}
+): Promise<string> {
+  const meta = { first_name: firstName, ...extraMeta }
   const existing = await findUserId(admin, email)
-  if (existing) return existing
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { first_name: firstName } })
+  if (existing) {
+    // Keep demo display names / country in sync when we rename them (e.g. Jayden → Vysha).
+    await admin.auth.admin.updateUserById(existing, { user_metadata: meta })
+    return existing
+  }
+  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: meta })
   if (error || !data.user) throw new Error(`couldn't create ${email}: ${error?.message}`)
   return data.user.id
 }
@@ -205,7 +216,14 @@ export async function ensureDemoAccount(
   emailOverride?: string
 ): Promise<DemoAccountReady> {
   const email = emailOverride ?? demoEmailFor(base.email, as)
-  const userId = await ensureUser(admin, email, base.password, DEMO_NAMES[as])
+  // Individual is a US personal account (no company); business admin HQ is also US.
+  const userId = await ensureUser(
+    admin,
+    email,
+    base.password,
+    DEMO_NAMES[as],
+    as === "individual" ? { country: "US", home_currency: "USD" } : { country: "US" }
+  )
   if (as === "admin") {
     const { rootId, branchId } = await ensureDemoCompany(admin, userId)
     await ensureDemoPeople(admin, rootId, userId).catch((e) => console.error("demo people seed failed", e))
