@@ -257,6 +257,14 @@ function ParentBranchBalances({
       maximumFractionDigits: (node.bankBalance?.currency ?? node.currency) === "IDR" ? 0 : 2,
     }).format(Number(balanceMinor) / 100)
   }
+  const positionMoney = (minor: bigint | string) => new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+  }).format(Number(BigInt(minor)) / 1_000_000)
+  const equityMinor = positions?.equities.reduce((sum, item) => sum + BigInt(item.valueMinor), 0n) ?? 0n
+  const yieldMinor = positions?.yield.reduce((sum, item) => sum + BigInt(item.valueMinor), 0n) ?? 0n
+  const equitySymbols = positions?.equities.filter((item) => BigInt(item.valueMinor) > 0n).map((item) => item.symbol).join(" · ") || "No positions"
+  const yieldNames = [...new Set(positions?.yield.filter((item) => BigInt(item.valueMinor) > 0n).map((item) => item.protocol || item.name) ?? [])].join(" · ") || "No positions"
 
   return (
     <section className="tile s12 home-branches" aria-labelledby="branch-balances" aria-busy={!ready}>
@@ -287,8 +295,6 @@ function ParentBranchBalances({
                   <span>{bankMoney(node)}</span>
                   <small>{node.bankBalance?.bankName ?? "Local bank"} operating account</small>
                   <small className="home-branch-card__stablecoin">Stablecoin liquidity · {formatBalance(node.ownMinor)} USDC · {node.wallets.length} {node.wallets.length === 1 ? "wallet" : "wallets"}</small>
-                  {isParent && positions ? <small className="home-branch-card__stablecoin">Internal liquidity · {formatBalance(positions.fUsdcMinor)} fUSDC</small> : null}
-                  {isParent && positions ? <small className="home-branch-card__stablecoin">Investments · {formatBalance(positions.equities.reduce((sum, item) => sum + BigInt(item.valueMinor), 0n).toString())} stocks · {formatBalance(positions.yield.reduce((sum, item) => sum + BigInt(item.valueMinor), 0n).toString())} yield</small> : null}
                 </div>
                 <span className="home-branch-card__open" aria-hidden>Open →</span>
               </Link>
@@ -296,6 +302,34 @@ function ParentBranchBalances({
           })}
         </div>
       ) : <div className="empty">No company branches yet.</div>}
+      {ready && positions ? (
+        <div className="home-treasury-positions" aria-label="Parent Treasury positions">
+          <div className="home-treasury-positions__head">
+            <div>
+              <span className="home-branch-card__kind">Parent Treasury positions</span>
+              <p className="body-s muted">Managed centrally by {parent?.name ?? "the parent company"}; branch operating balances stay separate.</p>
+            </div>
+            <Link href="/treasury" className="sx-btn sx-btn--quiet">Manage Treasury</Link>
+          </div>
+          <div className="home-treasury-positions__grid">
+            <div className="home-treasury-position">
+              <span className="sx-label">Internal liquidity</span>
+              <strong>{positionMoney(positions.fUsdcMinor)}</strong>
+              <small>fUSDC</small>
+            </div>
+            <div className="home-treasury-position">
+              <span className="sx-label">Tokenized stocks</span>
+              <strong>{positionMoney(equityMinor)}</strong>
+              <small>{equitySymbols}</small>
+            </div>
+            <div className="home-treasury-position">
+              <span className="sx-label">Yield positions</span>
+              <strong>{positionMoney(yieldMinor)}</strong>
+              <small>{yieldNames}</small>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
