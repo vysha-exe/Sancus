@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { PublicReceiveQr } from "@/components/sancus-ui/public-receive-qr"
+import { StaticReceiveLinks } from "@/components/sancus/static-receive-links"
 import type { InvoiceDto } from "@/lib/sancus/invoices"
 
 const MAX_BYTES = 10 * 1024 * 1024
@@ -84,7 +85,8 @@ export default function InvoicesPage() {
       </div>
 
       <section style={{ display: "grid", gap: 12 }} aria-labelledby="get-paid-locally">
-        <div><h2 id="get-paid-locally" className="sx-h heading-3">Get paid locally</h2><p className="body-s muted" style={{ margin: 0 }}>Share a reusable branch QR for Pix, QRIS, or PromptPay. The customer chooses the amount when they pay.</p></div>
+        <div><h2 id="get-paid-locally" className="sx-h heading-3">Get paid locally</h2><p className="body-s muted" style={{ margin: 0 }}>Share an organization&apos;s permanent QR when the payer chooses the amount, or create an exact-amount provider QR directly.</p></div>
+        <StaticReceiveLinks />
         <PublicReceiveQr />
       </section>
 

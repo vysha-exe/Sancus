@@ -1,8 +1,10 @@
 # Admin route performance investigation
 
-**Date:** November 18, 2026  
-**Branch:** `codex/globalpay-hackathon-dashboard`  
-**Status:** Fix implemented locally; authenticated timing verification still pending  
+**Date:** November 18, 2026
+
+**Branch:** `codex/globalpay-hackathon-dashboard`
+
+**Status:** Fix implemented locally; authenticated timing verification still pending
 **Scope:** Admin identity, company workspace loading, and client-side route transitions
 
 ## Executive summary

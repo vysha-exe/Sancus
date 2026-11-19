@@ -22,9 +22,6 @@ export default function HomePage() {
   const isAdmin = account?.type === "ADMIN"
   // A business admin's dashboard is always the company (never personal tiles).
   const personal = isAdmin ? false : ws.ready ? ws.isPersonal : !ws.hasBusiness
-  const now = new Date()
-  const weekday = now.toLocaleDateString(undefined, { weekday: "long" })
-  const date = now.toLocaleDateString(undefined, { month: "long", day: "numeric" })
   const activeName = ws.activeNode?.name ?? accountDisplayName(account, workspace.name)
   const showBranchOverview = !personal && ws.activeNode?.parentId === null
 
@@ -45,10 +42,6 @@ export default function HomePage() {
                 ? "Monitor the treasury, direct branches, and recent money movement."
                 : "Monitor this branch, its payments, and available funds."}
           </p>
-        </div>
-        <div className="home-date" suppressHydrationWarning>
-          <span>{weekday}</span>
-          <strong>{date}</strong>
         </div>
       </header>
 

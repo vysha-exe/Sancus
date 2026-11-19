@@ -6,7 +6,7 @@ import { toSpendingMethodDto } from "@/lib/sancus/local-rails"
 import { requirePermission } from "@/lib/sancus/accounts-server"
 
 const schema = z.object({
-  employeeId: z.string().min(1).max(80),
+  employeeId: z.string().uuid(),
   employeeName: z.string().min(1).max(120),
   label: z.string().min(1).max(120),
   methodType: z.enum(["PIX", "QRIS", "PROMPTPAY", "CARD"]).default("PIX"),
@@ -36,6 +36,7 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
     .from("sancus_spending_methods")
     .select("*")
     .eq("user_id", user.id)
+    .neq("status", "REVOKED")
     .order("created_at", { ascending: false })
   if (error) return NextResponse.json({ error: "Could not load spending methods" }, { status: 500 })
   const start = new Date()
@@ -62,6 +63,15 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (denied) return denied
   const parsed = await validateJsonBody(req, schema)
   if (!parsed.ok) return parsed.response
+  const { data: employee } = await supabase
+    .from("sancus_memberships")
+    .select("id")
+    .eq("user_id", parsed.data.employeeId)
+    .eq("status", "ACTIVE")
+    .in("role", ["EMPLOYEE", "FINANCE"])
+    .limit(1)
+    .maybeSingle()
+  if (!employee) return NextResponse.json({ error: "Choose an active employee from Team" }, { status: 400 })
   const methodType = parsed.data.methodType
   const currency = currencyFor(methodType, parsed.data.currency)
   const limitMajor = parsed.data.monthlyLimitBrl ?? parsed.data.monthlyLimit

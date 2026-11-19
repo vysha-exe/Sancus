@@ -38,4 +38,17 @@ describe("company balance projection", () => {
     expect(result[0]?.children[0]?.ownMinor).toBe("5000000")
     expect(result[0]?.children[1]?.ownMinor).toBe("4000000")
   })
+
+  it("floors a branch at zero when pending commitments exceed its wallet balance", () => {
+    const tree = [node("root", [node("bangkok")])]
+    const wallets = [
+      { walletId: "w1", name: "bangkok", address: "0x1", blockchain: "ARC-TESTNET", companyId: "bangkok", usdcMinor: "3000000", local: {} },
+    ]
+
+    const result = applyCompanyBalances(tree, { wallets, deductions: { bangkok: "337802231" } })
+
+    expect(result[0]?.children[0]?.ownMinor).toBe("0")
+    expect(result[0]?.children[0]?.totalMinor).toBe("0")
+    expect(result[0]?.totalMinor).toBe("0")
+  })
 })

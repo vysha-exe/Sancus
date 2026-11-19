@@ -64,6 +64,11 @@ export type Capabilities = {
 
 const NONE: Capabilities = { pay: false, approve: false, editPolicies: false, invite: false, createBranch: false, createWallet: false }
 
+function availableAfterDeductions(balance: bigint, deductions: bigint): bigint {
+  const available = balance - deductions
+  return available > 0n ? available : 0n
+}
+
 /** Capability matrix from docs/b2b-b2c-structure.md. */
 export function capabilities(role: Role | null): Capabilities {
   switch (role) {
@@ -126,7 +131,8 @@ export function buildCompanyTree(
       can.createWallet = false
     }
     const own = wallets.filter((w) => w.companyId === c.id)
-    const ownMinor = own.reduce((s, w) => s + (w.usdcMinor ? BigInt(w.usdcMinor) : 0n), 0n) - (deductions.get(c.id) ?? 0n)
+    const walletMinor = own.reduce((s, w) => s + (w.usdcMinor ? BigInt(w.usdcMinor) : 0n), 0n)
+    const ownMinor = availableAfterDeductions(walletMinor, deductions.get(c.id) ?? 0n)
     const children = (childrenOf.get(c.id) ?? []).map((k) => build(k, depth + 1))
     const totalMinor = children.reduce((s, k) => s + BigInt(k.totalMinor), ownMinor)
     return {
@@ -169,10 +175,11 @@ export function applyCompanyBalances(
   const apply = (node: CompanyNode): CompanyNode => {
     const wallets = walletsByCompany.get(node.id) ?? []
     const deduction = BigInt(snapshot.deductions[node.id] ?? "0")
-    const ownMinor = wallets.reduce(
+    const walletMinor = wallets.reduce(
       (sum, wallet) => sum + (wallet.usdcMinor ? BigInt(wallet.usdcMinor) : 0n),
       0n
-    ) - deduction
+    )
+    const ownMinor = availableAfterDeductions(walletMinor, deduction)
     const children = node.children.map(apply)
     const totalMinor = children.reduce((sum, child) => sum + BigInt(child.totalMinor), ownMinor)
     return {

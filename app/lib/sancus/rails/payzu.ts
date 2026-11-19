@@ -38,6 +38,11 @@ export function isPayZuConfigured() {
   return Boolean(process.env.PAYZU_SANDBOX_TOKEN?.trim())
 }
 
+export function isPayZuSandboxConfigured() {
+  const baseUrl = process.env.PAYZU_BASE_URL?.trim() || DEFAULT_BASE_URL
+  return isPayZuConfigured() && /(^|[./-])sandbox([./-]|$)/i.test(baseUrl)
+}
+
 export function simulatedPixCollection(input: { amountBrl: number; reference: string }): PayZuTransaction {
   const id = simulatedId("COL", input.reference)
   return {
