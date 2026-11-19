@@ -1,9 +1,16 @@
 // Sancus invoices: DTO and row mappers shared by the API routes and the invoice screens.
 export type InvoiceStatus = "DRAFT" | "READY" | "PAID"
 
-export const INVOICE_CURRENCIES = ["USD", "EUR", "BRL", "IDR", "THB"] as const
+export type InvoicePaymentDetails = {
+  bankName: string | null
+  accountName: string | null
+  accountNumber: string | null
+  swift: string | null
+}
+
+export const INVOICE_CURRENCIES = ["USD", "SGD", "EUR", "BRL", "IDR", "THB"] as const
 export type InvoiceCurrency = (typeof INVOICE_CURRENCIES)[number]
-export const INVOICE_RAILS = ["ACH", "SEPA", "WIRE", "USDC", "PIX"] as const
+export const INVOICE_RAILS = ["ACH", "PAYNOW", "SEPA", "WIRE", "USDC", "PIX"] as const
 
 export type InvoiceRow = {
   id: string
@@ -35,6 +42,7 @@ export type InvoiceDto = {
   currency: string
   dueDate: string | null
   rail: string | null
+  paymentDetails: InvoicePaymentDetails
   status: InvoiceStatus
   createdAt: string
   updatedAt: string
@@ -64,6 +72,9 @@ export function minorToAmount(minor: number | string, currency: string): number 
 export function toInvoiceDto(row: InvoiceRow): InvoiceDto {
   const currency = row.currency || "USD"
   const hasAmount = row.amount_minor !== null && row.amount_minor !== undefined
+  const payment = row.extracted?.paymentDetails && typeof row.extracted.paymentDetails === "object"
+    ? row.extracted.paymentDetails as Partial<InvoicePaymentDetails>
+    : {}
   return {
     id: row.id,
     fileName: row.file_name,
@@ -75,6 +86,12 @@ export function toInvoiceDto(row: InvoiceRow): InvoiceDto {
     currency,
     dueDate: row.due_date,
     rail: row.rail,
+    paymentDetails: {
+      bankName: typeof payment.bankName === "string" ? payment.bankName : null,
+      accountName: typeof payment.accountName === "string" ? payment.accountName : null,
+      accountNumber: typeof payment.accountNumber === "string" ? payment.accountNumber : null,
+      swift: typeof payment.swift === "string" ? payment.swift : null,
+    },
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

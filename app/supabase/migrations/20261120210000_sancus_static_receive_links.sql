@@ -20,10 +20,12 @@ create index if not exists sancus_receive_links_owner_idx
 
 alter table public.sancus_receive_links enable row level security;
 
+drop policy if exists "Members can view receive links" on public.sancus_receive_links;
 create policy "Members can view receive links"
   on public.sancus_receive_links for select
   using (public.sancus_can_access_company(auth.uid(), company_id));
 
+drop policy if exists "Managers can create receive links" on public.sancus_receive_links;
 create policy "Managers can create receive links"
   on public.sancus_receive_links for insert
   with check (
@@ -31,6 +33,7 @@ create policy "Managers can create receive links"
     and public.sancus_can_manage_company(auth.uid(), company_id)
   );
 
+drop policy if exists "Managers can update receive links" on public.sancus_receive_links;
 create policy "Managers can update receive links"
   on public.sancus_receive_links for update
   using (public.sancus_can_manage_company(auth.uid(), company_id));
@@ -38,6 +41,7 @@ create policy "Managers can update receive links"
 grant select, insert, update on public.sancus_receive_links to authenticated;
 grant all on public.sancus_receive_links to service_role;
 
+drop trigger if exists handle_sancus_receive_links_updated_at on public.sancus_receive_links;
 create trigger handle_sancus_receive_links_updated_at
   before update on public.sancus_receive_links
   for each row execute function public.handle_updated_at();
@@ -92,6 +96,7 @@ begin
   return new;
 end $$;
 
+drop trigger if exists sancus_companies_ensure_receive_link on public.sancus_companies;
 create trigger sancus_companies_ensure_receive_link
   after insert on public.sancus_companies
   for each row execute function public.sancus_ensure_receive_link();
