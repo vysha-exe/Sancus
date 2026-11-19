@@ -4,6 +4,7 @@ import Link from "next/link"
 import QRCode from "qrcode"
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import { VirtualCard } from "@/components/sancus-ui/virtual-card"
+import { CardDetailsDialog } from "@/components/sancus-ui/card-details-dialog"
 import { countryByCode } from "@/lib/sancus/countries"
 import type { XenditPayoutDto } from "@/lib/sancus/xendit-payouts"
 import { useLiveApprovals } from "@/lib/sancus/use-live-approvals"
@@ -19,6 +20,7 @@ type Method = {
   status: string
   source: "CARD" | "SPENDING_METHOD"
   lastFour: string | null
+  simulated?: boolean
 }
 type CardPurchase = {
   id: string; cardId: string | null; spendingMethodId: string | null; merchantName: string
@@ -87,6 +89,8 @@ export default function EmployeePage() {
   const [cardAmount, setCardAmount] = useState("25.00")
   const [cardBusy, setCardBusy] = useState(false)
   const [cardMessage, setCardMessage] = useState<string | null>(null)
+  const [detailsCard, setDetailsCard] = useState<Method | null>(null)
+  const closeCardDetails = useCallback(() => setDetailsCard(null), [])
   const [pixId, setPixId] = useState("")
   const [pixQr, setPixQr] = useState("")
   const [pixRecipient, setPixRecipient] = useState("")
@@ -288,6 +292,7 @@ export default function EmployeePage() {
             <>
               {cards.length > 1 ? <label className="field"><span>Card</span><select value={selectedCard.id} onChange={(event) => setCardId(event.target.value)}>{cards.map((card) => <option value={card.id} key={card.id}>{card.label} · {card.currency}</option>)}</select></label> : null}
               <VirtualCard limit={`${money(selectedCard.monthlyLimitMinor, selectedCard.currency)}/MO`} name={(data?.firstName ?? "").toUpperCase()} num={`•••• •••• •••• ${selectedCard.lastFour ?? fallbackLast4(selectedCard.id)}`} ariaLabel={`Virtual card ending ${selectedCard.lastFour ?? fallbackLast4(selectedCard.id)}`} />
+              {selectedCard.provider === "MARQETA" && !selectedCard.simulated ? <button type="button" className="sx-btn sx-btn--secondary" onClick={() => setDetailsCard(selectedCard)}>View card details</button> : null}
               <div className="kv"><span>Used this month</span><span>{money(selectedCard.usedMinor, selectedCard.currency)} of {money(selectedCard.monthlyLimitMinor, selectedCard.currency)}</span></div>
               <form onSubmit={spendCard} style={{ display: "grid", gap: 12 }}>
                 <label className="field"><span>Merchant</span><input value={merchant} onChange={(event) => setMerchant(event.target.value)} required maxLength={120} /></label>
@@ -401,6 +406,12 @@ export default function EmployeePage() {
           ].sort((a, b) => +new Date(b.at) - +new Date(a.at)).slice(0, 8).map((row) => <div className="kv" key={row.id}><span><span className="sx-rail">{row.method}</span> {row.name}<span className="body-s muted" style={{ display: "block" }}>{new Date(row.at).toLocaleString()}</span></span><span style={{ textAlign: "right" }}>−{row.amount}<span className="body-s muted" style={{ display: "block" }}>{row.status}</span></span></div>) : <div className="empty">No employee purchases yet.</div>}
         </section>
       </div>
+
+      {detailsCard ? <CardDetailsDialog
+        cardId={detailsCard.id}
+        holder={data?.firstName ?? "Cardholder"}
+        onClose={closeCardDetails}
+      /> : null}
     </div>
   )
 }
