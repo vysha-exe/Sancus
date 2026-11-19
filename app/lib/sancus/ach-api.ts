@@ -23,7 +23,7 @@ export async function settlementWallets(db: SupabaseClient, userId: string, comp
   // Paying wallet: the company's own treasury when acting for a company, else the personal one.
   let treasury = data?.find((w) => w.type === "treasury")?.address ?? null
   if (companyId) {
-    const { data: companyWallets } = await db.from("wallets").select("address").eq("company_id", companyId).order("created_at").limit(1)
+    const { data: companyWallets } = await db.from("wallets").select("address").eq("company_id", companyId).or("type.is.null,type.neq.payout").order("created_at").limit(1)
     treasury = (companyWallets?.[0]?.address as string | undefined) ?? treasury
   }
   const envAddr = process.env.ACH_SETTLEMENT_ADDRESS?.trim()

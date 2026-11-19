@@ -18,6 +18,7 @@ import { formatRate } from "@/lib/sancus/fx"
 import { getPayoutProvider } from "@/lib/sancus/payout-provider"
 import { evaluatePayout, isNewRecipient, loadCompanyPolicy, loadPolicy, spentToday } from "@/lib/sancus/policy"
 import { companyIdFromRequest } from "@/lib/sancus/workspace"
+import { ensureCompanySettlementWallet } from "@/lib/sancus/company-wallets"
 import { liveSgdFxConfig } from "@/lib/sancus/live-fx"
 import {
   executePayout,
@@ -28,41 +29,6 @@ import {
   toPayoutDto,
   type PayoutRow,
 } from "@/lib/sancus/payouts"
-
-type Db = Parameters<Parameters<typeof withAuth>[0]>[1]["supabase"]
-type ArcWallet = { address: string; blockchain: string; type: string }
-
-/** A Settlement ("payout") wallet for the USDC leg: the caller's own, else the global account owner's. */
-async function fallbackSettlementWallet(supabase: Db, userId: string, companyId: string | null): Promise<ArcWallet | null> {
-  const payoutWalletOf = async (uid: string) => {
-    const { data } = await supabase
-      .from("wallets")
-      .select("address, blockchain, type")
-      .eq("user_id", uid)
-      .eq("blockchain", "ARC-TESTNET")
-      .eq("type", "payout")
-      .is("company_id", null)
-      .order("created_at", { ascending: true })
-      .limit(1)
-    return (data?.[0] as ArcWallet | undefined) ?? null
-  }
-  const own = await payoutWalletOf(userId)
-  if (own || !companyId) return own
-  const { data: node } = await supabase.from("sancus_companies").select("root_id").eq("id", companyId).maybeSingle()
-  const rootId = (node?.root_id as string | undefined) ?? companyId
-  const { data: owners } = await supabase
-    .from("sancus_memberships")
-    .select("user_id")
-    .eq("company_id", rootId)
-    .eq("role", "OWNER")
-    .eq("status", "ACTIVE")
-    .not("user_id", "is", null)
-  for (const o of owners ?? []) {
-    const w = await payoutWalletOf(o.user_id as string)
-    if (w) return w
-  }
-  return null
-}
 
 const createSchema = quoteRequestSchema.extend({
   sourceWalletId: z.string().min(1).optional(),
@@ -180,11 +146,11 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     }
   }
 
-  // Company nodes only hold a treasury wallet. Without a settlement wallet the onchain USDC leg would
-  // be skipped (no tx hash, nothing leaves the treasury), so settle to the caller's own Settlement
-  // wallet, else the global account owner's.
-  if (!settlementWallet && !process.env.SANCUS_SETTLEMENT_ADDRESS?.trim()) {
-    settlementWallet = await fallbackSettlementWallet(supabase, user.id, companyId)
+  // Every payout moves USDC onchain from the treasury to a settlement wallet. A company node that
+  // doesn't have its own settlement wallet yet gets one created now (Circle, same wallet set).
+  if (!settlementWallet && !process.env.SANCUS_SETTLEMENT_ADDRESS?.trim() && companyId && treasuryWallet) {
+    const created = await ensureCompanySettlementWallet(supabase, user.id, companyId)
+    if (created) settlementWallet = { ...created, type: "payout" }
   }
 
   // Partner deposit address: env override (e.g. StraitsX's address), else our Settlement wallet.
