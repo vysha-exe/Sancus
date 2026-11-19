@@ -25,6 +25,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { circleDeveloperSdk } from "@/lib/circle/developer-controlled-wallets-client";
 import type { Blockchain } from "@circle-fin/developer-controlled-wallets";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface GatewayEOAWallet {
   chain: string;
@@ -38,13 +39,17 @@ export interface GatewayEOAWallet {
  * Creates wallets on all supported chains
  * Circle SDK automatically derives the same address across EVM chains
  */
-export async function generateGatewayEOAWallets(walletSetId: string): Promise<GatewayEOAWallet[]> {
-  const chains = [
+const GATEWAY_CHAINS = [
     { id: "ETH-SEPOLIA", name: "Ethereum Sepolia Gateway Signer" },
     { id: "BASE-SEPOLIA", name: "Base Sepolia Gateway Signer" },
     { id: "AVAX-FUJI", name: "Avalanche Fuji Gateway Signer" },
     { id: "ARC-TESTNET", name: "Arc Testnet Gateway Signer" },
-  ];
+  ] as const;
+
+export async function generateGatewayEOAWallets(
+  walletSetId: string,
+  chains: readonly { id: string; name: string }[] = GATEWAY_CHAINS
+): Promise<GatewayEOAWallet[]> {
 
   // Create EOA wallets using Circle SDK - one wallet per chain
   const response = await circleDeveloperSdk.createWallets({
@@ -74,12 +79,33 @@ export async function generateGatewayEOAWallets(walletSetId: string): Promise<Ga
  * Create wallet set and Gateway EOA wallets for a user
  * First creates a wallet set, then creates EOA wallets within that set
  */
-export async function storeGatewayEOAWalletsForUser(userId: string) {
-  const supabase = await createClient();
+export async function storeGatewayEOAWalletsForUser(
+  userId: string,
+  companyId?: string,
+  client?: SupabaseClient
+) {
+  const supabase = client ?? await createClient();
+
+  let existingQuery = supabase
+    .from("wallets")
+    .select("circle_wallet_id, address, blockchain, name, company_id")
+    .eq("user_id", userId)
+    .eq("type", "gateway_signer");
+  existingQuery = companyId
+    ? existingQuery.eq("company_id", companyId)
+    : existingQuery.is("company_id", null);
+  const { data: existing, error: existingError } = await existingQuery;
+  if (existingError) throw existingError;
+
+  const present = new Set((existing ?? []).map((wallet) => wallet.blockchain));
+  const missingChains = GATEWAY_CHAINS.filter((chain) => !present.has(chain.id));
+  if (missingChains.length === 0) return existing ?? [];
 
   // Step 1: Create a wallet set for this user
   const walletSetResponse = await circleDeveloperSdk.createWalletSet({
-    name: `Gateway Signers - User ${userId.substring(0, 8)}`,
+    name: companyId
+      ? `Gateway Signers - Company ${companyId.substring(0, 8)}`
+      : `Gateway Signers - User ${userId.substring(0, 8)}`,
   });
 
   if (!walletSetResponse.data?.walletSet) {
@@ -90,7 +116,7 @@ export async function storeGatewayEOAWalletsForUser(userId: string) {
   console.log(`Created wallet set ${walletSetId} for user ${userId}`);
 
   // Step 2: Create EOA wallets in the wallet set
-  const wallets = await generateGatewayEOAWallets(walletSetId);
+  const wallets = await generateGatewayEOAWallets(walletSetId, missingChains);
 
   // Step 3: Store wallet information in database
   // Store Circle wallet ID in the circle_wallet_id column
@@ -101,6 +127,7 @@ export async function storeGatewayEOAWalletsForUser(userId: string) {
     blockchain: wallet.chain,
     type: "gateway_signer", // Special type for Gateway EOA wallets
     circle_wallet_id: wallet.walletId, // Store Circle's wallet ID, not private key
+    company_id: companyId ?? null,
   }));
 
   const { data, error } = await supabase
@@ -116,7 +143,7 @@ export async function storeGatewayEOAWalletsForUser(userId: string) {
   console.log(
     `Stored ${wallets.length} Gateway EOA wallets for user ${userId} with shared address ${wallets[0].address}`
   );
-  return data;
+  return [...(existing ?? []), ...(data ?? [])];
 }
 
 /**
@@ -125,20 +152,22 @@ export async function storeGatewayEOAWalletsForUser(userId: string) {
  */
 export async function getGatewayEOAWalletId(
   userId: string,
-  blockchain: string
+  blockchain: string,
+  companyId?: string
 ): Promise<{ walletId: string; address: string }> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("wallets")
     .select("circle_wallet_id, address")
     .eq("user_id", userId)
     .eq("blockchain", blockchain)
-    .eq("type", "gateway_signer")
-    .single();
+    .eq("type", "gateway_signer");
+  query = companyId ? query.eq("company_id", companyId) : query.is("company_id", null);
+  const { data, error } = await query.order("created_at", { ascending: true }).limit(1).maybeSingle();
 
   if (error || !data) {
-    throw new Error(`Gateway EOA wallet not found for user ${userId} on ${blockchain}`);
+    throw new Error(`Gateway EOA wallet not found for ${companyId ? `company ${companyId}` : `user ${userId}`} on ${blockchain}`);
   }
 
   return {
