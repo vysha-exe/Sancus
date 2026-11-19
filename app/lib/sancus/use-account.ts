@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react"
 import type { AccountDto, Permission } from "./accounts"
 import { navKeyForPath } from "./accounts"
+import { resetCompaniesCache } from "./use-companies"
 
 type State = { account: AccountDto | null; ready: boolean; signedOut: boolean }
 
@@ -27,6 +28,7 @@ async function fetchAccount(): Promise<State> {
 export function resetAccountCache() {
   cached = null
   inflight = null
+  resetCompaniesCache()
 }
 
 export function useAccount(): State {

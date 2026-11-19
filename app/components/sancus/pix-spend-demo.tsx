@@ -100,7 +100,7 @@ export function PixSpendDemo() {
     finally { setBusy(false) }
   }
 
-  if (!selected) return <section className="tile"><div className="tile-head"><div><h2 className="tile-title">Employee Pix access</h2><p className="body-s muted">Issue Pix access to an employee before paying a merchant QR.</p></div><Link href="/team/ana/methods/new" className="sx-btn sx-btn--primary">Issue Pix access</Link></div></section>
+  if (!selected) return <section className="tile"><div className="tile-head"><div><h2 className="tile-title">Employee Pix access</h2><p className="body-s muted">Issue Pix access to an employee before paying a merchant QR.</p></div><Link href="/team" className="sx-btn sx-btn--primary">Issue Pix access</Link></div></section>
 
   const active = selected.status === "ACTIVE"
   const pct = Math.min(100, Math.round(Number(selected.usedMinor) / Number(selected.monthlyLimitMinor) * 100))

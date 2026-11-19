@@ -1,0 +1,112 @@
+// Provider-backed sandbox probe for issued employee cards and Pix access.
+import { randomUUID } from "node:crypto"
+import { NextResponse } from "next/server"
+import { z } from "zod"
+import { validateJsonBody } from "@/lib/api/validate"
+import { createAdminContext, withAuth } from "@/lib/api/with-auth"
+import { requirePermission } from "@/lib/sancus/accounts-server"
+import { createDevRun, finishDevRun, sanitizeProviderPayload, step, workflow, type DevRunStep } from "@/lib/sancus/dev-runs"
+import { toEmployeeCardPurchaseDto, type EmployeeCardPurchaseRow } from "@/lib/sancus/employee-spending"
+import { toPixPaymentDto, type PixPaymentDbRow } from "@/lib/sancus/local-rails"
+import { isMarqetaSandboxConfigured, simulateMarqetaAuthorization, simulateMarqetaClearing } from "@/lib/sancus/rails/marqeta"
+import { isPayZuSandboxConfigured, mapPayZuStatus, payPix, resolvePixQr } from "@/lib/sancus/rails/payzu"
+
+const schema = z.object({
+  kind: z.enum(["CARD", "PIX"]), source: z.enum(["CARD", "SPENDING_METHOD"]), methodId: z.string().uuid(),
+  merchantName: z.string().trim().min(1).max(120), amount: z.number().positive().max(250_000_000),
+  qrPayload: z.string().trim().max(8_000).optional(),
+})
+const enabled = () => process.env.NODE_ENV !== "production" || process.env.SANCUS_ENABLE_DEV_ENDPOINTS === "true"
+const monthStart = () => { const value = new Date(); value.setUTCDate(1); value.setUTCHours(0, 0, 0, 0); return value.toISOString() }
+
+export const POST = withAuth(async (req, { user, supabase }) => {
+  if (!enabled()) return NextResponse.json({ error: "Dev payment tools are disabled" }, { status: 404 })
+  const denied = await requirePermission(supabase, user, "spending.manage")
+  if (denied) return denied
+  const parsed = await validateJsonBody(req, schema)
+  if (!parsed.ok) return parsed.response
+  const { kind, source, methodId, merchantName, amount, qrPayload } = parsed.data
+  if (kind === "CARD" && source !== "CARD") return NextResponse.json({ error: "A Marqeta sandbox card is required; generic card access cannot be authorized by the provider" }, { status: 400 })
+  if (kind === "PIX" && (source !== "SPENDING_METHOD" || !qrPayload)) return NextResponse.json({ error: "Pix tests require issued Pix access and a merchant Pix QR payload" }, { status: 400 })
+
+  const { supabase: admin } = await createAdminContext()
+  const table = source === "CARD" ? "sancus_cards" : "sancus_spending_methods"
+  const { data: method, error: methodError } = await admin.from(table).select("*").eq("id", methodId).eq("user_id", user.id).maybeSingle()
+  if (methodError) return NextResponse.json({ error: "Could not load the spending method" }, { status: 500 })
+  if (!method) return NextResponse.json({ error: "Spending method not found for this business" }, { status: 404 })
+  if (method.status !== "ACTIVE") return NextResponse.json({ error: `Declined: method is ${String(method.status).toLowerCase()}` }, { status: 403 })
+  if (source === "SPENDING_METHOD" && method.method_type !== kind) return NextResponse.json({ error: `Selected method is ${method.method_type}, not ${kind}` }, { status: 400 })
+
+  const currency = String(method.currency)
+  const amountMinor = BigInt(Math.round(amount * (currency === "JPY" ? 1 : 100)))
+  const steps: DevRunStep[] = [step("issuedAccess", true, `${method.employee_name}'s active ${kind === "CARD" ? "card" : "Pix access"} resolved`)]
+  const provider = kind === "CARD" ? "MARQETA" : "PAYZU"
+  let run: { id: string } | null = null
+  try {
+    const createdRun = await createDevRun(admin, { userId: user.id, runType: `${kind}_SPEND`, provider, steps })
+    run = createdRun
+    const runId = createdRun.id
+    if (kind === "CARD") {
+      if (method.simulated || !method.provider_card_token) throw new Error("This is a demo card. Issue a real Marqeta sandbox card before running a provider test.")
+      if (!isMarqetaSandboxConfigured()) throw new Error("Marqeta sandbox credentials or sandbox URL are not configured")
+      const { data: purchases, error: purchasesError } = await admin.from("sancus_card_purchases").select("amount_minor").eq("card_id", methodId).in("status", ["HELD", "SETTLED"]).gte("created_at", monthStart())
+      if (purchasesError) throw new Error("Could not validate the card limit")
+      const used = (purchases ?? []).reduce((sum, row) => sum + BigInt(row.amount_minor), 0n)
+      if (used + amountMinor > BigInt(method.monthly_limit_minor)) throw new Error("Declined: test purchase exceeds the card's monthly limit")
+      steps.push(step("limits", true, `Monthly limit accepted ${amount} ${currency}`))
+      const authorization = await simulateMarqetaAuthorization({ cardToken: method.provider_card_token, amount, merchantName })
+      steps.push(step("authorization", authorization.approved, authorization.approved ? "Marqeta sandbox authorization approved" : `Marqeta declined with ${authorization.responseCode || authorization.state}`))
+      const { data: purchase, error: insertError } = await admin.from("sancus_card_purchases").insert({
+        user_id: user.id, employee_id: method.employee_id, employee_name: method.employee_name, card_id: method.id,
+        merchant_name: merchantName, amount_minor: amountMinor.toString(), currency,
+        status: authorization.approved ? "HELD" : "DECLINED", decline_reason: authorization.approved ? null : authorization.responseCode || authorization.state,
+        provider: "MARQETA", provider_transaction_id: authorization.token || null, provider_status: authorization.state,
+        provider_payload: sanitizeProviderPayload(authorization.raw), simulated: false,
+      }).select("*").single()
+      if (insertError || !purchase) throw new Error(insertError?.message || "Could not save the Marqeta authorization")
+      if (!authorization.approved) {
+        await finishDevRun(admin, runId, { status: "FAILED", steps, sourceRecordType: "CARD_PURCHASE", sourceRecordId: purchase.id, providerRef: authorization.token, error: "Provider declined the authorization" })
+        return NextResponse.json({ purchase: toEmployeeCardPurchaseDto(purchase as EmployeeCardPurchaseRow), workflow: workflow(steps), error: "Marqeta declined the authorization" }, { status: 409 })
+      }
+      const clearing = await simulateMarqetaClearing({ authorizationToken: authorization.token, amount })
+      const settled = clearing.approved || /cleared|completion/i.test(clearing.state)
+      steps.push(step("settlement", settled, settled ? "Marqeta sandbox clearing completed" : `Clearing stopped at ${clearing.state}`))
+      const { data: updated } = await admin.from("sancus_card_purchases").update({
+        status: settled ? "SETTLED" : "HELD", settled_at: settled ? new Date().toISOString() : null,
+        provider_status: clearing.state, provider_payload: sanitizeProviderPayload({ authorization: authorization.raw, clearing: clearing.raw }),
+      }).eq("id", purchase.id).select("*").single()
+      await finishDevRun(admin, runId, { status: settled ? "PASSED" : "WAITING", steps, sourceRecordType: "CARD_PURCHASE", sourceRecordId: purchase.id, providerRef: authorization.token, error: settled ? null : `Clearing is ${clearing.state}` })
+      return NextResponse.json({ purchase: toEmployeeCardPurchaseDto((updated ?? purchase) as EmployeeCardPurchaseRow), workflow: workflow(steps), runId }, { status: settled ? 201 : 202 })
+    }
+
+    if (!isPayZuSandboxConfigured()) throw new Error("PayZu sandbox credentials or sandbox URL are not configured")
+    const { data: payments, error: paymentsError } = await admin.from("sancus_pix_payments").select("amount_brl_minor").eq("spending_method_id", methodId).in("status", ["PENDING", "SETTLED"]).gte("created_at", monthStart())
+    if (paymentsError) throw new Error("Could not validate the Pix limit")
+    const used = (payments ?? []).reduce((sum, row) => sum + BigInt(row.amount_brl_minor), 0n)
+    if (used + amountMinor > BigInt(method.monthly_limit_minor)) throw new Error("Declined: test payment exceeds the Pix monthly limit")
+    steps.push(step("limits", true, `Monthly limit accepted R$ ${amount.toFixed(2)}`))
+    const resolved = await resolvePixQr(qrPayload!)
+    steps.push(step("qrScan", true, `PayZu resolved the merchant QR${resolved.name ? ` to ${resolved.name}` : ""}`))
+    const reference = `dev-${randomUUID()}`
+    const payment = await payPix({ amountBrl: amount, reference, qrPayload, description: `Sancus Dev: ${merchantName}` })
+    const status = mapPayZuStatus(payment.status)
+    steps.push(step("provider", status !== "FAILED" && status !== "CANCELLED", `PayZu sandbox payment is ${status.toLowerCase()}`))
+    const { data, error } = await admin.from("sancus_pix_payments").insert({
+      user_id: user.id, idempotency_key: reference, purpose: "EMPLOYEE_SPEND", spending_method_id: method.id,
+      employee_id: method.employee_id, employee_name: method.employee_name, recipient_name: resolved.name || merchantName,
+      pix_method: "QR", pix_key_masked: "QR payload", amount_brl_minor: amountMinor.toString(),
+      provider_transaction_id: payment.id, provider_status: payment.status || "PENDING", status,
+      end_to_end_id: payment.endToEndId ?? null, provider_payload: sanitizeProviderPayload({ resolved, payment }), simulated: false,
+      settled_at: status === "SETTLED" ? payment.paidAt || new Date().toISOString() : null,
+    }).select("*").single()
+    if (error || !data) throw new Error(error?.message || "Could not save the PayZu sandbox payment")
+    const terminal = status === "SETTLED" ? "PASSED" : status === "FAILED" || status === "CANCELLED" || status === "EXPIRED" ? "FAILED" : "WAITING"
+    await finishDevRun(admin, runId, { status: terminal, steps, sourceRecordType: "PIX_PAYMENT", sourceRecordId: data.id, providerRef: payment.id, error: terminal === "FAILED" ? status : null })
+    return NextResponse.json({ payment: toPixPaymentDto(data as PixPaymentDbRow), workflow: workflow(steps), runId }, { status: terminal === "PASSED" ? 201 : 202 })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Sandbox spend failed"
+    steps.push(step("provider", false, message))
+    if (run) await finishDevRun(admin, run.id, { status: "FAILED", steps, error: message })
+    return NextResponse.json({ error: message, workflow: workflow(steps), runId: run?.id }, { status: 502 })
+  }
+})

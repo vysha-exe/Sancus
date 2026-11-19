@@ -10,7 +10,8 @@ import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 
-const VOICE_ID = () => process.env.ELEVENLABS_VOICE_ID?.trim() || "JBFqnCBsd6RMkjVDRZzb"
+// Default: "Sarah" (American English, female). Set ELEVENLABS_VOICE_ID to use another voice.
+const VOICE_ID = () => process.env.ELEVENLABS_VOICE_ID?.trim() || "EXAVITQu4vr4xnSDxMaL"
 const MODEL_ID = () => process.env.ELEVENLABS_MODEL_ID?.trim() || "eleven_flash_v2_5" // ~100 ms, built for live agents
 const key = () => process.env.ELEVENLABS_API_KEY?.trim() || ""
 

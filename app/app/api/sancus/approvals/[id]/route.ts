@@ -51,11 +51,19 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       if (transfer.status !== "PENDING_APPROVAL") {
         return NextResponse.json({ error: "This transfer was already decided" }, { status: 409 })
       }
-      if (transfer.user_id === user.id && action === "approve") {
-        return NextResponse.json({ error: "You can't approve your own transfer. Ask another admin." }, { status: 403 })
+      // Same rule as payments (an admin of the source company, not the requester), except that the
+      // global admin has no limits on internal moves, so they may approve their own. That unsticks
+      // transfers they made over the limit before that rule existed.
+      const ownGlobal =
+        transfer.user_id === user.id && account.type === "ADMIN" && account.manageableCompanyIds().includes(transfer.source_company_id)
+      if (!ownGlobal) {
+        const refusedTransfer = deny(account, transfer.user_id, transfer.source_company_id, action)
+        if (refusedTransfer) return refusedTransfer
       }
       const now = new Date().toISOString()
-      const { data: claimed } = await supabase
+      // Authorized above; a branch admin's transfer may touch accounts RLS hides, so use the service client.
+      const transferDb = serviceClient() ?? supabase
+      const { data: claimed } = await transferDb
         .from("sancus_internal_transfers")
         .update(
           action === "approve"
@@ -68,7 +76,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
         .maybeSingle()
       if (!claimed) return NextResponse.json({ error: "Someone already decided this transfer" }, { status: 409 })
       const updated = action === "approve"
-        ? await executeInternalTransfer(supabase, claimed as InternalTransferRow)
+        ? await executeInternalTransfer(transferDb, claimed as InternalTransferRow)
         : (claimed as InternalTransferRow)
       return NextResponse.json({ internalTransfer: toInternalTransferDto(updated) })
     }

@@ -43,7 +43,7 @@ export const PAID_ENDPOINTS: PaidEndpoint[] = [
     path: "/api/x402/route-quote",
     method: "GET",
     description:
-      "Cheapest payout route into Asia right now: rail, FX rate, fee, total USDC cost and arrival time. Params: country (SG|ID|TH), amount (local currency), recipientType (UEN|MOBILE|BANK).",
+      "Cheapest payout route into Asia right now: rail, FX rate, fee, total USDC cost and arrival time. Params: country (ID|TH), amount (local currency), recipientType (MOBILE|BANK).",
     price: process.env.SANCUS_X402_PRICE?.trim() || "0.01",
   },
 ]

@@ -1,5 +1,6 @@
-// Sancus: the rail bot. Mints / burns the mock local stablecoins (mBRL, mIDR, mTHB) on Arc
-// testnet with MOCK_RAIL_MINTER_KEY. Server only. Deployed by scripts/deploy-mock-stablecoins.mjs.
+// Sancus: the rail bot. Mints / burns mock local stablecoins (mBRL, mIDR, mTHB) and Face USDC
+// (fUSDC) on Arc testnet with MOCK_RAIL_MINTER_KEY. Server only.
+// Deployed by scripts/deploy-mock-stablecoins.mjs.
 
 import { createPublicClient, createWalletClient, defineChain, http, type Address, type Hex } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
@@ -18,8 +19,26 @@ export type MockToken = {
   explorer: string
 }
 
-export const MOCK_TOKENS: Record<LocalCurrency, MockToken> = deployments.tokens as Record<LocalCurrency, MockToken>
+export type FaceUsdcToken = {
+  symbol: string
+  name: string
+  decimals: number
+  address: Address
+  explorer: string
+  deployTx?: string
+}
+
+type DeploymentsFile = {
+  tokens: Record<LocalCurrency, MockToken>
+  faceUsdc?: FaceUsdcToken | null
+}
+
+const deployed = deployments as DeploymentsFile
+
+export const MOCK_TOKENS: Record<LocalCurrency, MockToken> = deployed.tokens
 export const LOCAL_CURRENCIES = Object.keys(MOCK_TOKENS) as LocalCurrency[]
+/** Face USDC (fUSDC) — mintable stand-in for Circle USDC on Arc testnet. */
+export const FACE_USDC: FaceUsdcToken | null = deployed.faceUsdc?.address ? deployed.faceUsdc : null
 
 const arcTestnet = defineChain({
   id: 5042002,
@@ -86,4 +105,40 @@ export async function mockTokenBalances(address: string): Promise<Record<LocalCu
     })
   )
   return out
+}
+
+export async function faceUsdcBalanceOf(address: Address): Promise<bigint> {
+  if (!FACE_USDC) throw new Error("Face USDC isn't deployed (run scripts/deploy-mock-stablecoins.mjs)")
+  return (await publicClient().readContract({
+    address: FACE_USDC.address,
+    abi,
+    functionName: "balanceOf",
+    args: [address],
+  })) as bigint
+}
+
+export async function faceUsdcMint(to: Address, amountMinor: bigint, ref: string): Promise<Hex> {
+  if (!FACE_USDC) throw new Error("Face USDC isn't deployed (run scripts/deploy-mock-stablecoins.mjs)")
+  const hash = await botWallet().writeContract({
+    address: FACE_USDC.address,
+    abi,
+    functionName: "mint",
+    args: [to, amountMinor, ref],
+  })
+  const receipt = await publicClient().waitForTransactionReceipt({ hash })
+  if (receipt.status !== "success") throw new Error(`fUSDC mint reverted (${hash})`)
+  return hash
+}
+
+export async function faceUsdcBurn(from: Address, amountMinor: bigint, ref: string): Promise<Hex> {
+  if (!FACE_USDC) throw new Error("Face USDC isn't deployed (run scripts/deploy-mock-stablecoins.mjs)")
+  const hash = await botWallet().writeContract({
+    address: FACE_USDC.address,
+    abi,
+    functionName: "burn",
+    args: [from, amountMinor, ref],
+  })
+  const receipt = await publicClient().waitForTransactionReceipt({ hash })
+  if (receipt.status !== "success") throw new Error(`fUSDC burn reverted (${hash})`)
+  return hash
 }

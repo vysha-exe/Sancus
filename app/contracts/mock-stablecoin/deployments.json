@@ -36,5 +36,13 @@
       "deployTx": "0x958ec60d518a7677525394519910649bc0245d8dcf1a84bd20618dc111e3af97",
       "explorer": "https://explorer.testnet.arc.io/address/0x00bf05794364ef67815094d7158a0270e555f944"
     }
+  },
+  "faceUsdc": {
+    "name": "Sancus Face USDC",
+    "symbol": "fUSDC",
+    "decimals": 6,
+    "address": "0x5ae6d882b075628ea839e57cf422172434f27e0c",
+    "deployTx": "0xf6b830022dc36adefedc9fb2806fc5d1871cb437ab6b0bd6af8988cc6a651ab4",
+    "explorer": "https://explorer.testnet.arc.io/address/0x5ae6d882b075628ea839e57cf422172434f27e0c"
   }
 }

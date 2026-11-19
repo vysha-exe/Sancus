@@ -91,11 +91,28 @@ export function useAgentChat(): ChatState {
 
 /** The one card still waiting for a decision in the latest answer, if there is exactly one. */
 export function waitingProposal(): Proposal | null {
-  const { turns, outcomes } = getChat()
-  const last = [...turns].reverse().find((t) => t.role === "assistant")
-  if (!last || last.role !== "assistant") return null
-  const open = last.proposals.filter((p) => !outcomes[p.id] || outcomes[p.id]!.state === "error")
-  return open.length === 1 ? open[0]! : null
+  const open = openProposals(getChat())
+  return open.length ? open[open.length - 1]! : null
+}
+
+/**
+ * Cards still waiting for a decision, oldest first. A card stays open across later questions
+ * ("what's the fee?") and page changes until it's confirmed or cancelled; only the latest two
+ * answers that prepared something are considered.
+ */
+export function openProposals(state: Pick<ChatState, "turns" | "outcomes">): Proposal[] {
+  const withCards = state.turns.filter((t): t is Extract<Turn, { role: "assistant" }> => t.role === "assistant" && t.proposals.length > 0).slice(-2)
+  return withCards.flatMap((t) => t.proposals).filter((p) => {
+    const o = state.outcomes[p.id]
+    return !o || o.state === "error" || o.state === "running"
+  })
+}
+
+/** The conversation as the API wants it: at most 30 messages, starting with one of yours. */
+function forApi(messages: { role: string; content: string }[]) {
+  const recent = messages.filter((m) => m.content.trim()).slice(-30)
+  const firstUser = recent.findIndex((m) => m.role === "user")
+  return firstUser < 0 ? [] : recent.slice(firstUser)
 }
 
 const setOutcome = (id: string, o: Outcome) => setChat((s) => ({ outcomes: { ...s.outcomes, [id]: o } }))
@@ -119,6 +136,7 @@ export async function confirmProposal(p: Proposal): Promise<string> {
           ? "Limits updated."
           : `Done. Status: ${String(body.status).replace(/_/g, " ").toLowerCase()}.`
     setOutcome(p.id, { state: "done", text })
+    noteInChat(`${p.title}: ${text}`)
     window.dispatchEvent(new Event(CHANGED))
     return text
   } catch (e) {
@@ -130,6 +148,12 @@ export async function confirmProposal(p: Proposal): Promise<string> {
 
 export function dismissProposal(p: Proposal) {
   setOutcome(p.id, { state: "dismissed", text: "Cancelled." })
+  noteInChat(`${p.title}: cancelled.`)
+}
+
+/** Records what happened to a card as a short assistant line, so the agent knows on the next turn. */
+function noteInChat(text: string) {
+  setChat((s) => ({ turns: [...s.turns, { role: "assistant", content: text, steps: [], proposals: [] }] }))
 }
 
 /** POSTs to the agent in streaming mode and calls `onEvent` for each event. Returns the final result. */
@@ -142,7 +166,7 @@ export async function runAgentStream(
   const res = await fetch("/api/sancus/agent", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: messages.slice(-30), voice, stream: true, page }),
+    body: JSON.stringify({ messages: forApi(messages), voice, stream: true, page }),
   })
   if (!res.ok || !res.body) {
     const body = await res.json().catch(() => ({}))
@@ -363,6 +387,20 @@ export function useVoiceGlow(phase: Phase) {
 // ---------- speech out ----------
 
 /**
+ * Browser fallback (no ElevenLabs key): an American English female voice, so it sounds like the
+ * ElevenLabs one instead of the system default (often a male voice on Windows).
+ */
+const FEMALE_VOICES = /samantha|zira|aria|jenny|ava|allison|susan|joanna|female|google us english/i
+function femaleEnglishVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | null {
+  const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith("en"))
+  return (
+    voices.find((v) => v.lang === "en-US" && FEMALE_VOICES.test(v.name)) ??
+    voices.find((v) => FEMALE_VOICES.test(v.name)) ??
+    null
+  )
+}
+
+/**
  * Speaking: queued lines that never talk over each other; `interrupt` cuts off whatever is playing
  * (used for the real answer, so a progress line never delays it). `isActive` says whether voice
  * is still on (nothing is spoken after the call ends).
@@ -468,6 +506,8 @@ export function useSpeaker(isActive: () => boolean, opts?: { onAudio?: (a: HTMLA
         if (!synth) return resolve()
         const u = new SpeechSynthesisUtterance(text)
         u.rate = 1.03
+        const voice = femaleEnglishVoice(synth)
+        if (voice) u.voice = voice
         u.onend = () => resolve()
         u.onerror = () => resolve()
         synth.speak(u)

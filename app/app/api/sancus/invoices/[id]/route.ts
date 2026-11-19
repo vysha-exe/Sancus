@@ -14,6 +14,12 @@ const patchSchema = z.object({
   currency: z.enum(INVOICE_CURRENCIES).optional(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date").nullable().optional(),
   rail: z.enum(INVOICE_RAILS).optional(),
+  paymentDetails: z.object({
+    bankName: z.string().trim().max(120).nullable().optional(),
+    accountName: z.string().trim().max(160).nullable().optional(),
+    accountNumber: z.string().trim().max(100).nullable().optional(),
+    swift: z.string().trim().max(34).nullable().optional(),
+  }).optional(),
 })
 
 function invoiceId(req: NextRequest) {
@@ -61,6 +67,11 @@ export const PATCH = withAuth(async (req, { user, supabase }) => {
   }
   if (input.dueDate !== undefined) patch.due_date = input.dueDate
   if (input.rail !== undefined) patch.rail = input.rail
+  if (input.paymentDetails !== undefined) {
+    const existing = row.extracted && typeof row.extracted === "object" ? row.extracted : {}
+    const previous = existing.paymentDetails && typeof existing.paymentDetails === "object" ? existing.paymentDetails : {}
+    patch.extracted = { ...existing, paymentDetails: { ...previous, ...input.paymentDetails } }
+  }
 
   const { data, error } = await supabase.from("sancus_invoices").update(patch).eq("id", id).eq("user_id", user.id).select("*").maybeSingle()
   if (error) {

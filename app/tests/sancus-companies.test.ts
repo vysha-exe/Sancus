@@ -52,6 +52,13 @@ describe("company tree", () => {
     expect(findNode(tree, "id")!.totalMinor).toBe("2750000000") // Indonesia + Jakarta
     expect(tree[0]!.totalMinor).toBe("12750000000") // everything; unreadable Thailand counts as 0
   })
+
+  it("never projects a negative branch balance when deductions exceed funds", () => {
+    const tree = buildCompanyTree(companies, memberships, wallets, "maya", new Map([["th", 350_000_000n]]))
+
+    expect(findNode(tree, "th")!.ownMinor).toBe("0")
+    expect(findNode(tree, "th")!.totalMinor).toBe("0")
+  })
 })
 
 describe("roles inherit down, never up", () => {

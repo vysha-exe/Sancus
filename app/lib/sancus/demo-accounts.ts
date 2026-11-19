@@ -8,10 +8,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-export type DemoAs = "admin" | "branch" | "employee" | "individual"
-export const DEMO_AS: DemoAs[] = ["admin", "branch", "employee", "individual"]
-export const DEMO_HOME: Record<DemoAs, string> = { admin: "/home", branch: "/branch", employee: "/me", individual: "/home" }
-const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", branch: "Ploy", employee: "Niran", individual: "Jayden" }
+export type DemoAs = "admin" | "finance" | "branch" | "employee" | "individual"
+export const DEMO_AS: DemoAs[] = ["admin", "finance", "branch", "employee", "individual"]
+export const DEMO_HOME: Record<DemoAs, string> = { admin: "/home", finance: "/activity/approvals", branch: "/branch", employee: "/me", individual: "/home" }
+const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", finance: "Mei", branch: "Ploy", employee: "Niran", individual: "Jayden" }
 
 export function parseDemoAs(v: string | null | undefined): DemoAs {
   return DEMO_AS.includes(v as DemoAs) ? (v as DemoAs) : "admin"
@@ -59,7 +59,7 @@ async function ensureDemoCompany(admin: SupabaseClient, adminId: string): Promis
   if (!rootId) {
     const { data: root, error } = await admin
       .from("sancus_companies")
-      .insert({ parent_id: null, root_id: "00000000-0000-0000-0000-000000000000", name: "Lion City Trading", country: "SG", base_currency: "SGD", created_by: adminId })
+      .insert({ parent_id: null, root_id: "00000000-0000-0000-0000-000000000000", name: "Lion City Trading", country: "US", base_currency: "USD", created_by: adminId })
       .select("id")
       .single()
     if (error || !root) throw new Error(`couldn't create demo company: ${error?.message}`)
@@ -80,7 +80,7 @@ async function ensureDemoCompany(admin: SupabaseClient, adminId: string): Promis
   return { rootId, branchId }
 }
 
-async function ensureMembership(admin: SupabaseClient, companyId: string, userId: string, email: string, role: "ADMIN" | "EMPLOYEE") {
+async function ensureMembership(admin: SupabaseClient, companyId: string, userId: string, email: string, role: "ADMIN" | "FINANCE" | "EMPLOYEE") {
   const { data } = await admin.from("sancus_memberships").select("id").eq("company_id", companyId).eq("user_id", userId).maybeSingle()
   if (data) return
   const { error } = await admin.from("sancus_memberships").insert({
@@ -182,7 +182,12 @@ export async function ensureDemoAccount(
   if (as === "individual") return { email, password: base.password }
 
   const adminId = await ensureUser(admin, base.email, base.password, DEMO_NAMES.admin)
-  const { branchId } = await ensureDemoCompany(admin, adminId)
+  const { rootId, branchId } = await ensureDemoCompany(admin, adminId)
+  // Finance sits on the global account (HQ), so it can approve for every branch.
+  if (as === "finance") {
+    await ensureMembership(admin, rootId, userId, email, "FINANCE")
+    return { email, password: base.password }
+  }
   await ensureMembership(admin, branchId, userId, email, as === "branch" ? "ADMIN" : "EMPLOYEE")
   if (as === "employee") await ensureEmployeeMethods(admin, adminId, userId, DEMO_NAMES.employee)
   return { email, password: base.password }

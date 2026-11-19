@@ -1,7 +1,7 @@
 "use client"
 
 // Sancus: one global treasury → direct country branches, each with its own wallet.
-import { useCallback, useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import Link from "next/link"
 import {
   buildCompanyTree,
@@ -15,8 +15,8 @@ import { CompanyTreeDiagram } from "@/components/sancus-ui/company-tree-diagram"
 import { OrgChart } from "@/components/sancus-ui/org-chart"
 import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
-
-type Me = { circleConfigured: boolean; tree: CompanyNode[]; nodeCount: number; walletCount: number }
+import { useAccount } from "@/lib/sancus/use-account"
+import { useCompanies } from "@/lib/sancus/use-companies"
 
 const usd = (minor: string) => `$${displayMinor(BigInt(minor), USDC_DECIMALS, "", 2)}`
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
@@ -26,7 +26,7 @@ const flag = (code: string) => countryByCode(code)?.flag ?? "🏳️"
 const demoTree: CompanyNode[] = (() => {
   const t = (n: number) => `2026-11-18T00:00:0${n}Z`
   const rows: CompanyRow[] = [
-    { id: "hq", parent_id: null, root_id: "hq", name: "Lion City Trading (Global)", country: "SG", base_currency: "SGD", created_at: t(0) },
+    { id: "hq", parent_id: null, root_id: "hq", name: "Lion City Trading (Global)", country: "US", base_currency: "USD", created_at: t(0) },
     { id: "id", parent_id: "hq", root_id: "hq", name: "Indonesia", country: "ID", base_currency: "IDR", created_at: t(1) },
     { id: "th", parent_id: "hq", root_id: "hq", name: "Thailand", country: "TH", base_currency: "THB", created_at: t(2) },
   ]
@@ -57,56 +57,15 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
 
 export default function BranchesPage() {
   const ws = useWorkspace()
-  const [me, setMe] = useState<Me | null>(null)
-  const [mode, setMode] = useState<"loading" | "live" | "demo">("loading")
-  const [error, setError] = useState<string | null>(null)
+  const companiesData = useCompanies()
+  const accountState = useAccount()
+  const mode = !ws.ready || !accountState.ready ? "loading" : accountState.signedOut ? "demo" : "live"
 
-  const load = useCallback(async () => {
-    try {
-      let res = await fetch("/api/sancus/companies/me", { cache: "no-store" })
-      if (res.status === 401) {
-        await new Promise((r) => setTimeout(r, 1200))
-        res = await fetch("/api/sancus/companies/me", { cache: "no-store" })
-      }
-      if (res.status === 401) return setMode("demo")
-      const body = await res.json()
-      if (!res.ok) {
-        setError(body.error ?? "Could not load branches")
-        return setMode("live")
-      }
-      setMe(body as Me)
-      setError(null)
-      setMode("live")
-    } catch {
-      setMode("demo")
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    fetch("/api/sancus/companies/me", { cache: "no-store" })
-      .then(async (res) => {
-        if (cancelled) return
-        if (res.status === 401) return load() // retry once after demo auto-login
-        const body = await res.json()
-        if (res.ok) {
-          setMe(body as Me)
-          setMode("live")
-        } else {
-          setError(body.error ?? "Could not load branches")
-          setMode("live")
-        }
-      })
-      .catch(() => !cancelled && setMode("demo"))
-    return () => {
-      cancelled = true
-    }
-  }, [load])
-
-  const tree = mode === "demo" ? demoTree : (me?.tree ?? [])
+  const tree = mode === "demo" ? demoTree : ws.tree
   const total = tree.reduce((s, n) => s + BigInt(n.totalMinor), 0n)
-  const nodes = mode === "demo" ? 2 : Math.max(0, (me?.nodeCount ?? 0) - tree.length)
-  const walletCount = mode === "demo" ? 3 : (me?.walletCount ?? 0)
+  const nodes = mode === "demo" ? 2 : tree.reduce((sum, root) => sum + root.children.length, 0)
+  const walletCount = mode === "demo" ? 3 : companiesData.walletCount
+  const balancesReady = mode === "demo" || companiesData.balancesReady
 
   return (
     <div className="page">
@@ -123,7 +82,7 @@ export default function BranchesPage() {
       <div className="grid">
         <div className="tile s4">
           <span className="sx-label">Across every branch</span>
-          <span className="big">{usd(total.toString())}</span>
+          <span className="big">{balancesReady ? usd(total.toString()) : "***"}</span>
         </div>
         <div className="tile s4">
           <span className="sx-label">Branches</span>
@@ -133,14 +92,6 @@ export default function BranchesPage() {
           <span className="sx-label">Wallets</span>
           <span className="big">{walletCount}</span>
         </div>
-
-        {error ? (
-          <div className="tile s12" role="alert">
-            <span className="body-s" style={{ color: "var(--danger, #c0392b)" }}>
-              {error}
-            </span>
-          </div>
-        ) : null}
 
         {mode === "loading" ? (
           <div className="tile s12">
@@ -156,20 +107,14 @@ export default function BranchesPage() {
               <span>Open one to add a team and branches.</span>
             </div>
             <CreateGlobalAccount
-              circleConfigured={me?.circleConfigured ?? false}
-              onCreated={async () => {
-                await load()
-                await ws.refresh()
-              }}
+              circleConfigured={companiesData.circleConfigured}
+              onCreated={ws.refresh}
             />
           </section>
         ) : tree.length === 0 ? (
           <CreateGlobalAccount
-            circleConfigured={me?.circleConfigured ?? false}
-            onCreated={async () => {
-              await load()
-              await ws.refresh()
-            }}
+            circleConfigured={companiesData.circleConfigured}
+            onCreated={ws.refresh}
           />
         ) : (
           <>
@@ -180,7 +125,7 @@ export default function BranchesPage() {
               </h2>
               <span className="body-s muted">Select an account to open its treasury, payments, team, and transfers</span>
             </div>
-            <CompanyTreeDiagram tree={tree} />
+            <CompanyTreeDiagram tree={tree} balancesReady={balancesReady} />
           </section>
           {mode === "live" ? (
             <section className="tile s12" aria-labelledby="org">
@@ -195,7 +140,7 @@ export default function BranchesPage() {
           ) : null}
           {tree.map((root) => (
             <section key={root.id} className="tile s12" aria-label={root.name} style={{ gap: 12 }}>
-              <BranchNode node={root} live={mode === "live"} onChanged={load} />
+              <BranchNode node={root} live={mode === "live"} balancesReady={balancesReady} onChanged={ws.refresh} />
             </section>
           ))}
           </>
@@ -272,7 +217,17 @@ function CountrySelect({ name, defaultValue }: { name: string; defaultValue: str
   )
 }
 
-function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolean; onChanged: () => void }) {
+function BranchNode({
+  node,
+  live,
+  balancesReady,
+  onChanged,
+}: {
+  node: CompanyNode
+  live: boolean
+  balancesReady: boolean
+  onChanged: () => void
+}) {
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -325,9 +280,9 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
           </span>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div className="body-strong">{usd(node.ownMinor)}</div>
+          <div className="body-strong">{balancesReady ? usd(node.ownMinor) : "***"}</div>
           {node.children.length ? (
-            <div className="body-s muted">{usd(node.totalMinor)} with sub-branches</div>
+            <div className="body-s muted">{balancesReady ? usd(node.totalMinor) : "***"} with branches</div>
           ) : null}
         </div>
       </div>
@@ -351,7 +306,7 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
           {node.wallets.map((w) => (
             <div key={w.walletId} className="sx-row">
               <span className="sx-row__who">{w.name}</span>
-              <span className="sx-row__amount">{w.usdcMinor === null ? "–" : usd(w.usdcMinor)}</span>
+              <span className="sx-row__amount">{!balancesReady ? "***" : w.usdcMinor === null ? "–" : usd(w.usdcMinor)}</span>
               <span className="sx-row__meta">
                 <span className="sx-rail">USDC</span>{" "}
                 {Object.entries(w.local ?? {}).map(([cur, minor]) => (
@@ -422,7 +377,7 @@ function BranchNode({ node, live, onChanged }: { node: CompanyNode; live: boolea
       {node.children.length ? (
         <div style={{ display: "grid", gap: 16, marginTop: 6, paddingLeft: 18, borderLeft: "2px solid var(--line)" }}>
           {node.children.map((child) => (
-            <BranchNode key={child.id} node={child} live={live} onChanged={onChanged} />
+            <BranchNode key={child.id} node={child} live={live} balancesReady={balancesReady} onChanged={onChanged} />
           ))}
         </div>
       ) : null}

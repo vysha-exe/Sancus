@@ -47,6 +47,8 @@ const VOICE_RULES = [
   "- Answer in one to three short spoken sentences. No lists, no symbols, no URLs.",
   "- Say amounts the way a person would (\"two hundred and fifty Singapore dollars\" is fine as \"S$250\"), and round USDC costs to cents.",
   "- When you prepare a proposal, say what it is in one sentence, then: \"Say confirm, or tap Confirm, to send it.\" Never say it was sent.",
+  "- Only ask them to confirm after you've called propose_payment (or another propose_ tool) in this turn: that's what puts the Confirm button on screen. Quoting alone shows no button.",
+  "- If they say confirm, yes or go ahead and no card is waiting, prepare it now with propose_payment instead of telling them to press a button.",
   "- If you need a detail (who, how much), ask one short question.",
 ].join("\n")
 
@@ -70,7 +72,7 @@ function systemPrompt(ctx: AgentContext, companyName: string | null): string {
     "- Use tools for every fact (balances, recipients, quotes, activity). Never invent amounts, rates or names.",
     "- To pay someone: find them with list_recipients, quote_payment, then propose_payment. To collect money locally: propose_collection.",
     "- Proposals are not sent. The person confirms each one on a card under your message. Say what you prepared and that they can confirm it; never say money moved.",
-    "- For the cheapest or best way to send money into Singapore, Indonesia or Thailand, use buy_route_quote. It costs the agent about $0.01 per call from its own wallet (an x402 micropayment), so call it only when it helps, at most three times per request, and mention what you paid.",
+    "- For the cheapest or best way to send money into Indonesia or Thailand, use buy_route_quote. It costs the agent about $0.01 per call from its own wallet (an x402 micropayment), so call it only when it helps, at most three times per request, and mention what you paid.",
     "- If something is outside your tools or this account's permissions, say so plainly and suggest where in the app to do it.",
     "- Keep replies short: a sentence or two, then any figures as a short list. Amounts in their currency, USDC costs in dollars.",
     "- Write plain text: the chat doesn't render Markdown, so no asterisks, bold or headings. Use \"- \" for list items.",
