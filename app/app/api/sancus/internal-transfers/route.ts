@@ -74,23 +74,42 @@ async function namesFor(
   return new Map((data ?? []).map((company) => [company.id as string, company.name as string]))
 }
 
-export const GET = withAuth(async (req, { supabase }) => {
+export const GET = withAuth(async (req, { user, supabase }) => {
   const companyId = req.nextUrl.searchParams.get("companyId")
   if (companyId && !z.string().uuid().safeParse(companyId).success) {
     return NextResponse.json({ error: "Invalid branch id" }, { status: 400 })
   }
 
-  let query = supabase
+  // A transfer belongs to both of its accounts. The table's RLS only shows rows where the user can
+  // access BOTH ends, which hid a branch admin's own transfers to HQ (they have no role at HQ).
+  // List with the service client instead, limited to transfers touching an account where this user
+  // has a treasury-facing role. Employees only see their own requests (Me), never treasury moves.
+  const { data: visible } = await supabase.from("sancus_companies").select("id")
+  const visibleIds = ((visible ?? []) as { id: string }[]).map((company) => company.id)
+  const accessible = (
+    await Promise.all(
+      visibleIds.map(async (id) => {
+        const role = await roleAt(supabase, user.id, id)
+        return role && role !== "EMPLOYEE" ? id : null
+      })
+    )
+  ).filter((id): id is string => id !== null)
+  const ids = companyId ? accessible.filter((id) => id === companyId) : accessible
+  if (!ids.length) return NextResponse.json({ transfers: [] })
+
+  const db = serviceClient() ?? supabase
+  const list = ids.join(",")
+  const { data, error } = await db
     .from("sancus_internal_transfers")
     .select("*")
+    .or(`source_company_id.in.(${list}),destination_company_id.in.(${list})`)
     .order("created_at", { ascending: false })
     .limit(100)
-  if (companyId) query = query.or(`source_company_id.eq.${companyId},destination_company_id.eq.${companyId}`)
-  const { data, error } = await query
   if (error) return NextResponse.json({ error: "Could not load internal transfers" }, { status: 500 })
 
   const rows = (data ?? []) as InternalTransferRow[]
-  const names = await namesFor(supabase, rows)
+  // Names of the other end (e.g. HQ seen from a branch) are shown by name only, as on the branch page.
+  const names = await namesFor(db, rows)
   return NextResponse.json({
     transfers: rows.map((row) =>
       toInternalTransferDto(row, {

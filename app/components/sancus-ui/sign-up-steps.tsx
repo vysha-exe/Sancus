@@ -14,15 +14,37 @@ function SignInLink() {
   )
 }
 
-/** Step 1: name and email. */
+/** Step 1: name and email. Sends a real Supabase email OTP. */
 export function SignUpEmailStep() {
   const router = useRouter()
   const { data, update } = useSignUp()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const ready = data.agreed && data.firstName.trim() !== "" && data.email.trim() !== ""
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault()
-    if (ready) router.push("/sign-up/code")
+    if (!ready || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const { createClient } = await import("@/lib/supabase/client")
+      const supabase = createClient()
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: data.email.trim(),
+        options: {
+          shouldCreateUser: true,
+          data: { first_name: data.firstName.trim() },
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent("/sign-up/account-type")}`,
+        },
+      })
+      if (otpError) throw otpError
+      router.push("/sign-up/code")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the confirmation code")
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -61,9 +83,10 @@ export function SignUpEmailStep() {
             </span>
           </label>
         </div>
+        {error ? <p className="body-s" style={{ color: "var(--held)" }}>{error}</p> : null}
         <div className="auth-btns">
-          <button type="submit" className="sx-btn sx-btn--primary" disabled={!ready}>
-            Continue
+          <button type="submit" className="sx-btn sx-btn--primary" disabled={!ready || busy}>
+            {busy ? "Sending code…" : "Continue"}
           </button>
           <Link href="/demo" className="sx-btn sx-btn--secondary">
             Try the demo
@@ -74,12 +97,14 @@ export function SignUpEmailStep() {
   )
 }
 
-/** Step 2: six-digit code. Mock: any six digits work. */
+/** Step 2: six-digit email OTP from Supabase. */
 export function SignUpCodeStep() {
   const router = useRouter()
   const { data } = useSignUp()
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""])
   const [wait, setWait] = useState(42)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const refs = useRef<(HTMLInputElement | null)[]>([])
 
   useEffect(() => {
@@ -108,9 +133,47 @@ export function SignUpCodeStep() {
     refs.current[Math.min(pasted.length, 5)]?.focus()
   }
 
-  function submit(e: FormEvent) {
+  async function resend() {
+    setError(null)
+    try {
+      const { createClient } = await import("@/lib/supabase/client")
+      const supabase = createClient()
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: data.email.trim(),
+        options: {
+          shouldCreateUser: true,
+          data: { first_name: data.firstName.trim() },
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent("/sign-up/account-type")}`,
+        },
+      })
+      if (otpError) throw otpError
+      setWait(42)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not resend the code")
+    }
+  }
+
+  async function submit(e: FormEvent) {
     e.preventDefault()
-    if (full) router.push("/sign-up/account-type")
+    if (!full || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const { createClient } = await import("@/lib/supabase/client")
+      const supabase = createClient()
+      const token = digits.join("")
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: data.email.trim(),
+        token,
+        type: "email",
+      })
+      if (verifyError) throw verifyError
+      router.push("/sign-up/account-type")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That code didn’t work")
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -146,18 +209,19 @@ export function SignUpCodeStep() {
           {wait > 0 ? (
             <span className="data">Resend in 0:{String(wait).padStart(2, "0")}</span>
           ) : (
-            <button type="button" className="sx-btn sx-btn--quiet" onClick={() => setWait(42)}>
+            <button type="button" className="sx-btn sx-btn--quiet" onClick={() => void resend()}>
               Resend code
             </button>
           )}
           <Link href="/sign-up">Change email</Link>
         </div>
         <span className="sx-field__help" style={{ marginTop: -12 }}>
-          Enter the six-digit code we sent.
+          Enter the six-digit code we sent to your email.
         </span>
+        {error ? <p className="body-s" style={{ color: "var(--held)" }}>{error}</p> : null}
         <div className="auth-btns">
-          <button type="submit" className="sx-btn sx-btn--primary" disabled={!full}>
-            Continue
+          <button type="submit" className="sx-btn sx-btn--primary" disabled={!full || busy}>
+            {busy ? "Checking…" : "Continue"}
           </button>
           <Link href="/sign-up" className="sx-btn sx-btn--secondary">
             Back
@@ -168,7 +232,7 @@ export function SignUpCodeStep() {
   )
 }
 
-const COUNTRIES = ["Brazil", "Mexico", "Indonesia", "Thailand", "Portugal", "United States"]
+const COUNTRIES = ["United States", "Brazil", "Mexico", "Indonesia", "Thailand", "Portugal"]
 
 /** After code: Personal (B2C) vs Business (B2B). */
 export function SignUpAccountTypeStep() {
@@ -546,7 +610,7 @@ export function SignUpDoneStep() {
       setBusy(true)
       const { SIGNUP_COUNTRY_TO_CODE, setWorkspaceCompany } = await import("@/lib/sancus/workspace")
       try {
-        const country = SIGNUP_COUNTRY_TO_CODE[data.country] ?? "BR"
+        const country = SIGNUP_COUNTRY_TO_CODE[data.country] ?? "US"
         const res = await fetch("/api/sancus/companies", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

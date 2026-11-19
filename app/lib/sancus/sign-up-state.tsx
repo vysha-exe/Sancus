@@ -30,7 +30,7 @@ export const SIGN_UP_DEFAULTS: SignUpData = {
   accountType: "business",
   fullName: "Admin User",
   company: "Café Paulista Ltda",
-  country: "Brazil",
+  country: "United States",
   currency: "BRL",
   invites: [
     { email: "rafael@cafepaulista.com.br", role: "Finance" },

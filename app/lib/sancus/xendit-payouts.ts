@@ -21,6 +21,8 @@ export type XenditPayoutDto = {
   settledAt: string | null
   createdAt: string
   simulated: boolean
+  txHash: string | null
+  explorer: string | null
 }
 
 export type XenditPayoutRow = {
@@ -30,9 +32,11 @@ export type XenditPayoutRow = {
   amount_minor: number | string; description: string | null; provider_transaction_id: string;
   provider_status: string; status: XenditPayoutState; failure_reason: string | null;
   settled_at: string | null; created_at: string; simulated: boolean;
+  tx_hash?: string | null; source_address?: string | null; settlement_address?: string | null;
 }
 
 export function toXenditPayoutDto(row: XenditPayoutRow): XenditPayoutDto {
+  const txHash = row.tx_hash ?? null
   return {
     id: row.id, purpose: row.purpose, employeeName: row.employee_name, country: row.country,
     rail: row.rail, currency: row.currency, recipientName: row.recipient_name,
@@ -41,6 +45,8 @@ export function toXenditPayoutDto(row: XenditPayoutRow): XenditPayoutDto {
     providerTransactionId: row.provider_transaction_id, providerStatus: row.provider_status,
     status: row.status, failureReason: row.failure_reason, settledAt: row.settled_at,
     createdAt: row.created_at, simulated: row.simulated,
+    txHash,
+    explorer: txHash ? `https://explorer.testnet.arc.io/tx/${txHash}` : null,
   }
 }
 

@@ -3,9 +3,9 @@
 import { FIXED_USD_RATES, fixedUsdRateLabel } from "./fixed-rates"
 
 export const workspace = {
-  name: "Café Paulista Ltda",
-  country: "Brazil",
-  homeCurrency: "BRL",
+  name: "Lion City Trading",
+  country: "United States",
+  homeCurrency: "USD",
   balanceCurrency: "USD",
   actor: { firstName: "Admin", role: "Admin", initial: "A" },
   sandbox: true,
@@ -75,7 +75,7 @@ export const approvals = [
 
 export const approvalsTotalLabel = "$2,620.05"
 
-/** Jayden's (personal account) recent payments, shown until he has live ones. */
+/** Vysha's (personal US account) recent payments, shown until she has live ones. */
 export const personalLatestPayments: Payment[] = [
   { id: "p-somchai", who: "Baan Somchai Guesthouse · PromptPay QR", amount: "−$34.40", meta: "฿ 1,200.00 · Today, 8:12", rail: "PromptPay", status: "Settled", simulated: true, href: "/activity" },
   { id: "p-bia", who: "Bia Oliveira", amount: "−$27.70", meta: "R$ 150,00 · Yesterday · concert tickets", rail: "Pix", status: "Settled", simulated: true, href: "/activity" },
@@ -271,7 +271,7 @@ export type Recipient = {
   country: string
   methods: { rail: string; detail: string; tag: string }[]
   history: string
-  /** Who sees this payee: business accounts (default) or a personal account like Jayden's. */
+  /** Who sees this payee: business accounts (default) or a personal account like Vysha's. */
   audience?: "business" | "personal"
   /** Thailand (PromptPay) / Indonesia (BI-FAST) payees paid live through Xendit. */
   xendit?: {
@@ -407,7 +407,7 @@ export const recipients: Recipient[] = [
   },
 ]
 
-/** Jayden's own payees (personal account, US-based): family and friends abroad, and places he pays. No suppliers. */
+/** Vysha's own payees (personal account, US-based): family and friends abroad, and places she pays. No suppliers. */
 export const personalRecipients: Recipient[] = [
   {
     id: "p-mum",

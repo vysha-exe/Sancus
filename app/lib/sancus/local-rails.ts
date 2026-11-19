@@ -40,6 +40,8 @@ export type PixPaymentDto = {
   settledAt: string | null
   createdAt: string
   simulated: boolean
+  txHash: string | null
+  explorer: string | null
 }
 
 export type SpendingMethodType = "PIX" | "QRIS" | "PROMPTPAY" | "CARD"
@@ -75,6 +77,7 @@ export type PixPaymentDbRow = {
   recipient_name: string; pix_method: PixPaymentDto["pixMethod"]; amount_brl_minor: number | string;
   provider_transaction_id: string; provider_status: string; status: LocalRailStatus; end_to_end_id: string | null;
   failure_reason: string | null; settled_at: string | null; created_at: string; simulated: boolean;
+  tx_hash?: string | null; source_address?: string | null; settlement_address?: string | null;
 }
 
 export function toCollectionDto(row: CollectionDbRow, companyName: string | null = null): CollectionDto {
@@ -89,6 +92,7 @@ export function toCollectionDto(row: CollectionDbRow, companyName: string | null
 }
 
 export function toPixPaymentDto(row: PixPaymentDbRow): PixPaymentDto {
+  const txHash = row.tx_hash ?? null
   return {
     id: row.id, purpose: row.purpose, spendingMethodId: row.spending_method_id, employeeId: row.employee_id, employeeName: row.employee_name,
     recipientName: row.recipient_name, pixMethod: row.pix_method,
@@ -96,6 +100,8 @@ export function toPixPaymentDto(row: PixPaymentDbRow): PixPaymentDto {
     providerStatus: row.provider_status, status: row.status, endToEndId: row.end_to_end_id,
     failureReason: row.failure_reason, settledAt: row.settled_at, createdAt: row.created_at,
     simulated: row.simulated,
+    txHash,
+    explorer: txHash ? `https://explorer.testnet.arc.io/tx/${txHash}` : null,
   }
 }
 

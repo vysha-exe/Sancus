@@ -23,7 +23,8 @@ export const GET = withAuth(async (req, { user, supabase }) => {
 
   const companyId = await workspaceCompany(req, supabase, user.id)
   let q = supabase.from("wallets").select("address, name, type, company_id").eq("user_id", user.id)
-  if (companyId) q = q.eq("company_id", companyId)
+  // Personal / individual: only company_id-null treasuries. Business workspace: that company's wallets.
+  q = companyId ? q.eq("company_id", companyId) : q.is("company_id", null)
   const { data } = await q.order("created_at", { ascending: true })
   const wallets = (data ?? []).filter((w) => w.type !== "payout")
 
@@ -59,7 +60,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   const companyId = await workspaceCompany(req, supabase, user.id)
   let q = supabase.from("wallets").select("address, name, type").eq("user_id", user.id)
-  if (companyId) q = q.eq("company_id", companyId)
+  q = companyId ? q.eq("company_id", companyId) : q.is("company_id", null)
   const { data } = await q.order("created_at", { ascending: true })
   const wallets = (data ?? []).filter((w) => w.type !== "payout" && w.address)
 

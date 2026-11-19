@@ -13,8 +13,9 @@ import {
   isDemoLoginEnabled,
   safeNextPath,
 } from "@/lib/sancus/demo-login"
-import { DEMO_HOME, ensureDemoAccount, parseDemoAs } from "@/lib/sancus/demo-accounts"
+import { DEMO_HOME, ensureDemoAccount, parseDemoAs, type DemoAccountReady } from "@/lib/sancus/demo-accounts"
 import { SANCUS_ADMIN_COOKIE, SANCUS_EMPLOYEE_COOKIE } from "@/lib/sancus/simple-auth"
+import { COMPANY_COOKIE } from "@/lib/sancus/workspace"
 // Do NOT statically import provision-circle / Circle SDKs here. On Vercel those
 // packages can fail to load as ESM and take down this whole route (Open demo → 500).
 
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
   if (!baseCreds) {
     return enterAsGuest(request, next, "demo-misconfigured")
   }
-  let creds = baseCreds
+  let creds: DemoAccountReady = baseCreds
 
   try {
     // Create and wire every demo identity, including the global Admin account.
@@ -118,6 +119,16 @@ export async function GET(request: NextRequest) {
     // otherwise win over this one.
     response.cookies.set(SANCUS_ADMIN_COOKIE, "", { path: "/", maxAge: 0 })
     response.cookies.set(SANCUS_EMPLOYEE_COOKIE, "", { path: "/", maxAge: 0 })
+    // Pin workspace: Business Admin → HQ, branch/employee → branch, individual → personal.
+    if (as === "admin" && creds.rootId) {
+      response.cookies.set(COMPANY_COOKIE, creds.rootId, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 365 })
+    } else if ((as === "branch" || as === "employee") && creds.branchId) {
+      response.cookies.set(COMPANY_COOKIE, creds.branchId, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 365 })
+    } else if (as === "finance" && creds.rootId) {
+      response.cookies.set(COMPANY_COOKIE, creds.rootId, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 365 })
+    } else if (as === "individual") {
+      response.cookies.set(COMPANY_COOKIE, "", { path: "/", maxAge: 0 })
+    }
     return response
   } catch (err) {
     return enterAsGuest(request, next, err instanceof Error ? err.message : "unknown")
