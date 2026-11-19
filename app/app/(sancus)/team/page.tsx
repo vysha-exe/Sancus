@@ -201,7 +201,7 @@ export default function TeamPage() {
 
       <div className="grid">
         {/* Login accounts for branch admins and employees (hidden for accounts that can't manage people). */}
-        <AccountsManager />
+        <AccountsManager scopeCompanyId={companyId} />
 
         <section className="tile s12" aria-label="People">
           <div className="tbl-wrap">
