@@ -9,12 +9,26 @@ import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { extractInvoiceFields } from "@/lib/sancus/invoice-extract"
-import { amountToMinor, toInvoiceDto, type InvoiceRow } from "@/lib/sancus/invoices"
+import { amountToMinor, INVOICE_CURRENCIES, INVOICE_RAILS, toInvoiceDto, type InvoiceRow } from "@/lib/sancus/invoices"
 
 const MAX_BYTES = 10 * 1024 * 1024
 const BUCKET = "invoices"
 
-const jsonSchema = z.object({ fileName: z.string().trim().min(1).max(200), mimeType: z.string().max(100).optional() })
+const paymentDetailsSchema = z.object({
+  bankName: z.string().trim().max(120).nullable().optional(),
+  accountName: z.string().trim().max(160).nullable().optional(),
+  accountNumber: z.string().trim().max(100).nullable().optional(),
+  swift: z.string().trim().max(34).nullable().optional(),
+})
+const manualSchema = z.object({
+  supplierName: z.string().trim().min(1).max(120),
+  invoiceNumber: z.string().trim().min(1).max(60),
+  amount: z.number().positive().max(1_000_000_000),
+  currency: z.enum(INVOICE_CURRENCIES),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  rail: z.enum(INVOICE_RAILS),
+  paymentDetails: paymentDetailsSchema.optional(),
+})
 
 /** Best-effort binary upload with the service role. Returns the storage path, or null if skipped. */
 async function storeFile(userId: string, invoiceId: string, file: File): Promise<string | null> {
@@ -50,6 +64,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   let fileName: string
   let mimeType: string | undefined
   let file: File | null = null
+  let manual: z.infer<typeof manualSchema> | null = null
 
   if (req.headers.get("content-type")?.includes("multipart/form-data")) {
     let form: FormData
@@ -65,17 +80,44 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     fileName = entry.name.slice(0, 200)
     mimeType = entry.type || undefined
   } else {
-    const parsed = await validateJsonBody(req, jsonSchema)
+    const parsed = await validateJsonBody(req, manualSchema)
     if (!parsed.ok) return parsed.response
-    fileName = parsed.data.fileName
-    mimeType = parsed.data.mimeType
+    manual = parsed.data
+    fileName = `manual-${parsed.data.invoiceNumber}.json`.replace(/[^\w.\-]+/g, "_")
+    mimeType = "application/json"
   }
 
   const id = randomUUID()
-  const [extracted, storagePath] = await Promise.all([
-    extractInvoiceFields({ fileName, mimeType }),
-    file ? storeFile(user.id, id, file) : Promise.resolve(null),
-  ])
+  let extracted
+  let storagePath: string | null
+  if (manual) {
+    extracted = {
+      supplierName: manual.supplierName,
+      invoiceNumber: manual.invoiceNumber,
+      amount: manual.amount,
+      currency: manual.currency,
+      dueDate: manual.dueDate,
+      rail: manual.rail,
+      paymentDetails: {
+        bankName: manual.paymentDetails?.bankName || null,
+        accountName: manual.paymentDetails?.accountName || null,
+        accountNumber: manual.paymentDetails?.accountNumber || null,
+        swift: manual.paymentDetails?.swift || null,
+      },
+    }
+    storagePath = null
+  } else {
+    try {
+      const bytes = new Uint8Array(await file!.arrayBuffer())
+      ;[extracted, storagePath] = await Promise.all([
+        extractInvoiceFields({ fileName, mimeType, fileBytes: bytes }),
+        storeFile(user.id, id, file!),
+      ])
+    } catch (error) {
+      console.error("invoice parsing failed", error instanceof Error ? error.message : error)
+      return NextResponse.json({ error: "Could not read that invoice. Check the file and try again." }, { status: 502 })
+    }
+  }
 
   const { data, error } = await supabase.from("sancus_invoices").insert({
     id,
@@ -84,11 +126,11 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     storage_path: storagePath,
     supplier_name: extracted.supplierName,
     invoice_number: extracted.invoiceNumber,
-    amount_minor: amountToMinor(extracted.amount, extracted.currency),
+    amount_minor: extracted.amount === null ? null : amountToMinor(extracted.amount, extracted.currency ?? "USD"),
     currency: extracted.currency,
     due_date: extracted.dueDate,
     rail: extracted.rail,
-    status: "READY",
+    status: extracted.supplierName && extracted.amount !== null ? "READY" : "DRAFT",
     extracted,
   }).select("*").single()
   if (error || !data) {
