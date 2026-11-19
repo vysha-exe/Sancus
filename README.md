@@ -10,7 +10,7 @@ Sancus is a stablecoin business account for companies trading across **Asia**. A
 
 **Built on [Arc](https://docs.arc.io) (Circle's stablecoin L1) and the Circle developer suite:** developer-controlled wallets, Gateway (one USDC balance across chains), Gas Station and Nanopayments (x402).
 
-> ⚠️ **Hackathon prototype.** Uses testnet USDC only. All bank, local-rail, FX and card flows are **simulated** and clearly labeled in the UI. Nothing here handles real customer funds. Real banking, card issuing and cross-border payouts require licensed partners and regulatory compliance.
+> ⚠️ **Hackathon prototype.** Uses testnet USDC and provider test environments only. Circle wallets run on testnet; local QR rails and cards use real provider sandboxes when credentials are configured, with clearly labeled simulations as fallbacks. Nothing here handles production customer funds. Real banking, card issuing and cross-border payouts require licensed partners and regulatory compliance.
 
 ---
 
