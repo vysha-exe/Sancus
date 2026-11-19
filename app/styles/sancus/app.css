@@ -105,7 +105,7 @@
 .treasury-grid { gap: 18px; align-items: start; }
 .treasury-overview { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(250px, .85fr) minmax(0, 2fr); gap: 32px; align-items: end; padding: 26px 28px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-100); }
 .treasury-overview__lead { display: grid; gap: 8px; }
-.treasury-overview__lead .amount-xl { font-size: clamp(44px, 5vw, 68px); }
+.treasury-overview__lead .amount-xl { max-width: 100%; font-size: clamp(40px, 3.75vw, 52px); line-height: 1; letter-spacing: -.035em; white-space: nowrap; }
 .treasury-overview__balances { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .treasury-overview__balances > div { display: grid; gap: 4px; min-width: 0; padding: 14px 16px; border-right: 1px solid var(--line); }
 .treasury-overview__balances > div:first-child { padding-left: 0; }
