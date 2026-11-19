@@ -27,7 +27,7 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
       .order("created_at", { ascending: true }),
     admin
       .from("sancus_cards")
-      .select("id, label, currency, monthly_limit_minor, last_four, status, created_at")
+      .select("id, label, currency, monthly_limit_minor, last_four, status, simulated, created_at")
       .eq("employee_id", user.id)
       .neq("status", "TERMINATED")
       .order("created_at", { ascending: true }),
@@ -79,6 +79,7 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
         monthlyLimitMinor: String(card.monthly_limit_minor),
         usedMinor: activeCardPurchases.filter((purchase) => purchase.card_id === card.id).reduce((sum, purchase) => sum + BigInt(purchase.amount_minor), 0n).toString(),
         status: card.status,
+        simulated: Boolean(card.simulated),
         source: "CARD" as const,
         lastFour: card.last_four,
       })),
