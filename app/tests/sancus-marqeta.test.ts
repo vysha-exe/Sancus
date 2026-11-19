@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   issueMarqetaCardWithConfig,
+  getMarqetaCardDetailsWithConfig,
   simulateMarqetaAuthorizationWithConfig,
   simulateMarqetaClearingWithConfig,
   type MarqetaConfig,
@@ -99,5 +100,25 @@ describe("Marqeta sandbox transactions", () => {
     }) as unknown as typeof fetch
     const result = await simulateMarqetaClearingWithConfig(config, { authorizationToken: "tx-auth-1", amount: 25 }, fetchImpl)
     expect(result).toMatchObject({ token: "tx-clear-1", state: "COMPLETION", approved: true })
+  })
+})
+
+describe("Marqeta sandbox card details", () => {
+  it("retrieves PAN, expiration, and CVV only from the explicit reveal endpoint", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://marqeta.example/v3/cards/card-1/showpan?show_cvv_number=true")
+      expect(init?.method).toBe("GET")
+      return response({ pan: "4111111111111111", expiration: "0929", cvv_number: "123" })
+    }) as unknown as typeof fetch
+    await expect(getMarqetaCardDetailsWithConfig(config, "card-1", fetchImpl)).resolves.toEqual({
+      pan: "4111111111111111",
+      expiration: "0929",
+      cvv: "123",
+    })
+  })
+
+  it("rejects masked or incomplete provider responses", async () => {
+    const fetchImpl = vi.fn(async () => response({ pan: "411111______1111", expiration: "0929" })) as unknown as typeof fetch
+    await expect(getMarqetaCardDetailsWithConfig(config, "card-1", fetchImpl)).rejects.toThrow("complete sandbox card details")
   })
 })

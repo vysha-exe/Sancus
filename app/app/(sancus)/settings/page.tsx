@@ -66,7 +66,7 @@ function parseUsdInput(raw: string): bigint | null {
 }
 
 export default function SettingsPage() {
-  const { theme, setTheme } = useSancusPrefs()
+  const { theme, setTheme, debugMode, setDebugMode } = useSancusPrefs()
   const treasury = useLiveTreasury()
   const live = treasury.summary
   const ws = useWorkspace()
@@ -304,6 +304,19 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+          <div className="kv">
+            <span>
+              Debug mode
+              <small className="body-s muted" style={{ display: "block" }}>
+                Reveal bank, wallet, and provider details.
+              </small>
+            </span>
+            <Switch
+              checked={debugMode}
+              label={`Debug mode ${debugMode ? "on" : "off"}`}
+              onChange={setDebugMode}
+            />
+          </div>
           <div className="tile-foot">
             <Link href="/branches" className="sx-btn sx-btn--secondary sx-btn--sm">
               Open a business account
@@ -365,13 +378,17 @@ export default function SettingsPage() {
           <h2 className="tile-title" id="sec">
             How your money is kept
           </h2>
-          <span className="body-s" style={{ maxWidth: "62ch" }}>
-            Your balance is held as USDC, issued by Circle, in a treasury contract on Arc.
-            Limits, holds and approvals are enforced by that contract. This is the only page that
-            names the chain.
-          </span>
-          <TreasurySetup />
-          {live && live.wallets.length > 0 ? (
+          {!debugMode ? (
+            <span className="body-s muted" style={{ maxWidth: "62ch" }}>
+              Technical wallet balances and provider details are hidden. Turn on Debug mode above to inspect them.
+            </span>
+          ) : (
+            <>
+              <span className="body-s" style={{ maxWidth: "62ch" }}>
+                Cross-border liquidity is held as USDC in the company&apos;s Arc wallets. Local operating money remains in each branch&apos;s bank account.
+              </span>
+              <TreasurySetup />
+              {live && live.wallets.length > 0 ? (
             live.wallets.map((w) => (
               <div className="kv" key={w.walletId}>
                 <span>
@@ -386,13 +403,13 @@ export default function SettingsPage() {
                 </span>
               </div>
             ))
-          ) : (
+              ) : (
             <div className="kv">
               <span>Treasury address</span>
               <span>{live ? "No wallets yet: create one in setup" : "0x4F2a…c81E"}</span>
             </div>
-          )}
-          {live ? (
+              )}
+              {live ? (
             <>
               <div className="kv">
                 <span>Gateway (unified balance)</span>
@@ -409,7 +426,9 @@ export default function SettingsPage() {
                 </span>
               </div>
             </>
-          ) : null}
+              ) : null}
+            </>
+          )}
         </section>
       </div>
     </div>
