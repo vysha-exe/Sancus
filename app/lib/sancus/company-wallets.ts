@@ -22,6 +22,8 @@ export async function listCompanyWallets(supabase: SupabaseClient, companyIds: s
     .from("wallets")
     .select("circle_wallet_id, name, address, blockchain, company_id")
     .in("company_id", companyIds)
+    // Balances are the treasuries'; settlement wallets hold USDC already paid out to partners.
+    .or("type.is.null,type.neq.payout")
     .order("created_at", { ascending: true })
   return (data ?? []) as WalletDbRow[]
 }
@@ -107,7 +109,9 @@ export async function createCompanyWallet(
   supabase: SupabaseClient,
   userId: string,
   company: CompanyRow,
-  name: string
+  name: string,
+  /** "treasury" holds the node's money; "payout" is its settlement wallet for outgoing payouts. */
+  type: "treasury" | "payout" = "treasury"
 ): Promise<CreateWalletResult> {
   if (!circleConfigured()) {
     return { ok: false, status: 503, error: "Circle isn't set up (CIRCLE_API_KEY / CIRCLE_ENTITY_SECRET)" }
@@ -144,7 +148,7 @@ export async function createCompanyWallet(
       circle_wallet_id: w.id,
       address: w.address,
       blockchain: TREASURY_CHAIN,
-      type: "treasury",
+      type,
       company_id: company.id,
     }
     const { error } = await supabase.from("wallets").insert(row)
@@ -160,4 +164,32 @@ export async function createCompanyWallet(
   } catch (e) {
     return { ok: false, status: 502, error: `Circle wallet creation failed: ${e instanceof Error ? e.message : String(e)}` }
   }
+}
+
+/**
+ * The company node's Settlement wallet: where USDC goes onchain when it pays out (the stand-in for
+ * the payout partner's deposit address). Created in the global account's wallet set on first use.
+ */
+export async function ensureCompanySettlementWallet(
+  supabase: SupabaseClient,
+  userId: string,
+  companyId: string
+): Promise<{ address: string; blockchain: string } | null> {
+  const { data: existing } = await supabase
+    .from("wallets")
+    .select("address, blockchain")
+    .eq("company_id", companyId)
+    .eq("type", "payout")
+    .eq("blockchain", TREASURY_CHAIN)
+    .order("created_at", { ascending: true })
+    .limit(1)
+  if (existing?.[0]) return existing[0] as { address: string; blockchain: string }
+  const { data: company } = await supabase.from("sancus_companies").select("*").eq("id", companyId).maybeSingle()
+  if (!company) return null
+  const created = await createCompanyWallet(supabase, userId, company as CompanyRow, `${(company as CompanyRow).name} settlement`, "payout")
+  if (!created.ok) {
+    console.error("Couldn't create a settlement wallet", companyId, created.error)
+    return null
+  }
+  return { address: created.wallet.address, blockchain: created.wallet.blockchain }
 }

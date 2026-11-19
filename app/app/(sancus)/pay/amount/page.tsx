@@ -139,6 +139,7 @@ export default function PayAmountPage() {
             <input
               className="sx-field__input"
               value={state.memo}
+              placeholder="e.g. Dinner, or invoice INV-88"
               onChange={(e) => setMemo(e.target.value)}
             />
           </label>

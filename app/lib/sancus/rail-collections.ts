@@ -43,6 +43,7 @@ export async function resolveDestination(supabase: SupabaseClient, userId: strin
       .from("wallets")
       .select("address, name, company_id")
       .in("company_id", ids)
+      .or("type.is.null,type.neq.payout")
       .order("created_at")
       .limit(1)
     const w = wallets?.[0]

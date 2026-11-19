@@ -18,6 +18,7 @@ import { formatRate } from "@/lib/sancus/fx"
 import { getPayoutProvider } from "@/lib/sancus/payout-provider"
 import { evaluatePayout, isNewRecipient, loadCompanyPolicy, loadPolicy, spentToday } from "@/lib/sancus/policy"
 import { companyIdFromRequest } from "@/lib/sancus/workspace"
+import { ensureCompanySettlementWallet } from "@/lib/sancus/company-wallets"
 import { liveSgdFxConfig } from "@/lib/sancus/live-fx"
 import {
   executePayout,
@@ -143,6 +144,13 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       treasuryWallet = rootWallets?.find((w) => w.type === "treasury") ?? null
       settlementWallet = rootWallets?.find((w) => w.type === "payout") ?? null
     }
+  }
+
+  // Every payout moves USDC onchain from the treasury to a settlement wallet. A company node that
+  // doesn't have its own settlement wallet yet gets one created now (Circle, same wallet set).
+  if (!settlementWallet && !process.env.SANCUS_SETTLEMENT_ADDRESS?.trim() && companyId && treasuryWallet) {
+    const created = await ensureCompanySettlementWallet(supabase, user.id, companyId)
+    if (created) settlementWallet = { ...created, type: "payout" }
   }
 
   // Partner deposit address: env override (e.g. StraitsX's address), else our Settlement wallet.

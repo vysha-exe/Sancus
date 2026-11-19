@@ -1,20 +1,13 @@
 "use client"
 
-// REMOVE BEFORE SUBMISSION — Dev QA rail smoke tests (every account type).
+// Legacy path — Process replaced the Dev QA API smoke tests.
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { DevQaDashboard } from "@/components/sancus-ui/dev-qa-dashboard"
-import { isDevQaEnabled } from "@/lib/sancus/accounts"
-import { useAccount } from "@/lib/sancus/use-account"
 
-export default function DevQaPage() {
+export default function DevQaRedirect() {
   const router = useRouter()
-  const { account } = useAccount()
-
   useEffect(() => {
-    if (!isDevQaEnabled()) router.replace(account?.homePath ?? "/home")
-  }, [account, router])
-
-  if (!isDevQaEnabled()) return null
-  return <DevQaDashboard />
+    router.replace("/process")
+  }, [router])
+  return null
 }

@@ -49,7 +49,14 @@ const nav = [
   { key: "team", href: "/team", label: "Team", icon: IconTeam, match: (p: string) => p.startsWith("/team") },
   { key: "invoices", href: "/invoices", label: "Invoices", icon: IconInvoices, match: (p: string) => p.startsWith("/invoices") },
   { key: "agents", href: "/agents", label: "Agents", icon: IconAgents, match: (p: string) => p.startsWith("/agents") },
-  { key: "devqa", href: "/dev", label: "Dev", icon: IconDevQa, match: (p: string) => p.startsWith("/dev") },
+  // REMOVE BEFORE SUBMISSION — Process settlement log (was Dev QA)
+  {
+    key: "devqa",
+    href: "/process",
+    label: "Process",
+    icon: IconDevQa,
+    match: (p: string) => p.startsWith("/process") || p.startsWith("/dev-qa") || p.startsWith("/dev"),
+  },
 ] as const
 
 /** The admin's classic set, used for the guest demo before an account loads. */
