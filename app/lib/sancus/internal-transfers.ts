@@ -66,9 +66,11 @@ export function fixedRate(currency: string): number {
 }
 
 export function localMinorForUsdc(usdcMinor: bigint, currency: string): bigint {
-  if (currency === "USDC" || currency === "USD") return usdcMinor
+  // Only USDC (HQ's wallet) keeps 6 decimals. USD is a branch bank account in cents like every other
+  // local currency; returning USDC units for it credited a US branch 10,000x the amount.
+  if (currency === "USDC") return usdcMinor
   const rateMicro = BigInt(Math.round(fixedRate(currency) * 1_000_000))
-  // USDC has 6 decimals and local mock tokens have 2.
+  // USDC has 6 decimals and local bank accounts / mock tokens have 2.
   return (usdcMinor * rateMicro * 100n + 500_000_000_000n) / 1_000_000_000_000n
 }
 
