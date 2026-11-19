@@ -167,10 +167,10 @@ export default function TreasuryPage() {
             <span className="body-s muted">Liquid balances and current investment positions</span>
           </div>
           <div className="treasury-overview__balances">
-            <div><span>USDC</span><strong>{data ? usd(data.assets.usdcMinor) : "—"}</strong><small>Available on Arc</small></div>
-            <div><span>fUSDC</span><strong>{data ? usd(data.assets.fUsdcMinor) : "—"}</strong><small>Internal liquidity</small></div>
-            <div><span>Investments</span><strong>{data ? usd((equityValueMinor + yieldValueMinor).toString()) : "—"}</strong><small>Stocks and yield</small></div>
-            <div><span>Agent revenue</span><strong>{data ? usd(data.assets.gatewayUsdcMinor) : "—"}</strong><small>{data?.earnings.calls ?? 0} paid calls</small></div>
+            <div><span>USDC</span><strong>{data ? usd(data.assets.usdcMinor) : loading ? "…" : "—"}</strong><small>Available on Arc</small></div>
+            <div><span>fUSDC</span><strong>{data ? usd(data.assets.fUsdcMinor) : loading ? "…" : "—"}</strong><small>Internal liquidity</small></div>
+            <div><span>Investments</span><strong>{data ? usd((equityValueMinor + yieldValueMinor).toString()) : loading ? "…" : "—"}</strong><small>Stocks and yield</small></div>
+            <div><span>Agent revenue</span><strong>{data ? usd(data.assets.gatewayUsdcMinor) : loading ? "…" : "—"}</strong><small>{data ? `${data.earnings.calls} paid calls` : "Paid agent requests"}</small></div>
           </div>
         </section>
 
@@ -183,7 +183,7 @@ export default function TreasuryPage() {
           <div className="treasury-position-group">
             <div className="treasury-position-group__head"><div><h3>Tokenized stocks</h3><p>ERC-20 positions funded with parent-company fUSDC.</p></div><span className="sx-pill">Arc</span></div>
             {equities?.portfolio.map((asset) => <div className="treasury-position" key={asset.symbol}><div><strong>{asset.symbol}</strong><span>{asset.name}</span></div><span>{Number(asset.shares).toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</span><span className="data">{usd(asset.valueMinor)}</span></div>)}
-            {!equities ? <div className="treasury-position treasury-position--empty">No stock positions loaded.</div> : null}
+            {!equities ? <div className="treasury-position treasury-position--empty">{loading ? "Loading stock positions…" : "No stock positions yet."}</div> : null}
             <details className="treasury-action">
               <summary>Trade stock positions</summary>
               <div className="treasury-action__body">
@@ -200,7 +200,7 @@ export default function TreasuryPage() {
             {yieldData?.vaults.length ? yieldData.vaults.slice(0, 3).map((vault) => {
               const position = yieldData.positions.find((item) => item.vaultAddress.toLowerCase() === vault.vaultAddress.toLowerCase())
               return <div className="treasury-position" key={vault.vaultAddress}><div><strong>{vault.name}</strong><span>{vault.protocol}</span></div><span>{Number(vault.currentApy).toFixed(2)}% APY</span><span className="data">${Number(position?.currentBalance ?? 0).toFixed(2)}</span></div>
-            }) : <div className="treasury-position treasury-position--empty">No Arc USDC vaults are available.</div>}
+            }) : <div className="treasury-position treasury-position--empty">{loading ? "Loading yield positions…" : "No Arc USDC vaults are available."}</div>}
             <details className="treasury-action">
               <summary>Manage yield position</summary>
               <div className="treasury-action__body">
@@ -214,26 +214,27 @@ export default function TreasuryPage() {
 
         <aside className="treasury-rail s4" aria-labelledby="account-heading">
           <div className="treasury-section-head"><div><span className="sx-label">Infrastructure</span><h2 id="account-heading">Treasury account</h2></div></div>
+          {loading && !data ? <div className="treasury-inline-state">Loading treasury account…</div> : null}
           {data?.wallet ? <div className="treasury-account"><div><span>Network</span><strong>{data.wallet.blockchain}</strong></div><div><span>Wallet</span><strong className="data">{short(data.wallet.address)}</strong></div><a className="sx-btn sx-btn--secondary" target="_blank" rel="noreferrer" href={`https://explorer.testnet.arc.io/address/${data.wallet.address}`}>View on Arc</a></div> : null}
-          {!data?.gatewaySigner ? <div className="empty"><p>{data?.wallet ? "Finish Gateway setup to collect paid agent requests." : "Set up the parent-company Arc wallet and Gateway signer."}</p><button className="sx-btn sx-btn--secondary" type="button" disabled={!data || busy !== null} onClick={() => void setupParentTreasury()}>{busy === "setup" ? "Setting up…" : data?.wallet ? "Complete Gateway setup" : "Set up treasury"}</button></div> : null}
+          {data && !data.gatewaySigner ? <div className="empty"><p>{data.wallet ? "Finish Gateway setup to collect paid agent requests." : "Set up the parent-company Arc wallet and Gateway signer."}</p><button className="sx-btn sx-btn--secondary" type="button" disabled={busy !== null} onClick={() => void setupParentTreasury()}>{busy === "setup" ? "Setting up…" : data.wallet ? "Complete Gateway setup" : "Set up treasury"}</button></div> : null}
 
-          <div className="treasury-readiness">
+          {data ? <div className="treasury-readiness">
             <div><span>USDC liquidity</span><span className={`sx-pill ${data?.assets.readiness?.canonicalUsdc ? "sx-pill--settled" : "sx-pill--warning"}`}>{data?.assets.readiness?.canonicalUsdc ? "Ready" : "Needs funds"}</span></div>
             <div><span>fUSDC liquidity</span><span className={`sx-pill ${data?.assets.readiness?.internalLiquidity ? "sx-pill--settled" : "sx-pill--warning"}`}>{data?.assets.readiness?.internalLiquidity ? "Ready" : "Low"}</span></div>
             <button className="sx-btn sx-btn--quiet" type="button" disabled={busy !== null || !data?.wallet} onClick={() => void post("/api/sancus/treasury/readiness", {}, "readiness")}>{busy === "readiness" ? "Checking…" : "Check test liquidity"}</button>
-          </div>
+          </div> : null}
 
-          <div className="treasury-gateway">
+          {data ? <div className="treasury-gateway">
             <div><span className="sx-label">Agent revenue</span><strong>{data ? usd(data.assets.gatewayUsdcMinor) : "—"}</strong><small>{data?.earnings.calls ?? 0} paid requests · {data ? usd(data.earnings.totalMinor) : "—"} recorded</small></div>
             <div className="treasury-field"><label htmlFor="gateway-amount">USDC to move</label><input id="gateway-amount" className="sx-input" inputMode="decimal" placeholder="0.00" value={gatewayAmount} disabled={!data?.wallet || gatewayAvailable <= 2.01} onChange={(event) => setGatewayAmount(event.target.value)} /><small>{gatewayAvailable <= 2.01 ? "Revenue becomes movable after it covers the 2.01 USDC Gateway fee." : `${usd(data?.assets.gatewayUsdcMinor ?? "0")} available · fee included.`}</small></div>
             <button className="sx-btn sx-btn--secondary" type="button" disabled={busy !== null || !data?.wallet || !gatewayTransferValid} onClick={() => void post("/api/sancus/treasury/gateway", { amount: gatewayAmount }, "gateway")}>{busy === "gateway" ? "Moving…" : "Move to treasury"}</button>
-          </div>
+          </div> : null}
           {data?.warnings.map((warning) => <span className="body-s muted" key={warning}>{warning}</span>)}
         </aside>
 
         <section className="treasury-activity s12" aria-labelledby="treasury-activity">
           <div className="treasury-section-head"><div><span className="sx-label">History</span><h2 id="treasury-activity">Recent activity</h2></div><a className="sx-btn sx-btn--quiet" href="/api/x402" target="_blank" rel="noreferrer">Open paid API</a></div>
-          {data?.activity.length ? data.activity.map((item) => <div className="treasury-activity__row" key={item.id}><span className="sx-label">{item.kind}</span><span><strong>{item.label}</strong><small>{new Date(item.createdAt).toLocaleString()}</small></span><span className="data">{item.currency === "fUSDC" ? `${usd(item.amount)} fUSDC` : usd(item.amount)}</span><span className={`sx-pill ${item.status === "CONFIRMED" ? "sx-pill--settled" : item.status === "FAILED" ? "sx-pill--failed" : "sx-pill--warning"}`}>{item.status}</span></div>) : <div className="empty">No parent-company treasury activity yet.</div>}
+          {data?.activity.length ? data.activity.map((item) => <div className="treasury-activity__row" key={item.id}><span className="sx-label">{item.kind}</span><span><strong>{item.label}</strong><small>{new Date(item.createdAt).toLocaleString()}</small></span><span className="data">{item.currency === "fUSDC" ? `${usd(item.amount)} fUSDC` : usd(item.amount)}</span><span className={`sx-pill ${item.status === "CONFIRMED" ? "sx-pill--settled" : item.status === "FAILED" ? "sx-pill--failed" : "sx-pill--warning"}`}>{item.status}</span></div>) : <div className="empty">{loading ? "Loading treasury activity…" : "No parent-company treasury activity yet."}</div>}
         </section>
       </div>
     </div>

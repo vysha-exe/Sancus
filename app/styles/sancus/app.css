@@ -143,6 +143,7 @@
 .treasury-account > div { display: flex; justify-content: space-between; gap: 16px; }
 .treasury-account span { color: var(--ink-muted); font-size: 13px; }
 .treasury-account strong { max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.treasury-inline-state { min-height: 92px; display: flex; align-items: center; color: var(--ink-muted); font-size: 13px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .treasury-readiness { display: grid; gap: 10px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .treasury-readiness > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; }
 .treasury-gateway { display: grid; gap: 14px; }
