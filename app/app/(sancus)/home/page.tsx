@@ -304,7 +304,7 @@ function ParentBranchBalances({
                 </div>
                 <div className="home-branch-card__balance">
                   <span>{combinedMoney(node)}</span>
-                  <small>Combined balance · bank + cross-border liquidity</small>
+                  <small>Available balance</small>
                   {debugMode ? (
                     <div className="home-branch-card__breakdown">
                       <small>Bank · {bankMoney(node)} · {node.bankBalance?.bankName ?? "Local bank"}</small>
