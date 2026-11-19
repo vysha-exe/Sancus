@@ -4,9 +4,8 @@
 //   1. Validate recipient + amount, compute a fresh quote server-side (never trust client numbers).
 //   2. Spending policy: blocked → 403; at/over the approval rule → PENDING_APPROVAL (funds reserved).
 //      Employees can only request: every payment they start waits for an admin (approval-rules.ts).
-//   3. Insert the payout (idempotent on the Idempotency-Key header) and reserve funds in the ledger.
-//   4. If allowed: executePayout() runs the USDC leg on Arc (when SANCUS_SETTLEMENT_ADDRESS is set)
-//      and hands off to the payout provider (simulated until StraitsX sandbox access).
+//   3. Insert the payout (idempotent on the Idempotency-Key header) and reserve the branch bank funds.
+//   4. If allowed: executePayout() hands off to the payout provider and captures the bank hold on settlement.
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { evmAddressSchema, validateJsonBody } from "@/lib/api/validate"
@@ -18,8 +17,8 @@ import { formatRate } from "@/lib/sancus/fx"
 import { getPayoutProvider } from "@/lib/sancus/payout-provider"
 import { evaluatePayout, isNewRecipient, loadCompanyPolicy, loadPolicy, spentToday } from "@/lib/sancus/policy"
 import { companyIdFromRequest } from "@/lib/sancus/workspace"
-import { ensureCompanySettlementWallet } from "@/lib/sancus/company-wallets"
 import { liveSgdFxConfig } from "@/lib/sancus/live-fx"
+import { reserveSpendFunds } from "@/lib/sancus/spend-funding"
 import {
   executePayout,
   preparePayout,
@@ -101,6 +100,18 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     return NextResponse.json({ error: prepared.error, issues: prepared.issues }, { status: prepared.status })
   }
   const { recipient, quote } = prepared
+  if (companyId && sourceWalletId) {
+    return NextResponse.json({ error: "Branch payouts use the branch operating bank account" }, { status: 400 })
+  }
+  const { data: sourceBankAccount } = companyId
+    ? await supabase.from("sancus_receive_accounts").select("id, currency").eq("company_id", companyId).maybeSingle()
+    : { data: null }
+  if (companyId && !sourceBankAccount) {
+    return NextResponse.json({ error: "This branch needs an operating bank account before it can pay" }, { status: 409 })
+  }
+  if (sourceBankAccount && sourceBankAccount.currency !== "SGD") {
+    return NextResponse.json({ error: `PayNow and FAST require an SGD operating account, not ${sourceBankAccount.currency}` }, { status: 409 })
+  }
 
   // Treasury and Settlement wallets: company node when scoped, else personal.
   // A company's wallets may have been created by any admin, so match on the company, not the caller.
@@ -116,7 +127,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   let treasuryWallet = arcWallets?.find((w) => w.type === "treasury") ?? null
   let settlementWallet = arcWallets?.find((w) => w.type === "payout") ?? null
   // (Never for requests: an employee's personal wallet must not pay a company bill.)
-  if (companyId && !treasuryWallet && !requestOnly) {
+  if (!companyId && !treasuryWallet && !requestOnly) {
     const { data: personal } = await supabase
       .from("wallets")
       .select("address, blockchain, type")
@@ -129,36 +140,12 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     settlementWallet = personal?.find((w) => w.type === "payout") ?? null
   }
 
-  // Employee requests from a branch without its own treasury are paid by the global account's.
-  if (requestOnly && companyId && !treasuryWallet) {
-    const { data: node } = await supabase.from("sancus_companies").select("root_id").eq("id", companyId).maybeSingle()
-    const rootId = node?.root_id as string | undefined
-    if (rootId && rootId !== companyId) {
-      const { data: rootWallets } = await supabase
-        .from("wallets")
-        .select("address, blockchain, type")
-        .eq("company_id", rootId)
-        .eq("blockchain", "ARC-TESTNET")
-        .in("type", ["treasury", "payout"])
-        .order("created_at", { ascending: true })
-      treasuryWallet = rootWallets?.find((w) => w.type === "treasury") ?? null
-      settlementWallet = rootWallets?.find((w) => w.type === "payout") ?? null
-    }
-  }
-
-  // Every payout moves USDC onchain from the treasury to a settlement wallet. A company node that
-  // doesn't have its own settlement wallet yet gets one created now (Circle, same wallet set).
-  if (!settlementWallet && !process.env.SANCUS_SETTLEMENT_ADDRESS?.trim() && companyId && treasuryWallet) {
-    const created = await ensureCompanySettlementWallet(supabase, user.id, companyId)
-    if (created) settlementWallet = { ...created, type: "payout" }
-  }
-
   // Partner deposit address: env override (e.g. StraitsX's address), else our Settlement wallet.
-  const settlementRaw = process.env.SANCUS_SETTLEMENT_ADDRESS?.trim() || settlementWallet?.address || ""
+  const settlementRaw = companyId ? "" : process.env.SANCUS_SETTLEMENT_ADDRESS?.trim() || settlementWallet?.address || ""
   const settlementAddress = settlementRaw && evmAddressSchema.safeParse(settlementRaw).success ? settlementRaw : null
 
   // Paying wallet: the one picked in the UI, else the Treasury.
-  let sourceWallet: { address: string; blockchain: string } | null = treasuryWallet
+  let sourceWallet: { address: string; blockchain: string } | null = companyId ? null : treasuryWallet
   if (sourceWalletId) {
     const { data: wallet } = await supabase
       .from("wallets")
@@ -216,6 +203,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       client_rate: formatRate(quote.clientRateMicro),
       spread_bps: Number(quote.spreadBps),
       source_wallet_id: sourceWalletId ?? null,
+      source_bank_account_id: sourceBankAccount?.id ?? null,
       source_address: sourceWallet?.address ?? null,
       blockchain: sourceWallet?.blockchain ?? null,
       settlement_address: settlementAddress,
@@ -239,7 +227,30 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
 
   let row = inserted as PayoutRow
-  // Ledger: reserve the USDC (available → in transit), also while waiting for approval.
+  if (sourceBankAccount) {
+    const fundingAmount = BigInt(quote.sgdAmountMinor) + BigInt(quote.feeSgdMinor)
+    const holdRef = `payout:${row.id}`
+    try {
+      await reserveSpendFunds(supabase, {
+        accountId: sourceBankAccount.id,
+        amountMinor: fundingAmount,
+        ref: holdRef,
+        sourceType: "PAYOUT",
+        sourceId: row.id,
+      })
+      const { data: funded } = await supabase.from("sancus_payouts").update({
+        funding_status: "HELD", funding_amount_minor: fundingAmount.toString(), funding_hold_reference: holdRef,
+      }).eq("id", row.id).select("*").single()
+      if (funded) row = funded as PayoutRow
+    } catch (cause) {
+      await supabase.from("sancus_payouts").update({
+        status: "FAILED", funding_status: "UNFUNDED",
+        failure_reason: cause instanceof Error ? cause.message : "Insufficient bank balance",
+      }).eq("id", row.id)
+      return NextResponse.json({ error: cause instanceof Error ? cause.message : "Insufficient bank balance" }, { status: 409 })
+    }
+  }
+  // Retain the existing accounting journal while the operating-account hold is authoritative for branches.
   await syncPayoutLedger(supabase, row)
 
   // Over the approval rule: stop here. Money moves when someone approves it.

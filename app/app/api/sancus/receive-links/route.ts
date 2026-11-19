@@ -25,11 +25,13 @@ type ReceiveAccountRow = {
   routing_label: string
   routing_value: string
   currency: string
+  balance_minor: number | string
   provider: string
   simulated: boolean
 }
 
-function toReceiveAccount(row: ReceiveAccountRow): ReceiveAccount {
+function toReceiveAccount(row: ReceiveAccountRow, heldMinor = 0n): ReceiveAccount {
+  const postedMinor = BigInt(row.balance_minor)
   return {
     companyId: row.company_id,
     bankName: row.bank_name,
@@ -39,6 +41,9 @@ function toReceiveAccount(row: ReceiveAccountRow): ReceiveAccount {
     routingLabel: row.routing_label,
     routingValue: row.routing_value,
     currency: row.currency,
+    balanceMinor: (postedMinor > heldMinor ? postedMinor - heldMinor : 0n).toString(),
+    postedMinor: postedMinor.toString(),
+    heldMinor: heldMinor.toString(),
     provider: row.provider,
     simulated: row.simulated,
   }
@@ -56,7 +61,7 @@ export const GET = withAuth(async (_request, { user, supabase }) => {
     .map((company) => company.id)
   if (!accessibleIds.length) return NextResponse.json({ links: [] })
 
-  const [{ data: links, error }, { data: accounts, error: accountsError }] = await Promise.all([
+  const [{ data: links, error }, { data: accounts, error: accountsError }, { data: holds }] = await Promise.all([
     supabase
       .from("sancus_receive_links")
       .select("id, company_id, rail, public_token, active, created_at")
@@ -65,15 +70,27 @@ export const GET = withAuth(async (_request, { user, supabase }) => {
       .order("created_at"),
     supabase
       .from("sancus_receive_accounts")
-      .select("company_id, bank_name, account_name, account_number, account_type, routing_label, routing_value, currency, provider, simulated")
+      .select("company_id, bank_name, account_name, account_number, account_type, routing_label, routing_value, currency, balance_minor, provider, simulated")
       .in("company_id", accessibleIds),
+    supabase
+      .from("sancus_bank_holds")
+      .select("company_id, amount_minor")
+      .in("company_id", accessibleIds)
+      .eq("status", "ACTIVE"),
   ])
   if (error) return NextResponse.json({ error: "Could not load static receive links" }, { status: 500 })
   if (accountsError) console.warn("receive accounts unavailable; using sandbox projection", accountsError.message)
 
   const rows = (links ?? []) as ReceiveLinkRow[]
   const companyById = new Map(companyRows.map((company) => [company.id, company]))
-  const accountByCompany = new Map(((accounts ?? []) as ReceiveAccountRow[]).map((account) => [account.company_id, toReceiveAccount(account)]))
+  const heldByCompany = new Map<string, bigint>()
+  for (const hold of holds ?? []) {
+    heldByCompany.set(hold.company_id, (heldByCompany.get(hold.company_id) ?? 0n) + BigInt(hold.amount_minor))
+  }
+  const accountByCompany = new Map(((accounts ?? []) as ReceiveAccountRow[]).map((account) => [
+    account.company_id,
+    toReceiveAccount(account, heldByCompany.get(account.company_id) ?? 0n),
+  ]))
 
   return NextResponse.json({
     links: rows.flatMap((row) => {

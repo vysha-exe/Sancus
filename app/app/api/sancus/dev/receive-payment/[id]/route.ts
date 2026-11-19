@@ -26,10 +26,10 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
   const collection = await refreshCollection(supabase, data as CollectionRow)
   steps.push(step("providerStatus", collection.status !== "FAILED" && collection.status !== "EXPIRED", `Collection is ${collection.status.toLowerCase()}`))
-  if (collection.status === "MINTED") steps.push(step("cryptoMint", true, "Matching mock local token minted on Arc testnet"))
-  else steps.push(step("cryptoMint", collection.status !== "FAILED", collection.error || "Waiting for provider settlement before Arc mint"))
+  if (collection.status === "CREDITED") steps.push(step("bankDeposit", true, "Local operating bank account credited"))
+  else steps.push(step("bankDeposit", collection.status !== "FAILED", collection.error || "Waiting for local bank settlement"))
   if (parsed.data.runId) {
-    const status = collection.status === "MINTED" ? "PASSED" : collection.status === "FAILED" || collection.status === "EXPIRED" ? "FAILED" : "WAITING"
+    const status = collection.status === "CREDITED" ? "PASSED" : collection.status === "FAILED" || collection.status === "EXPIRED" ? "FAILED" : "WAITING"
     await finishDevRun(supabase, parsed.data.runId, { status, steps, sourceRecordType: "RAIL_COLLECTION", sourceRecordId: collection.id, providerRef: collection.provider_ref, error: collection.error })
   }
   return NextResponse.json({ collection: toApi(collection), workflow: workflow(steps) })

@@ -96,14 +96,22 @@ async function ensureMembership(admin: SupabaseClient, companyId: string, userId
   if (error) throw new Error(`couldn't add demo membership: ${error.message}`)
 }
 
-async function ensureEmployeeMethods(admin: SupabaseClient, adminId: string, employeeId: string, name: string) {
+async function ensureEmployeeMethods(admin: SupabaseClient, adminId: string, employeeId: string, name: string, companyId: string) {
   const { data } = await admin.from("sancus_spending_methods").select("method_type").eq("employee_id", employeeId).neq("status", "REVOKED")
   const existing = new Set((data ?? []).map((method) => method.method_type as string))
-  const missing = [
-    { user_id: adminId, employee_id: employeeId, employee_name: name, method_type: "CARD", provider: "SIMULATED", currency: "USD", label: "Virtual card", monthly_limit_minor: "300000" },
-    { user_id: adminId, employee_id: employeeId, employee_name: name, method_type: "PROMPTPAY", provider: "SIMULATED", currency: "THB", label: "PromptPay QR (Bangkok trip)", monthly_limit_minor: "2000000" },
-    { user_id: adminId, employee_id: employeeId, employee_name: name, method_type: "PIX", provider: "PAYZU", currency: "BRL", label: "Pix spending", monthly_limit_minor: "80000" },
-  ].filter((method) => !existing.has(method.method_type))
+  const [{ data: company }, { data: account }] = await Promise.all([
+    admin.from("sancus_companies").select("base_currency").eq("id", companyId).maybeSingle(),
+    admin.from("sancus_receive_accounts").select("id").eq("company_id", companyId).maybeSingle(),
+  ])
+  if (!company?.base_currency || !account?.id) return
+  const currency = String(company.base_currency).toUpperCase()
+  const localMethod = currency === "BRL" ? "PIX" : currency === "THB" ? "PROMPTPAY" : currency === "IDR" ? "QRIS" : "CARD"
+  const provider = localMethod === "PIX" ? "PAYZU" : localMethod === "PROMPTPAY" ? "OMISE" : localMethod === "QRIS" ? "MIDTRANS" : "SIMULATED"
+  const missing = [{
+    user_id: adminId, company_id: companyId, funding_account_id: account.id,
+    employee_id: employeeId, employee_name: name, method_type: localMethod, provider,
+    currency, label: localMethod === "CARD" ? "Virtual card" : `${localMethod} spending`, monthly_limit_minor: "2000000",
+  }].filter((method) => !existing.has(method.method_type))
   if (missing.length) await admin.from("sancus_spending_methods").insert(missing)
 }
 
@@ -189,6 +197,6 @@ export async function ensureDemoAccount(
     return { email, password: base.password }
   }
   await ensureMembership(admin, branchId, userId, email, as === "branch" ? "ADMIN" : "EMPLOYEE")
-  if (as === "employee") await ensureEmployeeMethods(admin, adminId, userId, DEMO_NAMES.employee)
+  if (as === "employee") await ensureEmployeeMethods(admin, adminId, userId, DEMO_NAMES.employee, branchId)
   return { email, password: base.password }
 }

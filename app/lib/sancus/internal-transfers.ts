@@ -1,9 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Address } from "viem"
 import { formatUnits } from "viem"
 import { sendUsdcOnSameChainWithAppKit } from "@/lib/circle/app-kit-send"
 import { FIXED_USD_RATES } from "./fixed-rates"
-import { MOCK_TOKENS, railBurn, railMint, type LocalCurrency } from "./mock-tokens"
 
 export type InternalTransferStatus =
   | "PENDING_APPROVAL"
@@ -38,6 +36,9 @@ export type InternalTransferRow = {
   source_address: string
   destination_wallet_id: string
   destination_address: string
+  source_bank_account_id: string | null
+  destination_bank_account_id: string | null
+  source_bank_hold_reference: string | null
   source_bank_name: string | null
   source_bank_label: string | null
   source_bank_last4: string | null
@@ -59,28 +60,6 @@ export type InternalTransferRow = {
 }
 
 export type InternalTransferDto = ReturnType<typeof toInternalTransferDto>
-
-const BANK_BY_COUNTRY: Record<string, string> = {
-  ID: "Bank Central Asia",
-  TH: "Kasikornbank",
-  BR: "Itaú Unibanco",
-  SG: "DBS Bank",
-  PH: "BDO Unibank",
-  MY: "Maybank",
-}
-
-export function branchBank(country: string, walletAddress: string) {
-  return {
-    name: BANK_BY_COUNTRY[country] ?? "Local operating bank",
-    label: "Operating account",
-    last4: walletAddress.slice(-4).toUpperCase(),
-    simulated: true,
-  }
-}
-
-export function isLocalCurrency(value: string): value is LocalCurrency {
-  return value in MOCK_TOKENS
-}
 
 export function fixedRate(currency: string): number {
   return FIXED_USD_RATES[currency as keyof typeof FIXED_USD_RATES] ?? 1
@@ -111,6 +90,8 @@ export function toInternalTransferDto(row: InternalTransferRow, names?: { source
     destinationRate: row.destination_rate,
     sourceWalletId: row.source_wallet_id,
     destinationWalletId: row.destination_wallet_id,
+    sourceBankAccountId: row.source_bank_account_id,
+    destinationBankAccountId: row.destination_bank_account_id,
     sourceBank: row.source_bank_name
       ? { name: row.source_bank_name, label: row.source_bank_label, last4: row.source_bank_last4, simulated: true }
       : null,
@@ -159,15 +140,24 @@ export async function executeInternalTransfer(
   try {
     row = await save(supabase, row.id, { status: "SOURCE_RESERVED", failed_stage: null, failure_reason: null })
 
-    if (isLocalCurrency(row.source_currency) && !row.burn_tx_hash) {
+    if (row.source_bank_account_id && !row.burn_tx_hash) {
       try {
-        const hash = await railBurn(
-          row.source_currency,
-          row.source_address as Address,
-          BigInt(row.source_amount_minor),
-          `${ref}:debit`
-        )
-        row = await save(supabase, row.id, { status: "LOCAL_DEBITED", burn_tx_hash: hash })
+        const holdReference = row.source_bank_hold_reference ?? `${ref}:bank-hold`
+        const { error: holdError } = await supabase.rpc("sancus_bank_create_hold", {
+          p_account_id: row.source_bank_account_id,
+          p_amount_minor: String(row.source_amount_minor),
+          p_reference: holdReference,
+          p_source_type: "INTERNAL_TRANSFER",
+          p_source_id: row.id,
+        })
+        if (holdError) throw new Error(holdError.message)
+        const { error: captureError } = await supabase.rpc("sancus_bank_capture_hold", { p_reference: holdReference })
+        if (captureError) throw new Error(captureError.message)
+        row = await save(supabase, row.id, {
+          status: "LOCAL_DEBITED",
+          source_bank_hold_reference: holdReference,
+          burn_tx_hash: holdReference,
+        })
       } catch (error) {
         throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage: "LOCAL_DEBIT" })
       }
@@ -181,7 +171,7 @@ export async function executeInternalTransfer(
           sourceWalletAddress: row.source_address,
           recipientAddress: row.destination_address,
           amount: formatUnits(BigInt(row.usdc_amount_minor), 6),
-          token: "USDC",
+          token: "fUSDC",
         })
         row = await save(supabase, row.id, {
           status: "USDC_SETTLED",
@@ -193,15 +183,19 @@ export async function executeInternalTransfer(
       }
     }
 
-    if (isLocalCurrency(row.destination_currency) && !row.mint_tx_hash) {
+    if (row.destination_bank_account_id && !row.mint_tx_hash) {
       try {
-        const hash = await railMint(
-          row.destination_currency,
-          row.destination_address as Address,
-          BigInt(row.destination_amount_minor),
-          `${ref}:credit`
-        )
-        row = await save(supabase, row.id, { status: "LOCAL_CREDITED", mint_tx_hash: hash })
+        const creditReference = `${ref}:bank-credit`
+        const { error } = await supabase.rpc("sancus_bank_post_credit", {
+          p_account_id: row.destination_bank_account_id,
+          p_amount_minor: String(row.destination_amount_minor),
+          p_entry_type: "INTERNAL_TRANSFER",
+          p_source_type: "INTERNAL_TRANSFER",
+          p_source_id: row.id,
+          p_idempotency_key: creditReference,
+        })
+        if (error) throw new Error(error.message)
+        row = await save(supabase, row.id, { status: "LOCAL_CREDITED", mint_tx_hash: creditReference })
       } catch (error) {
         throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage: "LOCAL_CREDIT" })
       }

@@ -47,6 +47,9 @@ export type SpendingMethodCurrency = "BRL" | "IDR" | "THB" | "USD"
 
 export type SpendingMethodDto = {
   id: string
+  companyId: string | null
+  fundingAccountId: string | null
+  fundingWalletId: string | null
   employeeId: string
   employeeName: string
   type: SpendingMethodType
@@ -97,12 +100,13 @@ export function toPixPaymentDto(row: PixPaymentDbRow): PixPaymentDto {
 }
 
 export function toSpendingMethodDto(row: {
-  id: string; employee_id: string; employee_name: string; method_type: SpendingMethodType; provider: string;
+  id: string; company_id?: string | null; funding_account_id?: string | null; funding_wallet_id?: string | null; employee_id: string; employee_name: string; method_type: SpendingMethodType; provider: string;
   label: string; currency: SpendingMethodCurrency; monthly_limit_minor: number | string;
   status: SpendingMethodDto["status"]; created_at: string;
 }, usedMinor: bigint = 0n): SpendingMethodDto {
   return {
-    id: row.id, employeeId: row.employee_id, employeeName: row.employee_name,
+    id: row.id, companyId: row.company_id ?? null, fundingAccountId: row.funding_account_id ?? null, fundingWalletId: row.funding_wallet_id ?? null,
+    employeeId: row.employee_id, employeeName: row.employee_name,
     type: row.method_type, provider: row.provider, label: row.label, currency: row.currency,
     monthlyLimitMinor: String(row.monthly_limit_minor), usedMinor: usedMinor.toString(),
     status: row.status, createdAt: row.created_at,

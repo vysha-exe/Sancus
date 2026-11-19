@@ -30,6 +30,7 @@ export type CompanyWallet = {
 export type CompanyBalanceSnapshot = {
   wallets: CompanyWallet[]
   deductions: Record<string, string>
+  bankBalances?: Record<string, { currency: string; balanceMinor: string; postedMinor: string; heldMinor: string; bankName: string }>
 }
 
 export type CompanyNode = {
@@ -50,6 +51,8 @@ export type CompanyNode = {
   ownMinor: string
   /** USDC across this node and every descendant. */
   totalMinor: string
+  /** Local operating-bank balance; separate from Arc wallet liquidity. */
+  bankBalance?: { currency: string; balanceMinor: string; postedMinor: string; heldMinor: string; bankName: string } | null
   children: CompanyNode[]
 }
 
@@ -149,6 +152,7 @@ export function buildCompanyTree(
       wallets: own,
       ownMinor: ownMinor.toString(),
       totalMinor: totalMinor.toString(),
+      bankBalance: null,
       children,
     }
   }
@@ -187,6 +191,7 @@ export function applyCompanyBalances(
       wallets,
       ownMinor: ownMinor.toString(),
       totalMinor: totalMinor.toString(),
+      bankBalance: snapshot.bankBalances?.[node.id] ?? null,
       children,
     }
   }

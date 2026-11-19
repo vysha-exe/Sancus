@@ -8,7 +8,7 @@ import { useDemoFallback } from "@/lib/sancus/demo-fallback"
 import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 import { maskPixKey, toPixPaymentDto } from "@/lib/sancus/local-rails"
 import { mapPayZuStatus, payPix, simulatedPixPayment } from "@/lib/sancus/rails/payzu"
-import { getRegionalBalance } from "@/lib/sancus/regional-balance"
+import { releaseSpendFunds, reserveSpendFunds, settleSpendFunds } from "@/lib/sancus/spend-funding"
 
 const schema = z.object({
   spendingMethodId: z.string().uuid(),
@@ -42,6 +42,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const { data: method } = await admin.from("sancus_spending_methods").select("*").eq("id", parsed.data.spendingMethodId).eq("employee_id", user.id).eq("method_type", "PIX").maybeSingle()
   if (!method) return NextResponse.json({ error: "Pix access is not assigned to your login" }, { status: 404 })
   if (method.status !== "ACTIVE") return NextResponse.json({ error: `Declined: Pix access is ${String(method.status).toLowerCase()}` }, { status: 403 })
+  if (!method.company_id || !method.funding_account_id) {
+    return NextResponse.json({ error: "This Pix access is not linked to a branch operating bank account" }, { status: 409 })
+  }
 
   const requestedMinor = BigInt(Math.round(parsed.data.amountBrl * 100))
   const [{ data: membership }, { data: monthPayments }, { data: todayPayments }] = await Promise.all([
@@ -62,21 +65,35 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (membership?.daily_limit_minor != null && todayUsdMicro + usdMicro > BigInt(membership.daily_limit_minor)) {
     return NextResponse.json({ error: "Declined: this Pix payment exceeds your daily limit" }, { status: 403 })
   }
-  const balance = await getRegionalBalance(admin, method.user_id)
-  if (requestedMinor > BigInt(balance.availableMinor)) {
-    return NextResponse.json({ error: "Declined: insufficient Brazil balance" }, { status: 409 })
-  }
-
   try {
     const reference = `sancus-employee-pix-${randomUUID()}`
+    const holdRef = `pix:${reference}`
+    await reserveSpendFunds(admin, {
+      accountId: method.funding_account_id,
+      amountMinor: requestedMinor,
+      ref: holdRef,
+      sourceType: "PIX_PAYMENT",
+      sourceId: reference,
+    })
     const simulated = useDemoFallback("PAYZU_SANDBOX_TOKEN")
-    const transaction = simulated
-      ? simulatedPixPayment({ amountBrl: parsed.data.amountBrl, reference })
-      : await payPix({ amountBrl: parsed.data.amountBrl, reference, qrPayload: parsed.data.qrPayload, description: `Employee purchase by ${method.employee_name}` })
+    let transaction
+    try {
+      transaction = simulated
+        ? simulatedPixPayment({ amountBrl: parsed.data.amountBrl, reference })
+        : await payPix({ amountBrl: parsed.data.amountBrl, reference, qrPayload: parsed.data.qrPayload, description: `Employee purchase by ${method.employee_name}` })
+    } catch (error) {
+      await releaseSpendFunds(admin, { ref: holdRef })
+      throw error
+    }
     const providerStatus = transaction.status || "PENDING"
     const status = mapPayZuStatus(providerStatus)
+    const terminalFailure = ["FAILED", "EXPIRED", "CANCELLED"].includes(status)
+    if (status === "SETTLED") await settleSpendFunds(admin, { ref: holdRef })
+    else if (terminalFailure) await releaseSpendFunds(admin, { ref: holdRef })
     const { data, error } = await admin.from("sancus_pix_payments").insert({
       user_id: method.user_id,
+      company_id: method.company_id,
+      funding_account_id: method.funding_account_id,
       idempotency_key: randomUUID(),
       purpose: "EMPLOYEE_SPEND",
       spending_method_id: method.id,
@@ -93,6 +110,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       provider_payload: transaction,
       simulated,
       settled_at: status === "SETTLED" ? transaction.paidAt || new Date().toISOString() : null,
+      funding_status: status === "SETTLED" ? "SETTLED" : terminalFailure ? "RELEASED" : "HELD",
+      funding_amount_minor: requestedMinor.toString(), funding_hold_tx_hash: holdRef,
     }).select("*").single()
     if (error || !data) return NextResponse.json({ error: "Pix was created, but Sancus could not save it" }, { status: 500 })
     return NextResponse.json({ payment: toPixPaymentDto(data) }, { status: 201 })

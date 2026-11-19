@@ -12,6 +12,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { createCompanyForUser, createError, getCompany, resolveNodeInput } from "@/lib/sancus/company-api"
 import { createCompanyWallet } from "@/lib/sancus/company-wallets"
+import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
 
 const createSchema = z.object({
   type: z.enum(["BRANCH", "EMPLOYEE"]),
@@ -114,6 +115,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const secret = process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
   if (!url || !secret) return NextResponse.json({ error: "Creating logins needs SUPABASE_SECRET_KEY on the server" }, { status: 503 })
+  const admin = createAdminClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } })
 
   // 1. Where the login goes. A new country branch can be created first by the
   // global admin, either for its first employee or its branch admin.
@@ -134,6 +136,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     }
     const company = await getCompany(supabase, created.id)
     if (!company) return NextResponse.json({ error: "Branch created but couldn't be read back" }, { status: 500 })
+    await ensureCompanyReceiveAccount(admin, company)
     const wallet = await createCompanyWallet(supabase, user.id, company, `${company.name} wallet`)
     branchCreated = { id: company.id, name: company.name, walletAddress: wallet.ok ? wallet.wallet.address : null }
     companyId = company.id
@@ -149,7 +152,6 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   }
 
   // 2. The login itself (confirmed, with a one-time temporary password).
-  const admin = createAdminClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } })
   const tempPassword = `Sx-${randomBytes(9).toString("base64url")}`
   const created = await admin.auth.admin.createUser({
     email: input.email,
@@ -187,23 +189,31 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     return NextResponse.json({ error: "Couldn't give the new login access to that branch" }, { status: 500 })
   }
 
-  // 4. Employees get a virtual card capped at their daily limit × 30 (USD cents).
+  // 4. Employees get company-funded virtual access capped at their daily limit × 30.
   let cardIssued = false
   if (input.type === "EMPLOYEE") {
+    const [{ data: fundingCompany }, { data: fundingAccount }] = await Promise.all([
+      admin.from("sancus_companies").select("base_currency").eq("id", companyId).maybeSingle(),
+      admin.from("sancus_receive_accounts").select("id").eq("company_id", companyId).maybeSingle(),
+    ])
     const dailyUsdc = BigInt(input.dailyLimitMinor ?? "1000000000")
     const monthlyCents = (dailyUsdc / 10_000n) * 30n
-    const { error: cErr } = await admin.from("sancus_spending_methods").insert({
-      user_id: user.id,
-      employee_id: newUserId,
-      employee_name: input.firstName,
-      method_type: "CARD",
-      provider: "SIMULATED",
-      currency: "USD",
-      label: "Virtual card",
-      monthly_limit_minor: monthlyCents.toString(),
-    })
-    cardIssued = !cErr
-    if (cErr) console.warn("Virtual card not issued", cErr.message)
+    if (fundingCompany?.base_currency && fundingAccount?.id) {
+      const { error: cErr } = await admin.from("sancus_spending_methods").insert({
+        user_id: user.id,
+        company_id: companyId,
+        funding_account_id: fundingAccount.id,
+        employee_id: newUserId,
+        employee_name: input.firstName,
+        method_type: "CARD",
+        provider: "SIMULATED",
+        currency: fundingCompany.base_currency,
+        label: "Virtual card",
+        monthly_limit_minor: monthlyCents.toString(),
+      })
+      cardIssued = !cErr
+      if (cErr) console.warn("Virtual card not issued", cErr.message)
+    }
   }
 
   return NextResponse.json(

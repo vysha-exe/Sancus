@@ -39,3 +39,6 @@ desktop.ini
 # Local screenshots
 screenshot/
 .vercel
+
+# Local research checkouts
+.research/

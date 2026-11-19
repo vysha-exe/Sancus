@@ -10,6 +10,7 @@ import { getAppKitSendError, sendUsdcOnSameChainWithAppKit } from "@/lib/circle/
 import { achJournalsFor, type AchPaymentRow } from "./ach"
 import { postJournal, postJournalFor } from "./ledger"
 import { formatMinor, USDC_DECIMALS } from "./money"
+import { faceUsdcEnabled } from "./face-usdc"
 import { type AchStatus, type BridgeEvent, canTransition, fromBridgeState, RETURN_CODES, simCanChange, simulateAch } from "./rails/ach-sim"
 
 export const ACH_PROVIDER = "bridge-simulated"
@@ -105,7 +106,6 @@ export async function refreshAchPayments(db: SupabaseClient, rows: AchPaymentRow
  * is released. MOCK_ONLY without face USDC skips the on-chain leg.
  */
 export async function executeAch(db: SupabaseClient, userId: string, row: AchPaymentRow): Promise<AchPaymentRow> {
-  const { faceUsdcEnabled } = await import("@/lib/sancus/face-usdc")
   const wantsOnchain = row.settlement_mode === "TESTNET_SETTLEMENT" || faceUsdcEnabled()
   if (!wantsOnchain) return row
   if (!row.source_address || !row.settlement_address) {
@@ -127,7 +127,7 @@ async function fundAchOnchain(db: SupabaseClient, userId: string, row: AchPaymen
       sourceWalletAddress: row.source_address!,
       recipientAddress: row.settlement_address!,
       amount,
-      token: "USDC",
+      token: faceUsdcEnabled() ? "fUSDC" : "USDC",
     })
     const { data } = await db
       .from("sancus_ach_payments")

@@ -32,6 +32,7 @@ import { AgentCallButton } from "./agent-call"
 
 const nav = [
   { key: "home", href: "/home", label: "Home", icon: IconHome, match: (p: string) => p === "/home" || p.startsWith("/home/") },
+  { key: "treasury", href: "/treasury", label: "Treasury", icon: IconBranches, match: (p: string) => p === "/treasury" || p.startsWith("/treasury/") },
   { key: "branch", href: "/branch", label: "My branch", icon: IconHome, match: (p: string) => p === "/branch" || p.startsWith("/branch/") },
   { key: "me", href: "/me", label: "My card", icon: IconSpending, match: (p: string) => p === "/me" || p.startsWith("/me/") },
   { key: "pay", href: "/pay", label: "Pay", icon: IconPay, match: (p: string) => p.startsWith("/pay") },
@@ -49,18 +50,19 @@ const nav = [
   { key: "team", href: "/team", label: "Team", icon: IconTeam, match: (p: string) => p.startsWith("/team") },
   { key: "invoices", href: "/invoices", label: "Invoices", icon: IconInvoices, match: (p: string) => p.startsWith("/invoices") },
   { key: "agents", href: "/agents", label: "Agents", icon: IconAgents, match: (p: string) => p.startsWith("/agents") },
-  // REMOVE BEFORE SUBMISSION — Process settlement log (was Dev QA)
+  { key: "dev", href: "/dev", label: "Dev", icon: IconDevQa, match: (p: string) => p === "/dev" || p.startsWith("/dev/") },
+  // REMOVE BEFORE SUBMISSION — Process settlement log
   {
     key: "devqa",
     href: "/process",
     label: "Process",
     icon: IconDevQa,
-    match: (p: string) => p.startsWith("/process") || p.startsWith("/dev-qa") || p.startsWith("/dev"),
+    match: (p: string) => p.startsWith("/process") || p.startsWith("/dev-qa"),
   },
 ] as const
 
 /** The admin's classic set, used for the guest demo before an account loads. */
-const DEFAULT_NAV: NavKey[] = ["home", "pay", "activity", "spending", "branches", "team", "invoices", "agents"]
+const DEFAULT_NAV: NavKey[] = ["home", "treasury", "pay", "activity", "spending", "branches", "team", "invoices", "agents"]
 
 export function AppShell({
   children,

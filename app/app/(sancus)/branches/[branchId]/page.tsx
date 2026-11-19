@@ -4,7 +4,6 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
 import { countryByCode } from "@/lib/sancus/countries"
-import { FIXED_USD_RATES, fixedUsdRateLabel } from "@/lib/sancus/fixed-rates"
 import type { InternalTransferDto } from "@/lib/sancus/internal-transfers"
 import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { PayoutDto } from "@/lib/sancus/payouts"
@@ -28,8 +27,11 @@ type Account = {
   /** This user may move money out of this account. */
   canSendFrom?: boolean
   availableMinor: string
+  postedMinor: string
+  heldMinor: string
+  walletLiquidityMinor: string
   wallet: Wallet | null
-  bank: { name: string; label: string; last4: string; simulated: boolean } | null
+  bank: { id: string; name: string; label: string; last4: string; currency: string; simulated: boolean } | null
 }
 
 type Member = {
@@ -51,22 +53,13 @@ type BranchResponse = {
 
 const usd = (minor: string) => `$${displayMinor(BigInt(minor || "0"), USDC_DECIMALS, "", 2)}`
 
-function localLabel(account: Account) {
-  if (account.isRoot) return "Global treasury · USDC"
-  const rate = FIXED_USD_RATES[account.currency as keyof typeof FIXED_USD_RATES]
-  if (!rate) return account.currency
-  const value = (Number(BigInt(account.availableMinor || "0")) / 1_000_000) * rate
+function accountBalanceLabel(account: Account, minor = account.availableMinor) {
+  if (account.isRoot) return usd(minor)
   return new Intl.NumberFormat(account.currency === "IDR" ? "id-ID" : undefined, {
     style: "currency",
     currency: account.currency,
     maximumFractionDigits: account.currency === "IDR" ? 0 : 2,
-  }).format(value)
-}
-
-function localTokenLabel(account: Account) {
-  const minor = account.wallet?.local?.[account.currency]
-  if (!minor) return null
-  return `${(Number(minor) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} m${account.currency}`
+  }).format(Number(minor || "0") / 100)
 }
 
 function statusLabel(status: string) {
@@ -118,7 +111,6 @@ export default function BranchDetailPage() {
 
   const { branch } = data
   const flag = branch.country ? countryByCode(branch.country)?.flag : null
-  const tokenBalance = localTokenLabel(branch)
   const recent = [
     ...data.transfers.map((transfer) => ({ kind: "transfer" as const, at: transfer.createdAt, transfer })),
     ...data.payouts.map((payout) => ({ kind: "payout" as const, at: payout.createdAt, payout })),
@@ -144,22 +136,22 @@ export default function BranchDetailPage() {
         <section className="tile s8" aria-labelledby="branch-treasury">
           <div className="tile-head">
             <div>
-              <span className="sx-label">Available treasury</span>
-              <h2 id="branch-treasury" className="sx-h heading-2" style={{ margin: "8px 0 0" }}>{usd(branch.availableMinor)}</h2>
+              <span className="sx-label">{branch.isRoot ? "Available treasury" : "Available bank balance"}</span>
+              <h2 id="branch-treasury" className="sx-h heading-2" style={{ margin: "8px 0 0" }}>{accountBalanceLabel(branch)}</h2>
             </div>
-            <span className="sx-pill sx-pill--settled">Arc testnet</span>
+            <span className="sx-pill sx-pill--settled">{branch.isRoot ? "Arc testnet" : "Operating account"}</span>
           </div>
           {!branch.isRoot ? (
             <div className="fill-grid">
               <div className="rail-tile">
-                <span className="sx-label">Local equivalent</span>
-                <span className="big">{localLabel(branch)}</span>
-                <span className="body-s muted">{fixedUsdRateLabel(branch.currency as keyof typeof FIXED_USD_RATES)}</span>
+                <span className="sx-label">Posted bank balance</span>
+                <span className="big">{accountBalanceLabel(branch, branch.postedMinor)}</span>
+                <span className="body-s muted">{accountBalanceLabel(branch, branch.heldMinor)} held for payments</span>
               </div>
               <div className="rail-tile">
-                <span className="sx-label">Local settlement asset</span>
-                <span className="big">{tokenBalance ?? `0 m${branch.currency}`}</span>
-                <span className="body-s muted">Test token · no cash value</span>
+                <span className="sx-label">Wallet liquidity</span>
+                <span className="big">{usd(branch.walletLiquidityMinor)}</span>
+                <span className="body-s muted">Separate · cross-border and on-chain only</span>
               </div>
             </div>
           ) : (
@@ -177,7 +169,7 @@ export default function BranchDetailPage() {
             <>
               <span className="body-strong">{branch.bank.name}</span>
               <span className="big" style={{ fontSize: 26 }}>{branch.bank.label} •••• {branch.bank.last4}</span>
-              <p className="body-s muted">Payments are funded by {branch.name} treasury. Arc settlement details remain available on each transaction.</p>
+              <p className="body-s muted">Local cards, Pix, and domestic payments use this account. Wallet liquidity is kept separate.</p>
             </>
           ) : (
             <div className="empty">Global treasury · USDC</div>
@@ -306,7 +298,7 @@ function MoveMoney({ data, onClose, onChanged }: { data: BranchResponse; onClose
                 {options.map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.name}
-                    {account.canSee === false ? "" : ` · ${usd(account.availableMinor)}`}
+                    {account.canSee === false ? "" : ` · ${accountBalanceLabel(account)}`}
                     {account.bank ? ` · ${account.bank.name} •••• ${account.bank.last4}` : ""}
                   </option>
                 ))}

@@ -1,10 +1,7 @@
-// Explains Sancus settlement for the Process log:
-//   USD → USDC (on-ramp / treasury) → local currency (off-ramp) → local rail to bank (large)
-//   or virtual card (small). Arc testnet explorer when a tx hash exists.
+// Explains Sancus settlement for the Process log. Bank payouts may use the
+// treasury settlement path; cards always use the issuing branch's local balance.
 
 export const ARC_TX_EXPLORER = "https://explorer.testnet.arc.io/tx"
-/** Below this USD notional, prefer virtual card over local bank rail (demo threshold). */
-export const CARD_ROUTE_USD = 100
 
 export type ProcessStepStatus = "done" | "active" | "pending" | "skipped"
 export type DestinationKind = "bank" | "card" | "collection" | "internal"
@@ -29,14 +26,8 @@ export function arcExplorer(txHash: string | null | undefined): string | null {
   return `${ARC_TX_EXPLORER}/${txHash.trim()}`
 }
 
-/** Product rule: small notional → virtual card; larger → local bank rail. */
-export function routeByAmount(amountUsd: number | null | undefined): "card" | "bank" {
-  if (amountUsd != null && amountUsd > 0 && amountUsd < CARD_ROUTE_USD) return "card"
-  return "bank"
-}
-
 /** Map a payment rail onto the product corridor (destination follows the live rail). */
-export function corridorFor(rail: string, opts?: { inbound?: boolean; destinationKind?: DestinationKind }): ProcessCorridor {
+export function corridorFor(rail: string, opts?: { inbound?: boolean; destinationKind?: DestinationKind; currency?: string }): ProcessCorridor {
   const r = rail.toUpperCase().replace(/\s+/g, " ")
   const kind = opts?.destinationKind
 
@@ -48,7 +39,8 @@ export function corridorFor(rail: string, opts?: { inbound?: boolean; destinatio
   }
 
   if (kind === "card" || r === "CARD" || r.includes("CARD")) {
-    return { label: "USD → fUSDC → virtual card", localCurrency: "USD", localRail: "Virtual card", destinationKind: "card" }
+    const currency = opts?.currency?.toUpperCase() || "LOCAL"
+    return { label: `${currency} branch balance → card network`, localCurrency: currency, localRail: "Card network", destinationKind: "card" }
   }
   if (kind === "internal" || r === "INTERNAL" || r.includes("INTERNAL")) {
     return { label: "Branch token → fUSDC → branch token", localCurrency: "USDC", localRail: "Arc internal", destinationKind: "internal" }
@@ -115,6 +107,8 @@ export type BuildPipelineInput = {
   amountUsd?: number | null
   /** Force destination (e.g. live Card purchases). */
   destinationKind?: DestinationKind
+  /** Currency of the issuing branch / instrument. */
+  currency?: string
   localAmountLabel?: string
   usdcLabel?: string
   txHash?: string | null
@@ -126,8 +120,7 @@ export type BuildPipelineInput = {
 /** Ordered legs for one transaction, with optional Arc explorer links. */
 export function buildPipeline(input: BuildPipelineInput): { corridor: ProcessCorridor; steps: ProcessStep[] } {
   const explorer = input.explorerUrl || arcExplorer(input.txHash)
-  const mintExplorer = arcExplorer(input.mintTxHash)
-  const corridor = corridorFor(input.rail, { inbound: input.inbound, destinationKind: input.destinationKind })
+  const corridor = corridorFor(input.rail, { inbound: input.inbound, destinationKind: input.destinationKind, currency: input.currency })
 
   const local = input.localAmountLabel ?? corridor.localCurrency
   const usdc = input.usdcLabel ?? "USDC"
@@ -150,44 +143,42 @@ export function buildPipeline(input: BuildPipelineInput): { corridor: ProcessCor
         status: "pending",
       },
       {
-        id: "mint",
-        title: "Mint into branch / treasury",
-        detail: `On-chain mint of the matching local stablecoin on Arc testnet${sim}.`,
+        id: "bank-credit",
+        title: "Credit the branch bank account",
+        detail: `The settled local-rail amount is posted to the destination operating account${sim}.`,
         status: "pending",
-        explorerUrl: mintExplorer || explorer,
       },
       {
-        id: "treasury",
+        id: "available",
         title: "Available in Sancus",
-        detail: "Balance updates for the destination wallet.",
+        detail: "The branch bank balance updates; its cross-border wallet remains separate.",
         status: "pending",
       },
     ]
   } else if (corridor.destinationKind === "internal") {
     steps = [
-      { id: "burn", title: "Burn source branch token", detail: "Release local-branch liquidity on Arc.", status: "pending", explorerUrl: explorer },
-      { id: "usdc", title: "Move USDC on Arc", detail: "Bridge value through USDC on testnet.", status: "pending" },
-      { id: "mint", title: "Mint destination token", detail: "Credit the receiving branch wallet.", status: "pending", explorerUrl: mintExplorer },
+      { id: "bank-debit", title: "Debit source operating account", detail: "Reserve and capture the source branch's local bank funds.", status: "pending" },
+      { id: "usdc", title: "Move USDC on Arc", detail: "Use wallet liquidity only for the cross-border transport leg.", status: "pending", explorerUrl: explorer },
+      { id: "bank-credit", title: "Credit destination operating account", detail: "Post the converted amount to the receiving branch bank account.", status: "pending" },
     ]
   } else if (corridor.destinationKind === "card") {
     steps = [
       {
-        id: "onramp",
-        title: "USD → fUSDC",
-        detail: "On-ramp / treasury: dollars become Face USDC (mintable test USDC) held on Arc.",
+        id: "authorize",
+        title: `${corridor.localCurrency} authorization hold`,
+        detail: `Reserve ${local} against the issuing branch's ${corridor.localCurrency} balance. Parent Treasury is not used.`,
         status: "pending",
       },
       {
-        id: "fund-card",
-        title: "Fund virtual card",
-        detail: `Small payment (< $${CARD_ROUTE_USD}): fUSDC loads a virtual credit card instead of a bank rail.`,
+        id: "card-network",
+        title: "Card network clearing",
+        detail: "The card provider clears the merchant transaction through the card's normal local issuing rail.",
         status: "pending",
-        explorerUrl: explorer,
       },
       {
-        id: "card-spend",
-        title: "Card authorization",
-        detail: "Merchant settles against the card; no local bank transfer.",
+        id: "settle",
+        title: "Settle from issuing branch",
+        detail: `Deduct the final ${corridor.localCurrency} amount from the branch that issued the card; release the hold on decline or reversal.`,
         status: "pending",
       },
     ]
@@ -251,6 +242,7 @@ export function demoProcessSeeds(): Array<{
   usdcLabel: string
   inbound?: boolean
   destinationKind?: DestinationKind
+  currency?: string
   txHash?: string
 }> {
   const day = new Date()
@@ -286,13 +278,14 @@ export function demoProcessSeeds(): Array<{
       id: "demo-card",
       at: iso(13),
       who: "Warung Bu Sri",
-      amount: "−$18.40",
+      amount: "−Rp294,400",
       amountUsd: 18.4,
       rail: "Card",
       status: "Settled",
-      localAmountLabel: "US$ 18.40",
+      localAmountLabel: "Rp294,400",
       usdcLabel: "18.40 USDC",
       destinationKind: "card",
+      currency: "IDR",
     },
     {
       id: "demo-promptpay",
