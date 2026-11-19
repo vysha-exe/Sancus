@@ -66,7 +66,7 @@
 .home-balance-chart__dates { color: var(--ink-muted); font: 400 11px/16px var(--font-mono); }
 .home-balance__actions { justify-content: flex-start; }
 .home-balance__actions .sx-btn--quiet { margin-left: auto; }
-.home-needs-empty { min-height: 150px; background: transparent; border: 1px dashed var(--line); }
+.home-needs-empty { min-height: 150px; background: transparent; border: 1px dashed var(--line); justify-items: center; }
 .home-needs-empty__mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--settled-bg); color: var(--settled); font: 600 16px/1 var(--font-sans); }
 .home-needs-empty strong { color: var(--ink); font: 600 15px/20px var(--font-sans); }
 .home-needs-empty span:last-child { max-width: 28ch; font-size: 13px; line-height: 18px; }
