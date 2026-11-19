@@ -115,7 +115,7 @@ export function AppShell({
             </label>
             {headerExtra}
             <div className="hdr-end push">
-              {account && can(account, "agent.use") ? <AgentCallButton /> : null}
+              {can(account, "agent.use") ? <AgentCallButton /> : null}
               <NotificationBell />
               <AccountMenu name={actorName} role={actorRole} email={account?.email ?? null} signedIn={Boolean(account)} />
             </div>

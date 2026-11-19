@@ -22,6 +22,7 @@ import {
   StepList,
   useAgentChat,
   useSpeaker,
+  useVoiceGlow,
   waitingProposal,
   type Phase,
   type Proposal,
@@ -46,8 +47,9 @@ export function AgentCallButton() {
   const phaseRef = useRef<Phase>("off")
   const recRef = useRef<Recognition | null>(null)
   const listenRef = useRef<() => void>(() => {})
+  const { orbRef, tapOutput } = useVoiceGlow(phase)
   const isActive = useCallback(() => phaseRef.current !== "off", [])
-  const { say, stopSpeaking, prefetchPhrases } = useSpeaker(isActive)
+  const { say, stopSpeaking, prefetchPhrases } = useSpeaker(isActive, { onAudio: tapOutput })
 
   const setPhaseBoth = (p: Phase) => {
     phaseRef.current = p
@@ -240,16 +242,16 @@ export function AgentCallButton() {
         <section className="ag-call" aria-label="Agent call" role="dialog">
           <div className="ag-call-h">
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <button
-                type="button"
-                className="ag-call-orb"
-                data-phase={phase}
-                onClick={onOrb}
-                disabled={phase === "thinking"}
-                aria-label={phase === "paused" ? "Resume listening" : phase === "speaking" ? "Interrupt" : "Pause listening"}
-              >
-                <IconMic size={24} />
-              </button>
+              <div ref={orbRef} className="ag-orb ag-orb--sm" data-phase={phase} style={{ ["--ag-level" as string]: 0 }}>
+                <span className="ag-blob" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="ag-orb-hit"
+                  onClick={onOrb}
+                  disabled={phase === "thinking"}
+                  aria-label={phase === "paused" ? "Resume listening" : phase === "speaking" ? "Interrupt" : "Pause listening"}
+                />
+              </div>
               <div style={{ display: "grid", gap: 2 }}>
                 <span className="ag-live">
                   <i aria-hidden="true" />

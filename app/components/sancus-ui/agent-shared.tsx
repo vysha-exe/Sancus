@@ -233,6 +233,133 @@ export function recognitionCtor(): (new () => Recognition) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
+/**
+ * Soft voice orb: drives CSS `--ag-level` from mic input (listening) or spoken audio
+ * (speaking). Pass `tapOutput` into `useSpeaker(..., { onAudio: tapOutput })`.
+ */
+export function useVoiceGlow(phase: Phase) {
+  const orbRef = useRef<HTMLDivElement>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const micAnalyserRef = useRef<AnalyserNode | null>(null)
+  const outAnalyserRef = useRef<AnalyserNode | null>(null)
+  const mediaSourcesRef = useRef(new WeakMap<HTMLMediaElement, MediaElementAudioSourceNode>())
+  const meterModeRef = useRef<"off" | "mic" | "out" | "synth">("off")
+  const meterRafRef = useRef(0)
+
+  const writeLevel = (v: number) => {
+    orbRef.current?.style.setProperty("--ag-level", Math.max(0, Math.min(1, v)).toFixed(3))
+  }
+
+  const analyserLevel = (analyser: AnalyserNode) => {
+    const buf = new Uint8Array(analyser.fftSize)
+    analyser.getByteTimeDomainData(buf)
+    let sum = 0
+    for (let i = 0; i < buf.length; i++) {
+      const n = (buf[i]! - 128) / 128
+      sum += n * n
+    }
+    return Math.min(1, Math.sqrt(sum / buf.length) * 3.4)
+  }
+
+  const stopMeter = useCallback(() => {
+    meterModeRef.current = "off"
+    cancelAnimationFrame(meterRafRef.current)
+    writeLevel(0)
+  }, [])
+
+  const startMeter = useCallback((mode: "mic" | "out" | "synth") => {
+    meterModeRef.current = mode
+    cancelAnimationFrame(meterRafRef.current)
+    const tick = (t: number) => {
+      let level = 0
+      if (meterModeRef.current === "mic" && micAnalyserRef.current) level = analyserLevel(micAnalyserRef.current)
+      else if (meterModeRef.current === "out" && outAnalyserRef.current) level = analyserLevel(outAnalyserRef.current)
+      else if (meterModeRef.current === "synth") level = 0.3 + 0.22 * Math.sin(t * 0.007) + 0.14 * Math.sin(t * 0.019)
+      writeLevel(level)
+      if (meterModeRef.current !== "off") meterRafRef.current = requestAnimationFrame(tick)
+    }
+    meterRafRef.current = requestAnimationFrame(tick)
+  }, [])
+
+  const ensureAudioCtx = () => {
+    if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
+    return audioCtxRef.current
+  }
+
+  const tapOutput = useCallback((el: HTMLAudioElement) => {
+    try {
+      const ctx = ensureAudioCtx()
+      void ctx.resume()
+      let analyser = outAnalyserRef.current
+      if (!analyser) {
+        analyser = ctx.createAnalyser()
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.72
+        analyser.connect(ctx.destination)
+        outAnalyserRef.current = analyser
+      }
+      if (!mediaSourcesRef.current.has(el)) {
+        const src = ctx.createMediaElementSource(el)
+        mediaSourcesRef.current.set(el, src)
+        src.connect(analyser)
+      }
+      if (meterModeRef.current !== "off") meterModeRef.current = "out"
+    } catch {
+      /* already tapped or Web Audio unavailable */
+    }
+  }, [])
+
+  useEffect(() => {
+    if (phase === "speaking") {
+      startMeter("synth")
+      return () => stopMeter()
+    }
+    if (phase !== "listening") {
+      stopMeter()
+      return
+    }
+    let cancelled = false
+    let stream: MediaStream | null = null
+    ;(async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+        const ctx = ensureAudioCtx()
+        void ctx.resume()
+        const source = ctx.createMediaStreamSource(stream)
+        const analyser = ctx.createAnalyser()
+        analyser.fftSize = 512
+        analyser.smoothingTimeConstant = 0.78
+        source.connect(analyser)
+        micAnalyserRef.current = analyser
+        startMeter("mic")
+      } catch {
+        /* recognition may already own the mic — keep idle glow */
+      }
+    })()
+    return () => {
+      cancelled = true
+      stream?.getTracks().forEach((t) => t.stop())
+      micAnalyserRef.current = null
+      stopMeter()
+    }
+  }, [phase, startMeter, stopMeter])
+
+  useEffect(
+    () => () => {
+      stopMeter()
+      audioCtxRef.current?.close().catch(() => {})
+      audioCtxRef.current = null
+    },
+    [stopMeter]
+  )
+
+  return { orbRef, tapOutput }
+}
+
 // ---------- speech out ----------
 
 /**
@@ -240,16 +367,20 @@ export function recognitionCtor(): (new () => Recognition) | null {
  * (used for the real answer, so a progress line never delays it). `isActive` says whether voice
  * is still on (nothing is spoken after the call ends).
  */
-export function useSpeaker(isActive: () => boolean) {
+export function useSpeaker(isActive: () => boolean, opts?: { onAudio?: (a: HTMLAudioElement) => void }) {
   const [eleven, setEleven] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const speakChain = useRef<Promise<void>>(Promise.resolve())
   const speakGen = useRef(0)
   const phraseCache = useRef<Map<string, string>>(new Map())
   const activeRef = useRef(isActive)
+  const onAudioRef = useRef(opts?.onAudio)
   useEffect(() => {
     activeRef.current = isActive
   }, [isActive])
+  useEffect(() => {
+    onAudioRef.current = opts?.onAudio
+  }, [opts?.onAudio])
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -292,6 +423,7 @@ export function useSpeaker(isActive: () => boolean) {
     (a: HTMLAudioElement) =>
       new Promise<boolean>((resolve) => {
         audioRef.current = a
+        onAudioRef.current?.(a)
         let started = false
         a.onplaying = () => {
           started = true
