@@ -30,6 +30,9 @@ export type MarqetaIssuedCard = {
 type MarqetaResponse = {
   token?: string
   last_four?: string
+  pan?: string
+  expiration?: string
+  cvv_number?: string
   state?: string
   status?: string
   data?: Array<{ token?: string; active?: boolean }>
@@ -40,6 +43,12 @@ type MarqetaResponse = {
     state?: string
     response?: { code?: string; memo?: string }
   }
+}
+
+export type MarqetaCardDetails = {
+  pan: string
+  expiration: string
+  cvv: string
 }
 
 function readConfig(): MarqetaConfig {
@@ -261,6 +270,33 @@ export async function setMarqetaCardStateWithConfig(
 
 export function setMarqetaCardState(input: { cardToken: string; state: "ACTIVE" | "SUSPENDED" }) {
   return setMarqetaCardStateWithConfig(readConfig(), input)
+}
+
+/** Retrieve sandbox card credentials only for an explicit, short-lived reveal. */
+export async function getMarqetaCardDetailsWithConfig(
+  config: MarqetaConfig,
+  cardToken: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<MarqetaCardDetails> {
+  const card = await request(
+    config,
+    `/cards/${encodeURIComponent(cardToken)}/showpan?show_cvv_number=true`,
+    { method: "GET" },
+    fetchImpl,
+  )
+  const pan = String(card.pan ?? "").replace(/\s/g, "")
+  const expiration = String(card.expiration ?? "").replace(/\D/g, "")
+  const cvv = String(card.cvv_number ?? "").replace(/\D/g, "")
+  const month = Number(expiration.slice(0, 2))
+  if (!/^\d{12,19}$/.test(pan) || !/^\d{4}$/.test(expiration) || month < 1 || month > 12 || !/^\d{3,4}$/.test(cvv)) {
+    throw new Error("Marqeta did not return complete sandbox card details")
+  }
+  return { pan, expiration, cvv }
+}
+
+export function getMarqetaCardDetails(cardToken: string) {
+  if (!isMarqetaSandboxConfigured()) throw new Error("Card details are available only from the Marqeta sandbox")
+  return getMarqetaCardDetailsWithConfig(readConfig(), cardToken)
 }
 
 export function simulatedMarqetaCard(seed: string): MarqetaIssuedCard {
