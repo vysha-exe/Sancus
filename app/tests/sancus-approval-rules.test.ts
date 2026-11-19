@@ -20,6 +20,8 @@ const ploy = as("ploy", [m("ploy", "th", "ADMIN")]) // branch admin
 const niran = as("niran", [m("niran", "bkk", "EMPLOYEE")]) // employee
 const alex = as("alex", []) // individual
 const zoe = as("zoe", [m("zoe", "acme", "OWNER")]) // another company's admin
+const wei = as("wei", [m("wei", "root", "FINANCE")]) // finance on the global account
+const kit = as("kit", [m("kit", "th", "FINANCE")]) // finance on the Thailand branch only
 
 describe("checkApprover: company payments", () => {
   it("lets an admin approve an employee's request", () => {
@@ -42,6 +44,29 @@ describe("checkApprover: company payments", () => {
   it("refuses accounts without the right to approve", () => {
     expect(checkApprover(niran, { requesterId: "maya", companyId: "root" })).toMatchObject({ ok: false, code: "NO_PERMISSION" })
     expect(checkApprover(ploy, { requesterId: "niran", companyId: "bkk" })).toMatchObject({ ok: false, code: "NO_PERMISSION" })
+  })
+})
+
+describe("checkApprover: finance", () => {
+  it("lets finance on the global account approve requests from any branch", () => {
+    expect(checkApprover(wei, { requesterId: "niran", companyId: "bkk" })).toEqual({ ok: true })
+    expect(checkApprover(wei, { requesterId: "maya", companyId: "root" })).toEqual({ ok: true })
+  })
+
+  it("limits branch finance to its own branch and below", () => {
+    expect(checkApprover(kit, { requesterId: "niran", companyId: "bkk" })).toEqual({ ok: true })
+    expect(checkApprover(kit, { requesterId: "maya", companyId: "root" })).toMatchObject({ ok: false, code: "NOT_YOURS" })
+  })
+
+  it("never lets finance approve their own request", () => {
+    expect(checkApprover(wei, { requesterId: "wei", companyId: "root" })).toMatchObject({ ok: false, code: "OWN_REQUEST" })
+  })
+
+  it("gives finance approvals but not people management", () => {
+    expect(wei.can("approvals.decide")).toBe(true)
+    expect(wei.manageableCompanyIds()).toEqual([])
+    expect(wei.canManageMembersAt("bkk")).toBe(false)
+    expect(paymentMode(wei)).toBe("REQUEST")
   })
 })
 

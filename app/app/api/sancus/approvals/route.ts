@@ -51,7 +51,7 @@ function decorate<T extends Owned, D>(rows: T[], toDto: (r: T) => D, me: Approve
 
 export const GET = withAuth(async (_req, { user, supabase }) => {
   const account = await loadAccount(supabase, user)
-  const companyIds = account.can("approvals.decide") ? account.manageableCompanyIds() : []
+  const companyIds = account.can("approvals.decide") ? account.approvableCompanyIds() : []
   const scope = mineOrCompanies(user.id, companyIds)
   const db: SupabaseClient = supabase
 

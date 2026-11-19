@@ -173,6 +173,11 @@ export abstract class SancusAccount {
   /** Where this account may add, disable and set limits for people. */
   abstract manageableCompanyIds(): string[]
 
+  /** Companies whose payments this account may approve (with approvals.decide). Usually the ones it manages. */
+  approvableCompanyIds(): string[] {
+    return this.manageableCompanyIds()
+  }
+
   canManageMembersAt(companyId: string): boolean {
     return this.can("members.manage") && this.manageableCompanyIds().includes(companyId)
   }
@@ -243,7 +248,7 @@ export class BranchAccount extends SancusAccount {
 
 export class EmployeeAccount extends SancusAccount {
   readonly type = "EMPLOYEE" as const
-  readonly label = "Employee"
+  readonly label: string = "Employee"
   readonly homePath = "/me"
   readonly nav: NavKey[] = ["me", "agents", "settings"]
   /** "pay" is reachable from Me → Request a payment. */
@@ -252,6 +257,30 @@ export class EmployeeAccount extends SancusAccount {
 
   manageableCompanyIds(): string[] {
     return []
+  }
+}
+
+/**
+ * Finance member: an employee who can also approve payments and transfers for the companies they're
+ * Finance on (and everything under them), never their own. They don't manage people.
+ */
+export class FinanceAccount extends EmployeeAccount {
+  readonly label = "Finance"
+  readonly nav: NavKey[] = ["me", "activity", "agents", "settings"]
+  protected readonly paths: NavKey[] = [...this.nav, "pay"]
+  protected readonly permissions = new Set<Permission>([
+    "money.request",
+    "approvals.decide",
+    "activity.view",
+    "card.view",
+    "limits.view",
+    "agent.use",
+    "settings",
+  ])
+
+  approvableCompanyIds(): string[] {
+    const nodes = this.scopes.filter((s) => s.role === "FINANCE").map((s) => s.companyId)
+    return [...new Set(nodes.flatMap((id) => this.subtree(id)))]
   }
 }
 
@@ -281,7 +310,8 @@ const ADMIN_ROLES: Role[] = ["OWNER", "ADMIN"]
 /**
  * Picks the account for a user from their own ACTIVE memberships:
  * Owner/Admin on a global account → Admin; Owner/Admin on a branch → Branch admin;
- * any other role (Employee, Finance, Viewer) → Employee; no business → Individual.
+ * Finance anywhere → Finance (an employee who can approve); any other role (Employee, Viewer) →
+ * Employee; no business → Individual.
  * When someone holds several, the most powerful wins.
  */
 export function resolveAccount(input: {
@@ -301,6 +331,7 @@ export function resolveAccount(input: {
 
   if (scopes.some((s) => s.isRoot && ADMIN_ROLES.includes(s.role))) return new AdminAccount(userId, email, scopes, companies)
   if (scopes.some((s) => !s.isRoot && ADMIN_ROLES.includes(s.role))) return new BranchAccount(userId, email, scopes, companies)
+  if (scopes.some((s) => s.role === "FINANCE")) return new FinanceAccount(userId, email, scopes, companies)
   if (scopes.length > 0) return new EmployeeAccount(userId, email, scopes, companies)
   return new IndividualAccount(userId, email, scopes, companies)
 }
@@ -314,7 +345,7 @@ export function accountFromDto(dto: AccountDto, companies: Pick<CompanyRow, "id"
     case "BRANCH":
       return new BranchAccount(...args)
     case "EMPLOYEE":
-      return new EmployeeAccount(...args)
+      return dto.scopes.some((s) => s.role === "FINANCE") ? new FinanceAccount(...args) : new EmployeeAccount(...args)
     default:
       return new IndividualAccount(...args)
   }
