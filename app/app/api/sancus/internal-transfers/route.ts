@@ -13,6 +13,9 @@ import {
   type InternalTransferRow,
 } from "@/lib/sancus/internal-transfers"
 import { evaluatePayout, loadCompanyPolicy, spentToday } from "@/lib/sancus/policy"
+import { loadAccount } from "@/lib/sancus/accounts-server"
+import { notifyApprovers } from "@/lib/sancus/approval-notify"
+import { serviceClient } from "@/lib/sancus/service-client"
 
 const createSchema = z.object({
   sourceCompanyId: z.string().uuid(),
@@ -89,7 +92,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 })
   }
 
-  const { data: replay } = await supabase
+  const { data: replay } = await (serviceClient() ?? supabase)
     .from("sancus_internal_transfers")
     .select("*")
     .eq("user_id", user.id)
@@ -104,26 +107,30 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     return NextResponse.json({ error: "Choose a different destination" }, { status: 400 })
   }
 
-  const [source, destination] = await Promise.all([
-    getCompany(supabase, sourceCompanyId),
-    getCompany(supabase, destinationCompanyId),
-  ])
-  if (!source || !destination) return NextResponse.json({ error: "Branch not found" }, { status: 404 })
+  // Who may move money: anyone who manages the SOURCE (owner/admin/finance there) may send it to any
+  // other account in the same company, e.g. a branch admin sending to HQ. The money never leaves the
+  // company. The destination may be outside what they can see, so it's looked up with the service
+  // client, but only after the source check passes.
+  const source = await getCompany(supabase, sourceCompanyId)
+  if (!source) return NextResponse.json({ error: "Branch not found" }, { status: 404 })
+  const sourceRole = await roleAt(supabase, user.id, source.id)
+  if (!sourceRole || !["OWNER", "ADMIN", "FINANCE"].includes(sourceRole)) {
+    return NextResponse.json({ error: "You do not have access to move money out of this account" }, { status: 403 })
+  }
+  const db = serviceClient() ?? supabase
+  const destination = await getCompany(db, destinationCompanyId)
+  if (!destination) return NextResponse.json({ error: "Branch not found" }, { status: 404 })
   if (source.root_id !== destination.root_id) {
     return NextResponse.json({ error: "Internal transfers must stay inside the same company" }, { status: 400 })
   }
 
-  const [sourceRole, destinationRole] = await Promise.all([
-    roleAt(supabase, user.id, source.id),
-    roleAt(supabase, user.id, destination.id),
-  ])
-  if (!sourceRole || !["OWNER", "ADMIN", "FINANCE"].includes(sourceRole) || !destinationRole) {
-    return NextResponse.json({ error: "You do not have access to move money between these accounts" }, { status: 403 })
-  }
+  // The global admin has no limits: their internal moves skip the spending policy entirely.
+  const account = await loadAccount(supabase, user)
+  const globalAdmin = account.type === "ADMIN" && account.manageableCompanyIds().includes(source.id)
 
   const [sourceWallet, destinationWallet] = await Promise.all([
     walletFor(supabase, source.id),
-    walletFor(supabase, destination.id),
+    walletFor(db, destination.id),
   ])
   if (!sourceWallet || !destinationWallet) {
     return NextResponse.json({ error: "Both accounts need an Arc treasury wallet" }, { status: 409 })
@@ -141,28 +148,32 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const usdcAmountMinor = BigInt(Math.round(amountUsdc * 1_000_000))
   const sourceAmountMinor = localMinorForUsdc(usdcAmountMinor, sourceCurrency)
   const destinationAmountMinor = localMinorForUsdc(usdcAmountMinor, destinationCurrency)
-  const policy = await loadCompanyPolicy(supabase, source.id, user.id)
-  const { data: todayTransfers } = await supabase
-    .from("sancus_internal_transfers")
-    .select("usdc_amount_minor, status")
-    .eq("source_company_id", source.id)
-    .gte("created_at", new Date(new Date().setUTCHours(0, 0, 0, 0)).toISOString())
-  const internalSpent = (todayTransfers ?? [])
-    .filter((row) => !["DECLINED", "FAILED", "EXPIRED", "REVERSED"].includes(row.status))
-    .reduce((sum, row) => sum + BigInt(row.usdc_amount_minor), 0n)
-  const evaluation = evaluatePayout({
-    policy,
-    amountMinor: usdcAmountMinor,
-    recipient: { name: destination.name, proxyValue: destination.id },
-    spentTodayMinor: (await spentToday(supabase, user.id)) + internalSpent,
-  })
-  if (evaluation.decision === "BLOCK") {
-    return NextResponse.json({ error: evaluation.reason ?? "This transfer is outside the account policy" }, { status: 403 })
+  let evaluation: { decision: "ALLOW" | "NEEDS_APPROVAL" | "BLOCK"; reason: string | null } = { decision: "ALLOW", reason: null }
+  if (!globalAdmin) {
+    const policy = await loadCompanyPolicy(supabase, source.id, user.id)
+    const { data: todayTransfers } = await db
+      .from("sancus_internal_transfers")
+      .select("usdc_amount_minor, status")
+      .eq("source_company_id", source.id)
+      .gte("created_at", new Date(new Date().setUTCHours(0, 0, 0, 0)).toISOString())
+    const internalSpent = (todayTransfers ?? [])
+      .filter((row) => !["DECLINED", "FAILED", "EXPIRED", "REVERSED"].includes(row.status))
+      .reduce((sum, row) => sum + BigInt(row.usdc_amount_minor), 0n)
+    evaluation = evaluatePayout({
+      policy,
+      amountMinor: usdcAmountMinor,
+      recipient: { name: destination.name, proxyValue: destination.id },
+      spentTodayMinor: (await spentToday(supabase, user.id)) + internalSpent,
+    })
+    if (evaluation.decision === "BLOCK") {
+      return NextResponse.json({ error: evaluation.reason ?? "This transfer is outside the account policy" }, { status: 403 })
+    }
   }
 
   const bank = source.parent_id ? branchBank(source.country, sourceWallet.address) : null
   const status = evaluation.decision === "NEEDS_APPROVAL" ? "PENDING_APPROVAL" : "QUEUED"
-  const { data: inserted, error } = await supabase
+  // Written with the service client: a branch admin can't see (so RLS can't check) the destination.
+  const { data: inserted, error } = await db
     .from("sancus_internal_transfers")
     .insert({
       user_id: user.id,
@@ -194,7 +205,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   if (error || !inserted) {
     if (error?.code === "23505") {
-      const { data } = await supabase
+      const { data } = await db
         .from("sancus_internal_transfers")
         .select("*")
         .eq("user_id", user.id)
@@ -207,9 +218,12 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   let row = inserted as InternalTransferRow
   if (status === "PENDING_APPROVAL") {
-    await supabase.from("sancus_notifications").insert({
-      user_id: user.id,
-      type: "approval.requested",
+    // Tell the company's admins (not the requester) that a transfer is waiting for them.
+    await notifyApprovers({
+      requesterId: user.id,
+      companyId: source.id,
+      title: `Approve transfer: ${source.name} → ${destination.name}`,
+      body: evaluation.reason ?? "Needs your approval",
       payload: { internalTransferId: row.id, sourceCompanyId, destinationCompanyId },
     })
     return NextResponse.json(
@@ -218,7 +232,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     )
   }
 
-  row = await executeInternalTransfer(supabase, row)
+  row = await executeInternalTransfer(db, row)
   return NextResponse.json(
     { transfer: toInternalTransferDto(row, { source: source.name, destination: destination.name }) },
     { status: row.status === "FAILED" ? 502 : 201 }

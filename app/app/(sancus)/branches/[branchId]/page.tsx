@@ -23,6 +23,10 @@ type Account = {
   country: string | null
   currency: string
   isRoot: boolean
+  /** False: shown by name only (e.g. HQ, seen from a branch admin). */
+  canSee?: boolean
+  /** This user may move money out of this account. */
+  canSendFrom?: boolean
   availableMinor: string
   wallet: Wallet | null
   bank: { name: string; label: string; last4: string; simulated: boolean } | null
@@ -227,8 +231,13 @@ export default function BranchDetailPage() {
 }
 
 function MoveMoney({ data, onClose, onChanged }: { data: BranchResponse; onClose: () => void; onChanged: () => Promise<void> }) {
-  const [direction, setDirection] = useState<"in" | "out">("in")
-  const [otherId, setOtherId] = useState(data.sources[0]?.id ?? "")
+  // "Fund this branch" pulls from another account, so it only lists accounts this user may send from.
+  // A branch admin usually has none (they can't pull from HQ), so they start on "Move out".
+  const fundFrom = data.sources.filter((account) => account.canSendFrom !== false)
+  const canFund = fundFrom.length > 0
+  const [direction, setDirection] = useState<"in" | "out">(canFund ? "in" : "out")
+  const options = direction === "in" ? fundFrom : data.sources
+  const [otherId, setOtherId] = useState((canFund ? fundFrom : data.sources)[0]?.id ?? "")
   const [amount, setAmount] = useState("100")
   const [memo, setMemo] = useState("")
   const [busy, setBusy] = useState(false)
@@ -286,14 +295,20 @@ function MoveMoney({ data, onClose, onChanged }: { data: BranchResponse; onClose
         ) : (
           <form onSubmit={submit} className="grid" style={{ gap: 14 }}>
             <div className="filters s12" role="group" aria-label="Transfer direction">
-              <button type="button" className="chip" aria-pressed={direction === "in"} onClick={() => setDirection("in")}>Fund this branch</button>
-              <button type="button" className="chip" aria-pressed={direction === "out"} onClick={() => setDirection("out")}>Move out</button>
+              {canFund ? (
+                <button type="button" className="chip" aria-pressed={direction === "in"} onClick={() => { setDirection("in"); setOtherId(fundFrom[0]?.id ?? "") }}>Fund this branch</button>
+              ) : null}
+              <button type="button" className="chip" aria-pressed={direction === "out"} onClick={() => { setDirection("out"); setOtherId(data.sources[0]?.id ?? "") }}>Move out</button>
             </div>
             <label className="sx-field s12">
               <span className="sx-label">{direction === "in" ? "Paying from" : "Destination"}</span>
               <select className="sx-field__input" value={otherId} onChange={(event) => setOtherId(event.target.value)} required>
-                {data.sources.map((account) => (
-                  <option key={account.id} value={account.id}>{account.name} · {usd(account.availableMinor)}{account.bank ? ` · ${account.bank.name} •••• ${account.bank.last4}` : ""}</option>
+                {options.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                    {account.canSee === false ? "" : ` · ${usd(account.availableMinor)}`}
+                    {account.bank ? ` · ${account.bank.name} •••• ${account.bank.last4}` : ""}
+                  </option>
                 ))}
               </select>
             </label>
