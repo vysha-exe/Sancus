@@ -6,6 +6,7 @@ import { toInternalTransferDto, type InternalTransferRow } from "@/lib/sancus/in
 import { toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
 import { serviceClient } from "@/lib/sancus/service-client"
 import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
+import { loadRootTransferPositions } from "@/lib/sancus/transfer-positions"
 
 export const GET = withAuth(async (req, { user, supabase }) => {
   const companyId = idFromPath(req.nextUrl.pathname, "branches")
@@ -49,6 +50,8 @@ export const GET = withAuth(async (req, { user, supabase }) => {
       .map((node) => ensureCompanyReceiveAccount(db, node))
   )
   const wallets = await withBalances(await listCompanyWallets(supabase, ids))
+  // HQ shows wallet USDC, which fUSDC-settled transfers never change; add what transfers moved in or out.
+  const rootPositions = await loadRootTransferPositions(db, ids.filter((id) => id === company.root_id))
   const [{ data: bankAccounts }, { data: bankHolds }] = await Promise.all([
     supabase.from("sancus_receive_accounts").select("id, company_id, bank_name, account_type, account_number, currency, balance_minor").in("company_id", ids),
     supabase.from("sancus_bank_holds").select("account_id, amount_minor").in("company_id", ids).eq("status", "ACTIVE"),
@@ -96,6 +99,7 @@ export const GET = withAuth(async (req, { user, supabase }) => {
     )
     const wallet = ownWallets[0] ?? null
     const isRoot = node.id === company.root_id
+    const rootMinor = isRoot ? ownMinor + (rootPositions.get(node.id as string) ?? 0n) : ownMinor
     const { canSee = false, canSendFrom = false } = access.get(node.id as string) ?? {}
     const bankAccount = (bankAccounts ?? []).find((item) => item.company_id === node.id) ?? null
     const postedMinor = bankAccount ? BigInt(bankAccount.balance_minor) : 0n
@@ -110,8 +114,8 @@ export const GET = withAuth(async (req, { user, supabase }) => {
       canSee,
       /** This user may move money out of this account. */
       canSendFrom,
-      availableMinor: isRoot ? ownMinor.toString() : (postedMinor > heldMinor ? postedMinor - heldMinor : 0n).toString(),
-      postedMinor: isRoot ? ownMinor.toString() : postedMinor.toString(),
+      availableMinor: isRoot ? (rootMinor > 0n ? rootMinor : 0n).toString() : (postedMinor > heldMinor ? postedMinor - heldMinor : 0n).toString(),
+      postedMinor: isRoot ? rootMinor.toString() : postedMinor.toString(),
       heldMinor: isRoot ? "0" : heldMinor.toString(),
       walletLiquidityMinor: ownMinor.toString(),
       wallet,
