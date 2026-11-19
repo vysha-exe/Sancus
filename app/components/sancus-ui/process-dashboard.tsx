@@ -104,8 +104,9 @@ export function ProcessDashboard() {
             ) : null}
           </div>
           <p className="body-s muted" style={{ margin: 0 }}>
-            Settlements use mintable <b>fUSDC</b> from the rail bot instead of scarce Circle testnet USDC — mint a large
-            balance, then run many Pay / ACH / PayNow flows with real Arc explorer links.
+            Settlements use <b>fUSDC</b> (public mint — anyone can mint on-chain) instead of scarce Circle testnet USDC.
+            Use the button below or call <code>mint</code> on the token contract, then run Pay / ACH / PayNow with Arc
+            explorer links.
           </p>
           {face?.enabled ? (
             <div className="kv" style={{ flexWrap: "wrap", gap: 8 }}>
