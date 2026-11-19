@@ -6,6 +6,7 @@ import { RisingColumn } from "@/components/sancus-ui/logo"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
 import { DemoReadiness } from "@/components/sancus/demo-readiness"
+import { CardDetailsDialog } from "@/components/sancus-ui/card-details-dialog"
 import type { Payment } from "@/lib/sancus/demo-data"
 import type { SancusCardDto } from "@/lib/sancus/cards"
 import type { EmployeeCardPurchaseDto } from "@/lib/sancus/employee-spending"
@@ -236,6 +237,8 @@ export default function SpendingPage() {
   const [freezingId, setFreezingId] = useState<string | null>(null)
   const [simulating, setSimulating] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [detailsCard, setDetailsCard] = useState<Method | null>(null)
+  const closeCardDetails = useCallback(() => setDetailsCard(null), [])
 
   const loadCards = useCallback(async () => {
     try {
@@ -546,6 +549,13 @@ export default function SpendingPage() {
               <div className="tile-foot">
                 <span className="body-s muted">{note}</span>
                 <span style={{ display: "flex", gap: 8 }}>
+                  {m.kind === "card" && m.source === "marqeta" && !m.simulated ? <button
+                    type="button"
+                    className="sx-btn sx-btn--quiet sx-btn--sm"
+                    onClick={() => setDetailsCard(m)}
+                  >
+                    View details
+                  </button> : null}
                   <button
                     type="button"
                     className="sx-btn sx-btn--secondary sx-btn--sm"
@@ -666,6 +676,12 @@ export default function SpendingPage() {
           </div>
         </section>
       </div>
+
+      {detailsCard ? <CardDetailsDialog
+        cardId={detailsCard.id}
+        holder={detailsCard.holder}
+        onClose={closeCardDetails}
+      /> : null}
 
       {limitCard ? (
         <div
