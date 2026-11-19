@@ -27,5 +27,12 @@ describe("branch balance display", () => {
       walletMinor: "16000000000",
       totalMinor: "48000000000",
     })
+
+    expect(calculateCompanyNodeTotal(node, "USD")).toEqual({
+      currency: "USD",
+      bankMinor: "2000000",
+      walletMinor: "1000000",
+      totalMinor: "3000000",
+    })
   })
 })

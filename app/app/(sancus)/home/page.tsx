@@ -261,11 +261,11 @@ function ParentBranchBalances({
     }).format(Number(balanceMinor) / 100)
   }
   const combinedMoney = (node: CompanyNode) => {
-    const total = calculateCompanyNodeTotal(node)
+    const total = calculateCompanyNodeTotal(node, "USD")
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency: total.currency,
-      maximumFractionDigits: total.currency === "IDR" ? 0 : 2,
+      maximumFractionDigits: 2,
     }).format(Number(total.totalMinor) / 1_000_000)
   }
   const positionMoney = (minor: bigint | string) => new Intl.NumberFormat(undefined, {
@@ -304,7 +304,7 @@ function ParentBranchBalances({
                 </div>
                 <div className="home-branch-card__balance">
                   <span>{combinedMoney(node)}</span>
-                  <small>Available balance</small>
+                  <small>USD equivalent</small>
                   {debugMode ? (
                     <div className="home-branch-card__breakdown">
                       <small>Bank · {bankMoney(node)} · {node.bankBalance?.bankName ?? "Local bank"}</small>
