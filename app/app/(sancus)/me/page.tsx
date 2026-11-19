@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import QRCode from "qrcode"
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import { VirtualCard } from "@/components/sancus-ui/virtual-card"
 import { countryByCode } from "@/lib/sancus/countries"
@@ -48,6 +49,36 @@ const fallbackLast4 = (id: string) => String(parseInt(id.replace(/-/g, "").slice
 const DEMO_PIX_QR = "00020101021226850014BR.GOV.BCB.PIX2563sancus.demo/pix/churrascaria5204000053039865802BR5920CHURRASCARIA DEMO6009SAO PAULO62070503***6304BEEF"
 const DEMO_PROMPTPAY_QR = "00020101021229370016A0000006770101110113006691234567853037645406100.005802TH5913BANGKOK CAFE6007BANGKOK6304DEMO"
 
+/** Show a real QR image for an EMV payload — never dump the raw digits in the main UI. */
+function MerchantQrPreview({ payload, label }: { payload: string; label: string }) {
+  const [src, setSrc] = useState("")
+  useEffect(() => {
+    let live = true
+    if (!payload.trim()) {
+      setSrc("")
+      return
+    }
+    void QRCode.toDataURL(payload.trim(), { width: 200, margin: 1, errorCorrectionLevel: "M" }).then((url) => {
+      if (live) setSrc(url)
+    })
+    return () => {
+      live = false
+    }
+  }, [payload])
+  if (!src) return null
+  return (
+    // Locally generated data URL for the merchant payload.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={label}
+      width={200}
+      height={200}
+      style={{ background: "white", borderRadius: 12, padding: 8, justify: "block", margin: "0 auto" }}
+    />
+  )
+}
+
 export default function EmployeePage() {
   const [data, setData] = useState<Data | null>(null)
   const [state, setState] = useState<"loading" | "ready" | "error">("loading")
@@ -57,18 +88,20 @@ export default function EmployeePage() {
   const [cardBusy, setCardBusy] = useState(false)
   const [cardMessage, setCardMessage] = useState<string | null>(null)
   const [pixId, setPixId] = useState("")
-  const [pixQr, setPixQr] = useState(DEMO_PIX_QR)
+  const [pixQr, setPixQr] = useState("")
   const [pixRecipient, setPixRecipient] = useState("")
   const [pixAmount, setPixAmount] = useState("")
   const [pixBusy, setPixBusy] = useState(false)
   const [pixMessage, setPixMessage] = useState<string | null>(null)
+  const [pixPasteOpen, setPixPasteOpen] = useState(false)
   const [promptPayId, setPromptPayId] = useState("")
-  const [promptPayQr, setPromptPayQr] = useState(DEMO_PROMPTPAY_QR)
+  const [promptPayQr, setPromptPayQr] = useState("")
   const [promptPayRecipient, setPromptPayRecipient] = useState("")
   const [promptPayAmount, setPromptPayAmount] = useState("")
   const [promptPayBusy, setPromptPayBusy] = useState(false)
   const [promptPayMessage, setPromptPayMessage] = useState<string | null>(null)
   const [promptPayPayout, setPromptPayPayout] = useState<XenditPayoutDto | null>(null)
+  const [promptPayPasteOpen, setPromptPayPasteOpen] = useState(false)
   // Payments this employee asked for; an admin approves or declines each one.
   const approvals = useLiveApprovals()
   const requests = [...approvals.waiting, ...approvals.decided].filter((a) => a.live && a.mine)
@@ -126,12 +159,17 @@ export default function EmployeePage() {
     }
   }
 
-  async function readPixQr() {
+  async function readPixQr(payload = pixQr) {
+    const qrPayload = payload.trim()
+    if (qrPayload.length < 20) {
+      setPixMessage("Load a demo merchant QR or paste a copy-and-paste code first.")
+      return
+    }
     setPixBusy(true)
     setPixMessage(null)
     try {
       const response = await fetch("/api/sancus/pix/resolve", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ qrPayload: pixQr }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ qrPayload }),
       })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || "Could not read this Pix QR")
@@ -143,6 +181,14 @@ export default function EmployeePage() {
     } finally {
       setPixBusy(false)
     }
+  }
+
+  function useDemoPixQr() {
+    setPixQr(DEMO_PIX_QR)
+    setPixRecipient("")
+    setPixAmount("")
+    setPixPasteOpen(false)
+    void readPixQr(DEMO_PIX_QR)
   }
 
   async function spendPix(event: FormEvent) {
@@ -176,10 +222,10 @@ export default function EmployeePage() {
     }
   }
 
-  function readPromptPayQr() {
+  function readPromptPayQr(payload = promptPayQr) {
     setPromptPayMessage(null)
-    if (promptPayQr.trim().length < 20) {
-      setPromptPayMessage("Paste the merchant's PromptPay QR payload first.")
+    if (payload.trim().length < 20) {
+      setPromptPayMessage("Load a demo merchant QR or paste a copy-and-paste code first.")
       return
     }
     // Hackathon decoder: exposes the review step without pretending that Xendit resolves merchant QRs.
@@ -187,6 +233,14 @@ export default function EmployeePage() {
     setPromptPayId("66912345678")
     setPromptPayAmount("100")
     setPromptPayMessage("QR read for the demo. Review the merchant and PromptPay destination before paying.")
+  }
+
+  function useDemoPromptPayQr() {
+    setPromptPayQr(DEMO_PROMPTPAY_QR)
+    setPromptPayRecipient("")
+    setPromptPayPayout(null)
+    setPromptPayPasteOpen(false)
+    readPromptPayQr(DEMO_PROMPTPAY_QR)
   }
 
   async function spendPromptPay(event: FormEvent) {
@@ -251,9 +305,26 @@ export default function EmployeePage() {
             <form onSubmit={spendPix} style={{ display: "grid", gap: 12 }}>
               {pixMethods.length > 1 ? <label className="field"><span>Pix access</span><select value={selectedPix.id} onChange={(event) => setPixId(event.target.value)}>{pixMethods.map((method) => <option value={method.id} key={method.id}>{method.label}</option>)}</select></label> : null}
               <div className="kv"><span>Used this month</span><span>{money(selectedPix.usedMinor, "BRL")} of {money(selectedPix.monthlyLimitMinor, "BRL")}</span></div>
-              <label className="field"><span>Pix copy-and-paste QR code</span><textarea rows={4} value={pixQr} onChange={(event) => { setPixQr(event.target.value); setPixRecipient("") }} required minLength={20} /></label>
-              <button type="button" className="sx-btn" onClick={readPixQr} disabled={pixBusy}>{pixBusy ? "Reading…" : "Read QR"}</button>
-              {pixRecipient ? <><label className="field"><span>Recipient</span><input value={pixRecipient} readOnly /></label><label className="field"><span>Amount (BRL)</span><input type="number" min="0.01" max="5000" step="0.01" value={pixAmount} onChange={(event) => setPixAmount(event.target.value)} required /></label><button type="submit" className="sx-btn sx-btn--primary" disabled={pixBusy || selectedPix.status !== "ACTIVE"}>{pixBusy ? "Sending…" : `Pay ${pixAmount ? `R$ ${pixAmount}` : "with Pix"}`}</button></> : null}
+              {pixQr ? (
+                <div style={{ display: "grid", gap: 8, justifyContent: "center" }}>
+                  <MerchantQrPreview payload={pixQr} label="Merchant Pix QR" />
+                  <span className="body-s muted" style={{ textAlign: "center" }}>Merchant Pix QR ready to pay</span>
+                </div>
+              ) : (
+                <div className="empty">Load a demo merchant QR, or paste a Pix copy-and-paste code.</div>
+              )}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="sx-btn sx-btn--secondary" onClick={useDemoPixQr} disabled={pixBusy}>Use demo merchant QR</button>
+                <button type="button" className="sx-btn" onClick={() => void readPixQr()} disabled={pixBusy || !pixQr}>{pixBusy ? "Reading…" : "Read QR"}</button>
+                <button type="button" className="sx-btn sx-btn--quiet" onClick={() => setPixPasteOpen((v) => !v)}>{pixPasteOpen ? "Hide paste" : "Paste code"}</button>
+              </div>
+              {pixPasteOpen ? (
+                <label className="field">
+                  <span>Pix copy-and-paste code</span>
+                  <textarea rows={3} value={pixQr} onChange={(event) => { setPixQr(event.target.value); setPixRecipient("") }} minLength={20} placeholder="Paste EMV / copy-and-paste payload only if needed" />
+                </label>
+              ) : null}
+              {pixRecipient ? <><label className="field"><span>Recipient</span><input value={pixRecipient} readOnly /></label><label className="field"><span>Amount (BRL)</span><input type="number" min="0.01" max="5000" step="0.01" value={pixAmount} onChange={(event) => setPixAmount(event.target.value)} required /></label><button type="submit" className="sx-btn sx-btn--primary" disabled={pixBusy || selectedPix.status !== "ACTIVE" || !pixQr}>{pixBusy ? "Sending…" : `Pay ${pixAmount ? `R$ ${pixAmount}` : "with Pix"}`}</button></> : null}
               {pixMessage ? <div className="empty" role="status">{pixMessage}</div> : null}
             </form>
           ) : <div className="empty">No Pix access is assigned to this login yet. Your admin can issue it from your team profile.</div>}
@@ -272,16 +343,33 @@ export default function EmployeePage() {
             <form onSubmit={spendPromptPay} className="grid" style={{ gap: 12 }}>
               <div className="s7" style={{ display: "grid", gap: 12 }}>
                 <div className="kv"><span>Used this month</span><span>{money(selectedPromptPay.usedMinor, "THB")} of {money(selectedPromptPay.monthlyLimitMinor, "THB")}</span></div>
-                <label className="field"><span>Scan or paste merchant PromptPay QR</span><textarea rows={4} value={promptPayQr} onChange={(event) => { setPromptPayQr(event.target.value); setPromptPayRecipient(""); setPromptPayPayout(null) }} required minLength={20} /></label>
-                <button type="button" className="sx-btn sx-btn--secondary" onClick={readPromptPayQr} disabled={promptPayBusy}>Read QR</button>
+                {promptPayQr ? (
+                  <div style={{ display: "grid", gap: 8, justifyContent: "center" }}>
+                    <MerchantQrPreview payload={promptPayQr} label="Merchant PromptPay QR" />
+                    <span className="body-s muted" style={{ textAlign: "center" }}>Merchant PromptPay QR ready to pay</span>
+                  </div>
+                ) : (
+                  <div className="empty">Load a demo merchant QR, or paste a PromptPay copy-and-paste code.</div>
+                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" className="sx-btn sx-btn--secondary" onClick={useDemoPromptPayQr} disabled={promptPayBusy}>Use demo merchant QR</button>
+                  <button type="button" className="sx-btn" onClick={() => readPromptPayQr()} disabled={promptPayBusy || !promptPayQr}>Read QR</button>
+                  <button type="button" className="sx-btn sx-btn--quiet" onClick={() => setPromptPayPasteOpen((v) => !v)}>{promptPayPasteOpen ? "Hide paste" : "Paste code"}</button>
+                </div>
+                {promptPayPasteOpen ? (
+                  <label className="field">
+                    <span>PromptPay copy-and-paste code</span>
+                    <textarea rows={3} value={promptPayQr} onChange={(event) => { setPromptPayQr(event.target.value); setPromptPayRecipient(""); setPromptPayPayout(null) }} minLength={20} placeholder="Paste EMV payload only if needed" />
+                  </label>
+                ) : null}
               </div>
               <div className="s5" style={{ display: "grid", gap: 12, alignContent: "start" }}>
                 {promptPayRecipient ? <>
                   <label className="field"><span>Merchant</span><input value={promptPayRecipient} onChange={(event) => setPromptPayRecipient(event.target.value)} required /></label>
                   <label className="field"><span>PromptPay destination</span><input value={promptPayId} onChange={(event) => setPromptPayId(event.target.value)} required /></label>
                   <label className="field"><span>Amount (THB)</span><input type="number" min="1" step="0.01" value={promptPayAmount} onChange={(event) => setPromptPayAmount(event.target.value)} required /></label>
-                  <button type="submit" className="sx-btn sx-btn--primary" disabled={promptPayBusy || selectedPromptPay.status !== "ACTIVE"}>{promptPayBusy ? "Sending…" : `Pay ${promptPayAmount ? `฿${promptPayAmount}` : "with PromptPay"}`}</button>
-                </> : <div className="empty">Read the merchant QR to review who will be paid.</div>}
+                  <button type="submit" className="sx-btn sx-btn--primary" disabled={promptPayBusy || selectedPromptPay.status !== "ACTIVE" || !promptPayQr}>{promptPayBusy ? "Sending…" : `Pay ${promptPayAmount ? `฿${promptPayAmount}` : "with PromptPay"}`}</button>
+                </> : <div className="empty">Load or read the merchant QR to review who will be paid.</div>}
               </div>
             </form>
             {promptPayMessage ? <div className="empty" role="status" style={{ marginTop: 12 }}>{promptPayMessage}{promptPayPayout ? ` · ${promptPayPayout.simulated ? "Simulated fallback" : "Xendit test mode"}` : ""}</div> : null}
