@@ -37,7 +37,7 @@ export default function PublicReceivePage({ params }: { params: Promise<{ token:
   useEffect(() => {
     let current = true
     if (details?.rail !== "USDC" || !details.walletAddress) return
-    void QRCode.toDataURL(details.walletAddress, { width: 300, margin: 1, errorCorrectionLevel: "M" }).then((value) => {
+    void QRCode.toDataURL(details.walletAddress, { width: 300, margin: 1, errorCorrectionLevel: "M" }).then((value: string) => {
       if (current) setWalletQr(value)
     })
     return () => { current = false }

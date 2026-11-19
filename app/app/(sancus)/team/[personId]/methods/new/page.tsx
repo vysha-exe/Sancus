@@ -102,7 +102,10 @@ const countryForCode = (code: string | undefined): Country => {
   if (code === "TH") return "Thailand"
   if (code === "BR") return "Brazil"
   if (code === "US") return "United States"
-  if (code === "SG") return "Singapore"
+  if (code === "HK") return "Hong Kong"
+  if (code === "JP") return "Japan"
+  if (code === "AU") return "Australia"
+  if (code === "GB") return "United Kingdom"
   return "Brazil"
 }
 
