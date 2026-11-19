@@ -66,7 +66,7 @@ function statusFrom(value: string, kind: "payout" | "local" | "ach" | "rail" | "
     return "Pending"
   }
   if (kind === "rail") {
-    if (value === "MINTED") return "Settled"
+    if (value === "CREDITED" || value === "MINTED") return "Settled"
     if (["FAILED", "EXPIRED"].includes(value)) return "Failed"
     return "Pending"
   }
@@ -99,6 +99,7 @@ function wrap(input: {
   usdcLabel?: string
   inbound?: boolean
   destinationKind?: DestinationKind
+  currency?: string
   txHash?: string | null
   explorerUrl?: string | null
   mintTxHash?: string | null
@@ -111,6 +112,7 @@ function wrap(input: {
     inbound: input.inbound,
     amountUsd: input.amountUsd,
     destinationKind: input.destinationKind,
+    currency: input.currency,
     localAmountLabel: input.localAmountLabel,
     usdcLabel: input.usdcLabel,
     txHash: input.txHash,
@@ -275,6 +277,7 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
               status: statusFrom(p.status, "card"),
               localAmountLabel: amount,
               destinationKind: "card",
+              currency: p.currency,
               simulated: true,
               source: "live",
             })

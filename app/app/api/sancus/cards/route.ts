@@ -5,6 +5,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { toSancusCardDto, type SancusCardRow } from "@/lib/sancus/cards"
 import { demoFallbacksEnabled } from "@/lib/sancus/demo-fallback"
 import { requirePermission } from "@/lib/sancus/accounts-server"
+import { resolveEmployeeFundingAccount } from "@/lib/sancus/spend-funding"
 import {
   isMarqetaConfigured,
   issueMarqetaCard,
@@ -18,6 +19,7 @@ const zeroDecimalCurrencies = new Set(["JPY"])
 
 const schema = z.object({
   employeeId: z.string().uuid(),
+  companyId: z.string().uuid(),
   employeeName: z.string().trim().min(1).max(120),
   label: z.string().trim().min(1).max(120),
   country: z.string().trim().min(2).max(80),
@@ -142,15 +144,16 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const parsed = await validateJsonBody(req, schema)
   if (!parsed.ok) return parsed.response
 
-  const { data: employee } = await supabase
-    .from("sancus_memberships")
-    .select("id")
-    .eq("user_id", parsed.data.employeeId)
-    .eq("status", "ACTIVE")
-    .in("role", ["EMPLOYEE", "FINANCE"])
-    .limit(1)
-    .maybeSingle()
-  if (!employee) return NextResponse.json({ error: "Choose an active employee from Team" }, { status: 400 })
+  let funding
+  try {
+    funding = await resolveEmployeeFundingAccount(supabase, {
+      employeeId: parsed.data.employeeId,
+      companyId: parsed.data.companyId,
+      currency: parsed.data.currency,
+    })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not resolve the funding account" }, { status: 400 })
+  }
 
   const names = parsed.data.employeeName.trim().split(/\s+/)
   const firstName = names.shift() || "Sancus"
@@ -168,6 +171,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     const scale = zeroDecimalCurrencies.has(parsed.data.currency) ? 1 : 100
     const { data, error } = await supabase.from("sancus_cards").insert({
       user_id: user.id,
+      company_id: funding.companyId,
+      funding_account_id: funding.accountId,
       idempotency_key: idempotencyKey,
       employee_id: parsed.data.employeeId,
       employee_name: parsed.data.employeeName,

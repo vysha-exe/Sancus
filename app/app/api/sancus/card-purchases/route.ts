@@ -4,6 +4,7 @@ import { validateJsonBody } from "@/lib/api/validate"
 import { createAdminContext, withAuth } from "@/lib/api/with-auth"
 import { requirePermission } from "@/lib/sancus/accounts-server"
 import { toEmployeeCardPurchaseDto, type EmployeeCardPurchaseRow } from "@/lib/sancus/employee-spending"
+import { reserveSpendFunds } from "@/lib/sancus/spend-funding"
 
 const schema = z.object({
   cardId: z.string().uuid(),
@@ -32,6 +33,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (card.status !== "ACTIVE") {
     return NextResponse.json({ error: `Declined: card is ${String(card.status).toLowerCase()}` }, { status: 403 })
   }
+  if (!card.company_id || !card.funding_account_id) {
+    return NextResponse.json({ error: "This card is not linked to a branch operating bank account" }, { status: 409 })
+  }
 
   const scale = zeroDecimal.has(card.currency) ? 1 : 100
   // Admin simulate: attribute to the acting user so we never violate auth.users FKs
@@ -42,11 +46,32 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     employee_id: user.id,
     employee_name: card.employee_name,
     card_id: card.id,
+    company_id: card.company_id,
+    funding_account_id: card.funding_account_id,
     merchant_name: parsed.data.merchantName,
     amount_minor: Math.round(parsed.data.amount * scale),
     currency: card.currency,
     status: "HELD",
   }).select("*").single()
   if (error || !data) return NextResponse.json({ error: "Could not create the card authorization" }, { status: 500 })
+  try {
+    const holdRef = `card:${data.id}`
+    await reserveSpendFunds(admin, {
+      accountId: card.funding_account_id,
+      amountMinor: BigInt(data.amount_minor),
+      ref: holdRef,
+      sourceType: "CARD_PURCHASE",
+      sourceId: data.id,
+    })
+    await admin.from("sancus_card_purchases").update({
+      funding_status: "HELD", funding_amount_minor: String(data.amount_minor), funding_hold_tx_hash: holdRef,
+    }).eq("id", data.id)
+  } catch (cause) {
+    await admin.from("sancus_card_purchases").update({
+      status: "DECLINED", funding_status: "UNFUNDED",
+      decline_reason: cause instanceof Error ? cause.message : "Insufficient bank balance",
+    }).eq("id", data.id)
+    return NextResponse.json({ error: cause instanceof Error ? cause.message : "Insufficient bank balance" }, { status: 409 })
+  }
   return NextResponse.json({ purchase: toEmployeeCardPurchaseDto(data as EmployeeCardPurchaseRow) }, { status: 201 })
 })

@@ -1,6 +1,6 @@
 "use client"
 
-// Branch admin dashboard: your branch's wallet (USDC and local stablecoins), your sub-branches, and
+// Branch admin dashboard: your branch's operating bank account, cross-border wallet, sub-branches, and
 // the people you manage. Branch admins never see the global account or other branches.
 import Link from "next/link"
 import { AccountsManager } from "@/components/sancus-ui/accounts-manager"
@@ -8,6 +8,14 @@ import { findNode, type CompanyNode } from "@/lib/sancus/companies"
 import { countryByCode } from "@/lib/sancus/countries"
 import { useAccount } from "@/lib/sancus/use-account"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
+
+const money = (minor: string, currency: string) => new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency,
+  currencyDisplay: "narrowSymbol",
+  minimumFractionDigits: ["IDR", "JPY", "KRW", "VND"].includes(currency) ? 0 : 2,
+  maximumFractionDigits: ["IDR", "JPY", "KRW", "VND"].includes(currency) ? 0 : 2,
+}).format(Number(BigInt(minor)) / 100)
 
 const usd = (minor: string) => `$${(Number(minor) / 1e6).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -23,7 +31,6 @@ export default function BranchPage() {
   const runs = account?.scopes.find((s) => !s.isRoot && (s.role === "ADMIN" || s.role === "OWNER"))
   const branch = (runs?.companyId ? findNode(ws.tree, runs.companyId) : null) ?? ws.tree[0] ?? null
   const country = branch ? countryByCode(branch.country) : undefined
-  const local = branch?.wallets.flatMap((w) => Object.entries(w.local ?? {})) ?? []
 
   return (
     <div className="page">
@@ -46,16 +53,12 @@ export default function BranchPage() {
             <div className="empty">Loading…</div>
           ) : (
             <>
-              <span className="amount-xl">{ws.balancesReady ? usd(branch.totalMinor) : "***"}</span>
-              <span className="body-s muted">USDC across {branch.wallets.length} wallet{branch.wallets.length === 1 ? "" : "s"}{branch.children.length ? " and sub-branches" : ""}</span>
-              {local.map(([cur, minor]) => (
-                <div className="kv" key={cur}>
-                  <span>Local stablecoin</span>
-                  <span>
-                    {(Number(minor) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} m{cur}
-                  </span>
-                </div>
-              ))}
+              <span className="amount-xl">{ws.balancesReady && branch.bankBalance ? money(branch.bankBalance.balanceMinor, branch.bankBalance.currency) : "***"}</span>
+              <span className="body-s muted">Available in {branch.bankBalance?.bankName ?? "the local operating bank"}</span>
+              <div className="kv">
+                <span>Cross-border wallet liquidity</span>
+                <span>{usd(branch.ownMinor)}</span>
+              </div>
             </>
           )}
         </section>
@@ -84,7 +87,7 @@ export default function BranchPage() {
             Get paid locally
           </h2>
           <p className="body-s muted" style={{ margin: 0 }}>
-            Customers pay by {branch?.country === "ID" ? "QRIS" : branch?.country === "BR" ? "Pix" : "PromptPay"}; the money lands in this branch&apos;s wallet.
+            Customers pay by {branch?.country === "ID" ? "QRIS" : branch?.country === "BR" ? "Pix" : "PromptPay"}; the money settles into this branch&apos;s operating bank account.
           </p>
           <div className="tile-foot">
             <Link href="/receive" className="sx-btn sx-btn--secondary">

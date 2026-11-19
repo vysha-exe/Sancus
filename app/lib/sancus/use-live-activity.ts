@@ -195,7 +195,7 @@ function mapRailCollection(c: RailCollectionRow): Payment {
     amountIn: true,
     meta: `${new Date(c.createdAt).toLocaleString()} · into ${c.destination.label ?? "your wallet"}`,
     rail,
-    status: c.status === "MINTED" ? "Settled" : ["FAILED", "EXPIRED"].includes(c.status) ? "Failed" : "Pending",
+    status: ["CREDITED", "MINTED"].includes(c.status) ? "Settled" : ["FAILED", "EXPIRED"].includes(c.status) ? "Failed" : "Pending",
     simulated: true,
     href: "/receive",
     ledger: {

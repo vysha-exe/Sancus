@@ -21,6 +21,7 @@ type Country =
   | "Sweden"
   | "Switzerland"
   | "Hong Kong"
+  | "Singapore"
   | "Japan"
   | "Australia"
   | "Indonesia"
@@ -58,6 +59,7 @@ const countryInfo: Record<Country, CountryInfo> = {
   Sweden: { network: "Card", code: "SEK", rate: FIXED_USD_RATES.SEK, defaultQr: 5200, defaultCard: 5200, help: "Cards are accepted anywhere Visa or Mastercard is." },
   Switzerland: { network: "Card", code: "CHF", rate: FIXED_USD_RATES.CHF, defaultQr: 450, defaultCard: 450, help: "Cards are accepted anywhere Visa or Mastercard is." },
   "Hong Kong": { network: "Card", code: "HKD", rate: FIXED_USD_RATES.HKD, defaultQr: 3900, defaultCard: 3900, help: "Cards are accepted anywhere Visa or Mastercard is." },
+  Singapore: { network: "Card", code: "SGD", rate: FIXED_USD_RATES.SGD, defaultQr: 670, defaultCard: 670, help: "Cards are accepted anywhere Visa or Mastercard is." },
   Japan: { network: "Card", code: "JPY", rate: FIXED_USD_RATES.JPY, defaultQr: 75000, defaultCard: 75000, help: "Cards are accepted anywhere Visa or Mastercard is." },
   Australia: { network: "Card", code: "AUD", rate: FIXED_USD_RATES.AUD, defaultQr: 760, defaultCard: 760, help: "Cards are accepted anywhere Visa or Mastercard is." },
   Indonesia: { network: "QRIS", code: "IDR", rate: FIXED_USD_RATES.IDR, defaultQr: 3200000, defaultCard: 3200000, help: "QRIS is the only QR network in Indonesia." },
@@ -67,7 +69,7 @@ const countryInfo: Record<Country, CountryInfo> = {
 const cardRegions: { label: string; countries: Country[] }[] = [
   { label: "Americas", countries: ["United States", "Canada", "Brazil"] },
   { label: "Europe", countries: ["United Kingdom", "Ireland", "Germany", "France", "Netherlands", "Spain", "Italy", "Sweden", "Switzerland"] },
-  { label: "Asia Pacific", countries: ["Hong Kong", "Japan", "Australia", "Indonesia", "Thailand"] },
+  { label: "Asia Pacific", countries: ["Singapore", "Hong Kong", "Japan", "Australia", "Indonesia", "Thailand"] },
 ]
 
 function formatLocal(code: string, n: number): string {
@@ -102,6 +104,7 @@ const countryForCode = (code: string | undefined): Country => {
   if (code === "TH") return "Thailand"
   if (code === "BR") return "Brazil"
   if (code === "US") return "United States"
+  if (code === "SG") return "Singapore"
   if (code === "HK") return "Hong Kong"
   if (code === "JP") return "Japan"
   if (code === "AU") return "Australia"
@@ -116,9 +119,18 @@ export default function AssignMethodPage() {
   const validInitialId = /^[0-9a-f-]{36}$/i.test(initialId)
   const [liveName, setLiveName] = useState<string | null>(null)
   const [liveUserId, setLiveUserId] = useState<string | null>(null)
+  const [liveCompanyId, setLiveCompanyId] = useState<string | null>(null)
   const [liveOk, setLiveOk] = useState(false)
   const [liveLoaded, setLiveLoaded] = useState(!validInitialId)
   const [personId] = useState(initialId)
+  const [kind, setKind] = useState<Kind>("qr")
+  const [country, setCountry] = useState<Country>("Brazil")
+  const info = countryInfo[country]
+  const [name, setName] = useState("Market runs")
+  const [limitRaw, setLimitRaw] = useState(formatLocal(info.code, info.defaultQr))
+  const [hold, setHold] = useState(false)
+  const [issuing, setIssuing] = useState(false)
+  const [issueError, setIssueError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!validInitialId) return
@@ -128,8 +140,12 @@ export default function AssignMethodPage() {
         const body = await res.json()
         setLiveName(body.member?.email ?? body.member?.userId ?? "Teammate")
         setLiveUserId(body.member?.userId ?? null)
+        setLiveCompanyId(body.company?.id ?? null)
         setLiveOk(true)
-        changeCountry(countryForCode(body.company?.country))
+        const next = countryForCode(body.company?.country)
+        const nextInfo = countryInfo[next]
+        setCountry(next)
+        setLimitRaw(formatLocal(nextInfo.code, kind === "card" ? nextInfo.defaultCard : nextInfo.defaultQr))
       })
       .catch(() => undefined)
       .finally(() => setLiveLoaded(true))
@@ -144,15 +160,6 @@ export default function AssignMethodPage() {
     initials: "T",
   }
   const first = person.name.split(" ")[0]?.split("@")[0] ?? "them"
-
-  const [kind, setKind] = useState<Kind>("qr")
-  const [country, setCountry] = useState<Country>("Brazil")
-  const info = countryInfo[country]
-  const [name, setName] = useState("Market runs")
-  const [limitRaw, setLimitRaw] = useState(formatLocal(info.code, info.defaultQr))
-  const [hold, setHold] = useState(false)
-  const [issuing, setIssuing] = useState(false)
-  const [issueError, setIssueError] = useState<string | null>(null)
 
   if (liveLoaded && !liveOk) {
     return (
@@ -178,12 +185,6 @@ export default function AssignMethodPage() {
   const usd = limit / info.rate
   const usdLabel = money.format(usd)
   const holds = kind === "card" || hold
-  function changeCountry(next: Country) {
-    const nextInfo = countryInfo[next]
-    setCountry(next)
-    setLimitRaw(formatLocal(nextInfo.code, kind === "card" ? nextInfo.defaultCard : nextInfo.defaultQr))
-  }
-
   function changeKind(next: Kind) {
     setKind(next)
     setName(next === "card" ? "Office and supplies" : "Market runs")
@@ -196,7 +197,7 @@ export default function AssignMethodPage() {
   }
 
   async function issueAccess() {
-    if (!liveUserId) {
+    if (!liveUserId || !liveCompanyId) {
       setIssueError("They need to accept the invite and create their employee login before you can issue spending access.")
       return
     }
@@ -209,6 +210,7 @@ export default function AssignMethodPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           employeeId: liveUserId,
+          companyId: liveCompanyId,
           employeeName: person.name,
           label: name,
           methodType,
@@ -228,7 +230,7 @@ export default function AssignMethodPage() {
   }
 
   async function issueCard() {
-    if (!liveUserId) {
+    if (!liveUserId || !liveCompanyId) {
       setIssueError("They need to accept the invite and create their employee login before you can issue a card.")
       return
     }
@@ -243,6 +245,7 @@ export default function AssignMethodPage() {
         },
         body: JSON.stringify({
           employeeId: liveUserId,
+          companyId: liveCompanyId,
           employeeName: person.name,
           label: name,
           country,
@@ -317,7 +320,8 @@ export default function AssignMethodPage() {
               <select
                 className="sx-field__input"
                 value={country}
-                onChange={(e) => changeCountry(e.target.value as Country)}
+                onChange={() => {}}
+                disabled
               >
                 {kind === "card"
                   ? cardRegions.map((region) => (
@@ -335,6 +339,7 @@ export default function AssignMethodPage() {
                     </>
                   )}
               </select>
+              <span className="sx-field__help">Spending is funded by this employee&apos;s assigned company.</span>
             </label>
             <label className="sx-field s6">
               <span className="sx-label">Network</span>

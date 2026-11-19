@@ -187,23 +187,31 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     return NextResponse.json({ error: "Couldn't give the new login access to that branch" }, { status: 500 })
   }
 
-  // 4. Employees get a virtual card capped at their daily limit × 30 (USD cents).
+  // 4. Employees get company-funded virtual access capped at their daily limit × 30.
   let cardIssued = false
   if (input.type === "EMPLOYEE") {
+    const [{ data: fundingCompany }, { data: fundingAccount }] = await Promise.all([
+      admin.from("sancus_companies").select("base_currency").eq("id", companyId).maybeSingle(),
+      admin.from("sancus_receive_accounts").select("id").eq("company_id", companyId).maybeSingle(),
+    ])
     const dailyUsdc = BigInt(input.dailyLimitMinor ?? "1000000000")
     const monthlyCents = (dailyUsdc / 10_000n) * 30n
-    const { error: cErr } = await admin.from("sancus_spending_methods").insert({
-      user_id: user.id,
-      employee_id: newUserId,
-      employee_name: input.firstName,
-      method_type: "CARD",
-      provider: "SIMULATED",
-      currency: "USD",
-      label: "Virtual card",
-      monthly_limit_minor: monthlyCents.toString(),
-    })
-    cardIssued = !cErr
-    if (cErr) console.warn("Virtual card not issued", cErr.message)
+    if (fundingCompany?.base_currency && fundingAccount?.id) {
+      const { error: cErr } = await admin.from("sancus_spending_methods").insert({
+        user_id: user.id,
+        company_id: companyId,
+        funding_account_id: fundingAccount.id,
+        employee_id: newUserId,
+        employee_name: input.firstName,
+        method_type: "CARD",
+        provider: "SIMULATED",
+        currency: fundingCompany.base_currency,
+        label: "Virtual card",
+        monthly_limit_minor: monthlyCents.toString(),
+      })
+      cardIssued = !cErr
+      if (cErr) console.warn("Virtual card not issued", cErr.message)
+    }
   }
 
   return NextResponse.json(

@@ -1,5 +1,5 @@
-// Development-only receive-flow probe. Creates a real provider sandbox charge
-// for a reusable branch receive identity. Settlement and Arc minting happen on refresh.
+// Development-only receive-flow probe. Simulates a paid local-rail collection and
+// immediately credits the selected branch's local operating bank account.
 import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 import { z } from "zod"
@@ -7,9 +7,9 @@ import { withAuth } from "@/lib/api/with-auth"
 import { validateJsonBody } from "@/lib/api/validate"
 import { effectiveRole, type CompanyRow, type MembershipRow } from "@/lib/sancus/companies"
 import { createDevRun, finishDevRun, step, workflow } from "@/lib/sancus/dev-runs"
-import { createCharge, RAIL_INFO, strictRailConfigured, type LocalRail } from "@/lib/sancus/local-sandboxes"
+import { RAIL_INFO, type LocalRail } from "@/lib/sancus/local-sandboxes"
 import { MOCK_TOKENS } from "@/lib/sancus/mock-tokens"
-import { toApi, type CollectionRow } from "@/lib/sancus/rail-collections"
+import { refreshCollection, toApi, type CollectionRow } from "@/lib/sancus/rail-collections"
 
 const schema = z.object({
   rail: z.enum(["QRIS", "PROMPTPAY", "PIX"]),
@@ -45,60 +45,54 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     return NextResponse.json({ error: `${info.label} must pay a ${info.currency} branch` }, { status: 400 })
   }
 
-  const { data: wallet } = await supabase
-    .from("wallets")
-    .select("address, name")
+  const { data: bankAccount } = await supabase
+    .from("sancus_receive_accounts")
+    .select("id, bank_name, account_number")
     .eq("company_id", company.id)
-    .order("created_at")
-    .limit(1)
     .maybeSingle()
-  if (!wallet) return NextResponse.json({ error: `${company.name} has no wallet to receive the test payment` }, { status: 409 })
+  if (!bankAccount) return NextResponse.json({ error: `${company.name} has no local bank account to receive the test payment` }, { status: 409 })
 
-  if (!strictRailConfigured(rail)) {
-    return NextResponse.json({ error: `${info.label} sandbox credentials are not configured` }, { status: 503 })
-  }
   const reference = `dev-receive-${randomUUID()}`
   const steps = [step("receiveCode", true, `${info.label} identity resolved to ${company.name}`)]
-  const run = await createDevRun(supabase, { userId: user.id, companyId: company.id, runType: `${rail}_RECEIVE`, provider: rail === "QRIS" ? "MIDTRANS" : rail === "PROMPTPAY" ? "OMISE" : "PAYZU", steps })
-  let charge
-  try {
-    charge = await createCharge(rail, amountMinor, reference)
-    if (charge.simulated) throw new Error("The provider returned a simulated charge; strict Dev tests require a configured sandbox")
-    steps.push(step("providerCharge", true, `${charge.provider} created a sandbox charge`))
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Provider charge creation failed"
-    steps.push(step("providerCharge", false, message))
-    await finishDevRun(supabase, run.id, { status: "FAILED", steps, error: message })
-    return NextResponse.json({ error: message, workflow: workflow(steps), runId: run.id }, { status: 502 })
-  }
+  const run = await createDevRun(supabase, { userId: user.id, companyId: company.id, runType: `${rail}_RECEIVE`, provider: "MOCK_BANK", steps })
+  steps.push(step("mockPayment", true, `Mock customer paid ${info.currency} ${(Number(amountMinor) / 100).toFixed(2)}`))
   const { data, error } = await supabase
     .from("sancus_rail_collections")
     .insert({
       user_id: user.id,
+      company_id: company.id,
+      receive_account_id: bankAccount.id,
       rail,
       currency: info.currency,
       amount_minor: amountMinor.toString(),
-      provider: charge.provider,
-      provider_ref: charge.providerRef,
-      status: charge.status,
-      simulated: false,
-      qr_image_url: charge.qrImageUrl,
-      qr_payload: charge.qrPayload,
-      simulator_url: charge.simulatorUrl,
-      destination_address: wallet.address,
-      destination_label: `${company.name} (branch)`,
+      provider: "simulated",
+      provider_ref: reference,
+      status: "PAID",
+      simulated: true,
+      qr_image_url: null,
+      qr_payload: null,
+      simulator_url: null,
+      destination_address: bankAccount.account_number,
+      destination_label: `${bankAccount.bank_name} · ${company.name}`,
       token_address: MOCK_TOKENS[info.currency].address,
     })
     .select()
     .single()
   if (error || !data) {
     const message = error?.message || "Could not record the sandbox charge"
-    await finishDevRun(supabase, run.id, { status: "FAILED", steps, providerRef: charge.providerRef, error: message })
+    await finishDevRun(supabase, run.id, { status: "FAILED", steps, providerRef: reference, error: message })
     return NextResponse.json({ error: message, workflow: workflow(steps), runId: run.id }, { status: 500 })
   }
-  steps.push(step("settlement", true, "Charge created; complete it in the provider sandbox, then refresh"))
-  await finishDevRun(supabase, run.id, { status: "WAITING", steps, sourceRecordType: "RAIL_COLLECTION", sourceRecordId: data.id, providerRef: charge.providerRef })
+  const credited = await refreshCollection(supabase, data as CollectionRow)
+  if (credited.status !== "CREDITED") {
+    const message = credited.error || "Could not credit the branch bank account"
+    steps.push(step("bankDeposit", false, message))
+    await finishDevRun(supabase, run.id, { status: "FAILED", steps, sourceRecordType: "RAIL_COLLECTION", sourceRecordId: data.id, providerRef: reference, error: message })
+    return NextResponse.json({ error: message, collection: toApi(credited), workflow: workflow(steps), runId: run.id }, { status: 500 })
+  }
+  steps.push(step("bankDeposit", true, `${bankAccount.bank_name} credited ${company.name}'s ${info.currency} operating account`))
+  await finishDevRun(supabase, run.id, { status: "PASSED", steps, sourceRecordType: "RAIL_COLLECTION", sourceRecordId: data.id, providerRef: reference })
   return NextResponse.json({
-    collection: toApi(data as CollectionRow), workflow: workflow(steps), runId: run.id,
+    collection: toApi(credited), workflow: workflow(steps), runId: run.id,
   }, { status: 201 })
 })

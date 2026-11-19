@@ -17,7 +17,7 @@ import { serviceClient } from "@/lib/sancus/service-client"
 import { toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
 import { decideAch } from "@/lib/sancus/ach-server"
 import { executeInternalTransfer, toInternalTransferDto, type InternalTransferRow } from "@/lib/sancus/internal-transfers"
-import { executePayout, syncPayoutLedger, toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
+import { executePayout, syncPayoutBankFunding, syncPayoutLedger, toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
 
 const bodySchema = z.object({
   action: z.enum(["approve", "decline"]),
@@ -131,6 +131,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   let updated = claimed as PayoutRow
   if (action === "decline") {
     await syncPayoutLedger(db, updated) // releases the reserved funds
+    await syncPayoutBankFunding(db, updated)
   } else {
     updated = await executePayout(db, row.user_id, updated)
   }

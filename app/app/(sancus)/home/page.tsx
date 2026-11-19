@@ -14,7 +14,6 @@ import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { accountDisplayName, useAccount } from "@/lib/sancus/use-account"
 import { countryByCode } from "@/lib/sancus/countries"
 import type { CompanyNode } from "@/lib/sancus/companies"
-import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 
 export default function HomePage() {
   const ws = useWorkspace()
@@ -185,7 +184,6 @@ export default function HomePage() {
     </div>
   )
 }
-
 function ParentBranchBalances({
   tree,
   ready,
@@ -200,6 +198,14 @@ function ParentBranchBalances({
   const rows = parent
     ? [{ node: parent, level: "Parent" }, ...branches.map((node) => ({ node, level: "Branch" }))]
     : []
+  const bankMoney = (node: CompanyNode) => {
+    const balanceMinor = node.bankBalance?.balanceMinor ?? "0"
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: node.bankBalance?.currency ?? node.currency,
+      maximumFractionDigits: (node.bankBalance?.currency ?? node.currency) === "IDR" ? 0 : 2,
+    }).format(Number(balanceMinor) / 100)
+  }
 
   return (
     <section className="tile s12 home-branches" aria-labelledby="branch-balances" aria-busy={!ready}>
@@ -227,8 +233,8 @@ function ParentBranchBalances({
                   <span>{isParent ? "Global treasury · USDC" : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}</span>
                 </div>
                 <div className="home-branch-card__balance">
-                  <span>{formatBalance(node.ownMinor)}</span>
-                  <small>{isParent ? `${node.wallets.length} ${node.wallets.length === 1 ? "wallet" : "wallets"}` : localBalance(node.ownMinor, node.currency)}</small>
+                  <span>{isParent ? formatBalance(node.ownMinor) : bankMoney(node)}</span>
+                  <small>{isParent ? `${node.wallets.length} ${node.wallets.length === 1 ? "wallet" : "wallets"}` : `${node.bankBalance?.bankName ?? "Local bank"} operating account`}</small>
                 </div>
                 <span className="home-branch-card__open" aria-hidden>Open →</span>
               </Link>
@@ -239,7 +245,6 @@ function ParentBranchBalances({
     </section>
   )
 }
-
 function CompanySnapshot({ tree, ready }: { tree: CompanyNode[]; ready: boolean }) {
   const parent = tree.find((node) => node.parentId === null) ?? tree[0] ?? null
   const branches = parent?.children ?? []
@@ -271,16 +276,4 @@ function CompanySnapshot({ tree, ready }: { tree: CompanyNode[]; ready: boolean 
     </section>
   )
 }
-
-function localBalance(usdcMinor: string, currency: string): string {
-  const rate = FIXED_USD_RATES[currency as keyof typeof FIXED_USD_RATES]
-  if (!rate) return `Local balance unavailable · ${currency}`
-  const localAmount = Number(BigInt(usdcMinor)) / 1_000_000 * rate
-  const zeroDecimal = new Set(["IDR", "JPY", "KRW", "VND"])
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency", currency, currencyDisplay: "narrowSymbol",
-    minimumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
-    maximumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
-  }).format(localAmount)
-  return `${formatted} ${currency}`
-}
+CompanySnapshot.displayName = "CompanySnapshot"

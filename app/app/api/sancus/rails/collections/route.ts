@@ -52,7 +52,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (!railConfigured(rail)) return NextResponse.json({ error: `${info.label} sandbox key isn't set` }, { status: 503 })
 
   const destination = await resolveDestination(supabase, user.id, rail)
-  if (!destination) return NextResponse.json({ error: "No wallet to receive into yet. Set up your Treasury first." }, { status: 409 })
+  if (!destination) return NextResponse.json({ error: "No branch bank account is available for this local rail." }, { status: 409 })
 
   const reference = `sancus-${rail.toLowerCase()}-${randomUUID().slice(0, 12)}`
   let charge
@@ -66,6 +66,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     .from("sancus_rail_collections")
     .insert({
       user_id: user.id,
+      company_id: destination.companyId,
+      receive_account_id: destination.receiveAccountId,
       rail,
       currency: info.currency,
       amount_minor: amount.toString(),
