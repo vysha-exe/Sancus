@@ -9,6 +9,7 @@
 // Money lands in the Gateway balance of `payTo` (the account's Arc treasury wallet),
 // which the treasury summary already counts.
 
+import { createHash } from "node:crypto"
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { BatchFacilitatorClient } from "@circle-fin/x402-batching/server"
@@ -94,19 +95,20 @@ function adminClient(): SupabaseClient | null {
   return admin
 }
 
-export type Seller = { userId: string | null; payTo: string }
+export type Seller = { userId: string | null; companyId: string | null; walletId: string | null; payTo: string }
 
 let sellerCache: { value: Seller; at: number } | null = null
 
 /**
  * The account that earns from x402 calls:
- *   user  = SANCUS_X402_ACCOUNT_EMAIL (falls back to SANCUS_DEMO_EMAIL)
- *   payTo = SANCUS_X402_PAY_TO, else that user's first Arc testnet wallet
+ * The configured receiving wallet must belong directly to the parent company.
  * Returns null when nothing is configured.
  */
 export async function resolveSeller(): Promise<Seller | null> {
   if (sellerCache && Date.now() - sellerCache.at < 60_000) return sellerCache.value
   const db = adminClient()
+  const configuredCompanyId = process.env.SANCUS_X402_COMPANY_ID?.trim() || null
+  const configuredWalletId = process.env.SANCUS_X402_RECEIVING_WALLET_ID?.trim() || null
   const email = (process.env.SANCUS_X402_ACCOUNT_EMAIL || process.env.SANCUS_DEMO_EMAIL || "").trim().toLowerCase()
   let userId: string | null = null
   if (db && email) {
@@ -114,19 +116,42 @@ export async function resolveSeller(): Promise<Seller | null> {
     userId = data?.users.find((u) => u.email?.toLowerCase() === email)?.id ?? null
   }
 
-  let payTo = process.env.SANCUS_X402_PAY_TO?.trim() || ""
-  if (!payTo && db && userId) {
+  let companyId = configuredCompanyId
+  if (!companyId && db && userId) {
     const { data } = await db
-      .from("wallets")
-      .select("address, type")
+      .from("sancus_memberships")
+      .select("company_id, sancus_companies!inner(parent_id)")
       .eq("user_id", userId)
+      .eq("status", "ACTIVE")
+      .in("role", ["OWNER", "ADMIN"])
+    companyId = (data ?? []).find((row) => {
+      const company = row.sancus_companies as unknown as { parent_id: string | null }
+      return company.parent_id === null
+    })?.company_id ?? null
+  }
+
+  let payTo = process.env.SANCUS_X402_PAY_TO?.trim() || ""
+  let walletId = configuredWalletId
+  if (db && companyId) {
+    let query = db
+      .from("wallets")
+      .select("circle_wallet_id, address, type, company_id")
+      .eq("company_id", companyId)
       .eq("blockchain", "ARC-TESTNET")
       .order("created_at", { ascending: true })
-    payTo = data?.find((w) => w.type !== "gateway_signer")?.address ?? ""
+    if (configuredWalletId) query = query.eq("circle_wallet_id", configuredWalletId)
+    const { data } = await query
+    const wallet = configuredWalletId
+      ? data?.[0]
+      : data?.find((item) => item.type === "gateway_signer") ?? data?.find((item) => item.type === "treasury")
+    if (!wallet) return null
+    if (payTo && payTo.toLowerCase() !== wallet.address.toLowerCase()) return null
+    walletId = wallet.circle_wallet_id
+    payTo ||= wallet.address
   }
   if (!/^0x[a-fA-F0-9]{40}$/.test(payTo)) return null
 
-  const value = { userId, payTo }
+  const value = { userId, companyId, walletId, payTo }
   sellerCache = { value, at: Date.now() }
   return value
 }
@@ -140,6 +165,7 @@ async function recordEarning(input: {
   amountMinor: bigint
   network: string
   gatewayTx: string | null
+  paymentFingerprint: string
 }) {
   const db = adminClient()
   if (!db || !input.seller.userId) {
@@ -150,6 +176,9 @@ async function recordEarning(input: {
     .from("sancus_x402_earnings")
     .insert({
       user_id: input.seller.userId,
+      company_id: input.seller.companyId,
+      wallet_id: input.seller.walletId,
+      payment_fingerprint: input.paymentFingerprint,
       endpoint: input.endpoint,
       payer: input.payer,
       amount_minor: input.amountMinor.toString(),
@@ -178,6 +207,14 @@ async function recordEarning(input: {
     })),
   })
   if (jErr) console.error("[x402] Failed to post revenue journal", jErr)
+}
+
+function paymentFingerprint(req: NextRequest, signature: string) {
+  const url = new URL(req.url)
+  const query = [...url.searchParams.entries()].sort(([a], [b]) => a.localeCompare(b))
+  return createHash("sha256")
+    .update([req.method, url.pathname, JSON.stringify(query), signature].join("|"))
+    .digest("hex")
 }
 
 // ---------- route wrapper ----------
@@ -227,6 +264,20 @@ export function withX402(endpoint: PaidEndpoint, handler: (req: NextRequest) => 
 
     try {
       facilitator ??= new BatchFacilitatorClient()
+      const fingerprint = paymentFingerprint(req, signature)
+      const db = adminClient()
+      if (db) {
+        const { data: replay } = await db
+          .from("sancus_x402_earnings")
+          .select("gateway_tx, payer")
+          .eq("payment_fingerprint", fingerprint)
+          .maybeSingle()
+        if (replay) {
+          const response = await handler(req)
+          response.headers.set("PAYMENT-RESPONSE", encodeHeader({ success: true, transaction: replay.gateway_tx, payer: replay.payer, replayed: true }))
+          return response
+        }
+      }
       const verified = await facilitator.verify(payload, requirements)
       if (!verified.isValid) {
         return NextResponse.json({ error: "Payment verification failed", reason: verified.invalidReason }, { status: 402 })
@@ -244,6 +295,7 @@ export function withX402(endpoint: PaidEndpoint, handler: (req: NextRequest) => 
         amountMinor,
         network: requirements.network,
         gatewayTx: settled.transaction ?? null,
+        paymentFingerprint: fingerprint,
       })
       console.log(`[x402] ${endpoint.path} paid ${displayMinor(amountMinor, USDC_DECIMALS, "", 6)} USDC by ${payer}`)
 
