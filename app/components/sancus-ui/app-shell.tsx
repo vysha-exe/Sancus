@@ -92,12 +92,13 @@ export function AppShell({
   const actorName = account ? ACCOUNT_TYPE_LABEL[account.type] : ACCOUNT_TYPE_LABEL.ADMIN
   const actorRole = accountDisplayName(account, workspace.name)
 
-  // A business admin always works in the company (there's no personal account on the admin dashboard).
+  // Business admin (and guest admin demo): always work in the company — never "Personal".
+  const isBusinessAdmin = !account || account.type === "ADMIN"
   useEffect(() => {
-    if (account?.type !== "ADMIN" || !ws.ready || !ws.isPersonal || !ws.hasBusiness) return
-    const root = account.scopes.find((s) => s.isRoot)
-    if (root) ws.selectCompany(root.companyId)
-  }, [account, ws])
+    if (!isBusinessAdmin || !ws.ready || !ws.isPersonal || !ws.hasBusiness) return
+    const rootId = account?.scopes.find((s) => s.isRoot)?.companyId ?? ws.tree[0]?.id
+    if (rootId) ws.selectCompany(rootId)
+  }, [account, isBusinessAdmin, ws])
 
   // Pages outside this account's reach send it home (the APIs refuse them regardless).
   useEffect(() => {
@@ -142,7 +143,7 @@ export function AppShell({
         <header className="hdr">
           <SancusLockup />
           <div className="bar">
-            {!account || account.type === "ADMIN" ? <WorkspaceSwitcher allowPersonal={account?.type !== "ADMIN"} /> : null}
+            {isBusinessAdmin ? <WorkspaceSwitcher allowPersonal={false} /> : null}
             <label className="search-pill">
               <IconSearch />
               <span className="vh">Search</span>

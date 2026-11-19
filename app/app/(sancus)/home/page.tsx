@@ -19,8 +19,8 @@ import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 export default function HomePage() {
   const ws = useWorkspace()
   const { account } = useAccount()
-  const isAdmin = account?.type === "ADMIN"
-  // A business admin's dashboard is always the company (never personal tiles).
+  // Guest demo and signed-in ADMIN: always the company dashboard (never "Personal").
+  const isAdmin = !account || account.type === "ADMIN"
   const personal = isAdmin ? false : ws.ready ? ws.isPersonal : !ws.hasBusiness
   const activeName = ws.activeNode?.name ?? accountDisplayName(account, workspace.name)
   const showBranchOverview = !personal && ws.activeNode?.parentId === null
