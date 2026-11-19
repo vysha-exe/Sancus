@@ -4,6 +4,7 @@ import { getCompany, idFromPath } from "@/lib/sancus/company-api"
 import { listCompanyWallets, withBalances } from "@/lib/sancus/company-wallets"
 import { branchBank, toInternalTransferDto, type InternalTransferRow } from "@/lib/sancus/internal-transfers"
 import { toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
+import { serviceClient } from "@/lib/sancus/service-client"
 
 export const GET = withAuth(async (req, { user, supabase }) => {
   const companyId = idFromPath(req.nextUrl.pathname, "branches")
@@ -17,7 +18,10 @@ export const GET = withAuth(async (req, { user, supabase }) => {
   })
   if (!allowed) return NextResponse.json({ error: "No access to this branch" }, { status: 403 })
 
-  const { data: companies } = await supabase
+  // The company's other accounts are listed with the service client (a branch admin can't see HQ, but
+  // may send money there). Balances and wallets are only shown for accounts this user can access.
+  const db = serviceClient() ?? supabase
+  const { data: companies } = await db
     .from("sancus_companies")
     .select("id, parent_id, root_id, name, country, base_currency, created_at")
     .eq("root_id", company.root_id)
@@ -25,11 +29,24 @@ export const GET = withAuth(async (req, { user, supabase }) => {
   const visibleNodes = (companies ?? []).filter(
     (node) => node.id === company.root_id || node.parent_id === company.root_id
   )
-  const ids = visibleNodes.map((node) => node.id as string)
+  const access = new Map(
+    await Promise.all(
+      visibleNodes.map(async (node) => {
+        const [{ data: canSee }, { data: role }] = await Promise.all([
+          supabase.rpc("sancus_can_access_company", { p_user: user.id, p_company: node.id }),
+          supabase.rpc("sancus_effective_role", { p_user: user.id, p_company: node.id }),
+        ])
+        const canSendFrom = typeof role === "string" && ["OWNER", "ADMIN", "FINANCE"].includes(role)
+        return [node.id as string, { canSee: Boolean(canSee), canSendFrom }] as const
+      })
+    )
+  )
+  const ids = visibleNodes.map((node) => node.id as string).filter((id) => access.get(id)?.canSee)
   const wallets = await withBalances(await listCompanyWallets(supabase, ids))
 
   const [transfersRes, payoutsRes, membersRes] = await Promise.all([
-    supabase
+    // Every transfer in or out of this branch, including ones to accounts this user can't see.
+    db
       .from("sancus_internal_transfers")
       .select("*")
       .or(`source_company_id.eq.${company.id},destination_company_id.eq.${company.id}`)
@@ -65,12 +82,17 @@ export const GET = withAuth(async (req, { user, supabase }) => {
     )
     const wallet = ownWallets[0] ?? null
     const isRoot = node.id === company.root_id
+    const { canSee = false, canSendFrom = false } = access.get(node.id as string) ?? {}
     return {
       id: node.id,
       name: node.name,
       country: isRoot ? null : node.country,
       currency: isRoot ? "USDC" : node.base_currency,
       isRoot,
+      /** False: name only (no balance or wallet), e.g. HQ seen from a branch admin. */
+      canSee,
+      /** This user may move money out of this account. */
+      canSendFrom,
       availableMinor: ownMinor.toString(),
       wallet,
       bank: !isRoot && wallet ? branchBank(node.country, wallet.address) : null,
