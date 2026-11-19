@@ -4,9 +4,11 @@ import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { toSpendingMethodDto } from "@/lib/sancus/local-rails"
 import { requirePermission } from "@/lib/sancus/accounts-server"
+import { resolveEmployeeFundingAccount } from "@/lib/sancus/spend-funding"
 
 const schema = z.object({
   employeeId: z.string().uuid(),
+  companyId: z.string().uuid(),
   employeeName: z.string().min(1).max(120),
   label: z.string().min(1).max(120),
   methodType: z.enum(["PIX", "QRIS", "PROMPTPAY", "CARD"]).default("PIX"),
@@ -63,24 +65,26 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (denied) return denied
   const parsed = await validateJsonBody(req, schema)
   if (!parsed.ok) return parsed.response
-  const { data: employee } = await supabase
-    .from("sancus_memberships")
-    .select("id")
-    .eq("user_id", parsed.data.employeeId)
-    .eq("status", "ACTIVE")
-    .in("role", ["EMPLOYEE", "FINANCE"])
-    .limit(1)
-    .maybeSingle()
-  if (!employee) return NextResponse.json({ error: "Choose an active employee from Team" }, { status: 400 })
   const methodType = parsed.data.methodType
   const currency = currencyFor(methodType, parsed.data.currency)
   const limitMajor = parsed.data.monthlyLimitBrl ?? parsed.data.monthlyLimit
+  let funding
+  try {
+    funding = await resolveEmployeeFundingAccount(supabase, {
+      employeeId: parsed.data.employeeId,
+      companyId: parsed.data.companyId,
+      currency,
+    })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not resolve the funding account" }, { status: 400 })
+  }
 
   const { data: existing } = await supabase
     .from("sancus_spending_methods")
     .select("id")
     .eq("user_id", user.id)
     .eq("employee_id", parsed.data.employeeId)
+    .eq("company_id", funding.companyId)
     .eq("method_type", methodType)
     .neq("status", "REVOKED")
     .maybeSingle()
@@ -92,6 +96,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     .from("sancus_spending_methods")
     .insert({
       user_id: user.id,
+      company_id: funding.companyId,
+      funding_account_id: funding.accountId,
       employee_id: parsed.data.employeeId,
       employee_name: parsed.data.employeeName,
       method_type: methodType,

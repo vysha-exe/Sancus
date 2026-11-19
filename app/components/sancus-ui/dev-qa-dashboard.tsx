@@ -29,13 +29,16 @@ type StoredPixQr = {
   id: string
   payload: string
   label: string
+  merchantName: string | null
   status: string
-  amountBrlMinor: string
+  qrCodeType: string | null
+  amountEditable: boolean
+  fixedAmountBrlMinor: string | null
   createdAt: string
-  source: "COLLECTION" | "DEV_COLLECTION"
 }
 type DevSpendMethod = {
   id: string
+  companyId: string
   kind: SpendKind
   source: "CARD" | "SPENDING_METHOD"
   employeeName: string
@@ -83,6 +86,9 @@ export function DevQaDashboard() {
   const [spendAmount, setSpendAmount] = useState("10.00")
   const [storedPixQrs, setStoredPixQrs] = useState<StoredPixQr[]>([])
   const [spendPixQrId, setSpendPixQrId] = useState("")
+  const [newPixQrLabel, setNewPixQrLabel] = useState("Sandbox merchant")
+  const [newPixQrPayload, setNewPixQrPayload] = useState("")
+  const [pixQrSaveError, setPixQrSaveError] = useState<string | null>(null)
   const [spendResult, setSpendResult] = useState<WorkflowResult | null>(null)
   const [providers, setProviders] = useState<ProviderReadiness[]>([])
   const [recentRuns, setRecentRuns] = useState<DevRun[]>([])
@@ -109,11 +115,16 @@ export function DevQaDashboard() {
     () => flatten(workspace.tree).filter((node) => node.parentId !== null && node.currency === RECEIVE_RAILS[receiveRail].currency),
     [receiveRail, workspace.tree]
   )
+  const companiesById = useMemo(() => new Map(flatten(workspace.tree).map((company) => [company.id, company])), [workspace.tree])
   const receiveBranch = receiveBranches.find((node) => node.id === receiveBranchId) ?? receiveBranches[0] ?? null
   const receiveCode = receiveBranch ? encodeReceiveCode({ rail: receiveRail, companyId: receiveBranch.id }) : ""
   const availableSpendMethods = useMemo(() => spendMethods.filter((method) => method.kind === spendKind), [spendKind, spendMethods])
   const spendMethod = availableSpendMethods.find((method) => method.id === spendMethodId) ?? availableSpendMethods[0] ?? null
   const spendPixQr = storedPixQrs.find((qr) => qr.id === spendPixQrId) ?? storedPixQrs[0] ?? null
+  const fixedPixAmount = spendPixQr && !spendPixQr.amountEditable && spendPixQr.fixedAmountBrlMinor
+    ? (Number(spendPixQr.fixedAmountBrlMinor) / 100).toFixed(2)
+    : null
+  const effectiveSpendAmount = spendKind === "PIX" && fixedPixAmount ? fixedPixAmount : spendAmount
 
   useEffect(() => {
     let cancelled = false
@@ -127,9 +138,10 @@ export function DevQaDashboard() {
       ])
       if (cancelled) return
       const cards = ((cardsResult.body as { cards?: SancusCardDto[] })?.cards ?? [])
-        .filter((card) => card.status === "ACTIVE" && !card.simulated)
+        .filter((card) => card.status === "ACTIVE" && !card.simulated && card.companyId && card.fundingAccountId)
         .map<DevSpendMethod>((card) => ({
           id: card.id,
+          companyId: card.companyId!,
           kind: "CARD",
           source: "CARD",
           employeeName: card.employeeName,
@@ -138,9 +150,10 @@ export function DevQaDashboard() {
           detail: `Card •••• ${card.lastFour}`,
         }))
       const methods = ((methodsResult.body as { methods?: SpendingMethodDto[] })?.methods ?? [])
-        .filter((method) => method.status === "ACTIVE" && method.type === "PIX")
+        .filter((method) => method.status === "ACTIVE" && method.type === "PIX" && method.companyId && method.fundingAccountId)
         .map<DevSpendMethod>((method) => ({
           id: method.id,
+          companyId: method.companyId!,
           kind: method.type as SpendKind,
           source: "SPENDING_METHOD",
           employeeName: method.employeeName,
@@ -157,7 +170,7 @@ export function DevQaDashboard() {
   }, [])
 
   async function runSpendTest() {
-    if (!spendMethod || !Number.isFinite(Number(spendAmount)) || Number(spendAmount) <= 0 || !spendMerchant.trim()) return
+    if (!spendMethod || !Number.isFinite(Number(effectiveSpendAmount)) || Number(effectiveSpendAmount) <= 0 || !spendMerchant.trim()) return
     const id = `spend-${spendKind.toLowerCase()}`
     setBusy(id)
     setSpendResult(null)
@@ -170,7 +183,7 @@ export function DevQaDashboard() {
           source: spendMethod.source,
           methodId: spendMethod.id,
           merchantName: spendMerchant.trim(),
-          amount: Number(spendAmount),
+          amount: Number(effectiveSpendAmount),
           ...(spendKind === "PIX" ? { qrPayload: spendPixQr?.payload ?? "" } : {}),
         }),
       })
@@ -183,6 +196,31 @@ export function DevQaDashboard() {
       const result = { status: 0, ok: false, body: { error: error instanceof Error ? error.message : String(error) } }
       setSpendResult(result.body)
       push(id, result)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function saveMerchantPixQr() {
+    if (!newPixQrLabel.trim() || !newPixQrPayload.trim()) return
+    setBusy("save-pix-qr")
+    setPixQrSaveError(null)
+    try {
+      const result = await call("/api/sancus/dev/pix-qrs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: newPixQrLabel.trim(), payload: newPixQrPayload.trim() }),
+      })
+      if (!result.ok) {
+        setPixQrSaveError(String((result.body as { error?: string })?.error ?? "Could not save the merchant QR"))
+        return
+      }
+      const saved = (result.body as { qr: StoredPixQr }).qr
+      setStoredPixQrs((current) => [saved, ...current.filter((qr) => qr.id !== saved.id)])
+      setSpendPixQrId(saved.id)
+      setNewPixQrPayload("")
+    } catch (error) {
+      setPixQrSaveError(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(null)
     }
@@ -505,7 +543,7 @@ export function DevQaDashboard() {
                 {!availableSpendMethods.length ? <option value="">No active {spendKind === "PIX" ? "Pix access" : "cards"}</option> : null}
                 {availableSpendMethods.map((method) => (
                   <option value={method.id} key={`${method.source}-${method.id}`}>
-                    {method.employeeName} · {method.detail} · {method.label}
+                    {companiesById.get(method.companyId)?.name ?? "Company"} · {method.employeeName} · {method.detail} · {method.label}
                   </option>
                 ))}
               </select>
@@ -516,34 +554,67 @@ export function DevQaDashboard() {
             </label>
             <label className="sx-field s3">
               <span className="sx-label">Amount · {spendMethod?.currency ?? (spendKind === "PIX" ? "BRL" : "local")}</span>
-              <input className="sx-field__input" inputMode="decimal" value={spendAmount} onChange={(event) => setSpendAmount(event.target.value)} />
+              <input
+                className="sx-field__input"
+                inputMode="decimal"
+                value={effectiveSpendAmount}
+                onChange={(event) => setSpendAmount(event.target.value)}
+                disabled={spendKind === "PIX" && Boolean(fixedPixAmount)}
+              />
+              {spendKind === "PIX" && fixedPixAmount ? <span className="sx-field__help">Fixed by the selected QR.</span> : null}
             </label>
             {spendKind === "PIX" ? (
-              <label className="sx-field s12">
-                <span className="sx-label">Stored merchant Pix QR</span>
-                <select
-                  className="sx-field__input"
-                  value={spendPixQr?.id ?? ""}
-                  onChange={(event) => { setSpendPixQrId(event.target.value); setSpendResult(null) }}
-                  disabled={!storedPixQrs.length}
-                >
-                  {!storedPixQrs.length ? <option value="">No stored Pix QR codes</option> : null}
-                  {storedPixQrs.map((qr) => (
-                    <option value={qr.id} key={qr.id}>
-                      {qr.label} · R$ {(Number(qr.amountBrlMinor) / 100).toFixed(2)} · {qr.status.toLowerCase()}
-                    </option>
-                  ))}
-                </select>
-                <span className="sx-field__help">
-                  Select a PayZu EMV payload already stored by a Pix collection. Create one under Test incoming QR payments if this list is empty.
-                </span>
-              </label>
+              <>
+                <label className="sx-field s12">
+                  <span className="sx-label">Stored outgoing merchant Pix QR</span>
+                  <select
+                    className="sx-field__input"
+                    value={spendPixQr?.id ?? ""}
+                    onChange={(event) => { setSpendPixQrId(event.target.value); setSpendResult(null) }}
+                    disabled={!storedPixQrs.length}
+                  >
+                    {!storedPixQrs.length ? <option value="">No merchant Pix QRs saved</option> : null}
+                    {storedPixQrs.map((qr) => (
+                      <option value={qr.id} key={qr.id}>
+                        {qr.label} · {qr.amountEditable ? "payer enters amount" : `fixed R$ ${(Number(qr.fixedAmountBrlMinor) / 100).toFixed(2)}`} · {(qr.qrCodeType ?? "QR").toLowerCase()}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="sx-field__help">
+                    Only merchant QRs saved for outgoing spending appear here. Incoming collection QRs are excluded.
+                  </span>
+                </label>
+                <label className="sx-field s4">
+                  <span className="sx-label">Add another merchant QR</span>
+                  <input className="sx-field__input" value={newPixQrLabel} onChange={(event) => setNewPixQrLabel(event.target.value)} />
+                </label>
+                <label className="sx-field s8">
+                  <span className="sx-label">Merchant Pix QR code</span>
+                  <input
+                    className="sx-field__input"
+                    value={newPixQrPayload}
+                    onChange={(event) => setNewPixQrPayload(event.target.value)}
+                    placeholder="Paste a PayZu sandbox merchant QR code"
+                  />
+                </label>
+                <div className="s12" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button
+                    type="button"
+                    className="sx-btn sx-btn--quiet"
+                    disabled={Boolean(busy) || !newPixQrLabel.trim() || !newPixQrPayload.trim()}
+                    onClick={() => void saveMerchantPixQr()}
+                  >
+                    {busy === "save-pix-qr" ? "Reading QR…" : "Save merchant QR"}
+                  </button>
+                  {pixQrSaveError ? <span className="body-s" style={{ color: "var(--failed)" }}>{pixQrSaveError}</span> : null}
+                </div>
+              </>
             ) : null}
           </div>
 
           {!availableSpendMethods.length ? (
             <p className="body-s muted" style={{ margin: 0 }}>
-              Issue {spendKind === "PIX" ? "Pix access" : "a card"} on <Link href="/spending">Spending</Link> before running this test.
+              Issue company-funded {spendKind === "PIX" ? "Pix access" : "a card"} on <Link href="/spending">Spending</Link> before running this test.
             </p>
           ) : null}
 
@@ -552,7 +623,7 @@ export function DevQaDashboard() {
             <button
               type="button"
               className="sx-btn sx-btn--primary"
-              disabled={Boolean(busy) || !spendMethod || Number(spendAmount) <= 0 || !spendMerchant.trim() || (spendKind === "PIX" && !spendPixQr)}
+              disabled={Boolean(busy) || !spendMethod || Number(effectiveSpendAmount) <= 0 || !spendMerchant.trim() || (spendKind === "PIX" && !spendPixQr)}
               onClick={() => void runSpendTest()}
             >
               {busy === `spend-${spendKind.toLowerCase()}` ? "Running spend…" : `Run ${spendKind === "PIX" ? "Pix" : "card"} spend`}
@@ -582,10 +653,10 @@ export function DevQaDashboard() {
             <div>
               <h2 className="tile-title" id="test-receive-qr">Test incoming QR payments</h2>
               <p className="body-s muted" style={{ margin: "4px 0 0" }}>
-                Creates a real provider sandbox charge. Complete it in the provider simulator, refresh it, and verify the Arc testnet mint.
+                Simulates a paid customer QR and credits the selected branch&apos;s local operating bank account.
               </p>
             </div>
-            <span className="sx-rail">receive → rail → Arc</span>
+            <span className="sx-rail">receive → local rail → bank</span>
           </div>
           <div className="grid" style={{ gap: 12 }}>
             <label className="sx-field s3">
@@ -611,9 +682,9 @@ export function DevQaDashboard() {
             </div>
           </div>
           <div className="tile-foot">
-            <span className="body-s muted">This writes sandbox activity and can mint test tokens; it never moves production money.</span>
+            <span className="body-s muted">This credits a sandbox bank balance. It does not mint tokens or move production money.</span>
             <button type="button" className="sx-btn sx-btn--primary" disabled={Boolean(busy) || !receiveBranch || Number(receiveAmount) <= 0} onClick={sendFakeReceivePayment}>
-              {busy === "receive-qr" ? "Validating…" : "Send fake payment & validate"}
+              {busy === "receive-qr" ? "Crediting…" : "Mock paid payment"}
             </button>
           </div>
           {receiveResult ? (

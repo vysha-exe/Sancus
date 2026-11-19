@@ -20,14 +20,35 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
   const rows = allRows.filter((company) => effectiveRole(allRows, membershipRows, user.id, company.id).role !== null)
   const ids = rows.map((company) => company.id)
 
-  const [wallets, deductions] = await Promise.all([
+  const [wallets, deductions, bankAccounts, bankHolds] = await Promise.all([
     listCompanyWallets(supabase, ids).then((records) => withBalances(records)),
     loadNodeDeductions(supabase, ids),
+    ids.length
+      ? supabase.from("sancus_receive_accounts").select("id, company_id, currency, balance_minor, bank_name").in("company_id", ids)
+      : Promise.resolve({ data: [] }),
+    ids.length
+      ? supabase.from("sancus_bank_holds").select("account_id, amount_minor").in("company_id", ids).eq("status", "ACTIVE")
+      : Promise.resolve({ data: [] }),
   ])
+  const heldByAccount = new Map<string, bigint>()
+  for (const hold of bankHolds.data ?? []) {
+    heldByAccount.set(hold.account_id, (heldByAccount.get(hold.account_id) ?? 0n) + BigInt(hold.amount_minor))
+  }
 
   return NextResponse.json({
     wallets,
     deductions: Object.fromEntries([...deductions].map(([companyId, amount]) => [companyId, amount.toString()])),
+    bankBalances: Object.fromEntries((bankAccounts.data ?? []).map((account) => {
+      const posted = BigInt(account.balance_minor)
+      const held = heldByAccount.get(account.id) ?? 0n
+      return [account.company_id, {
+        currency: String(account.currency),
+        balanceMinor: (posted > held ? posted - held : 0n).toString(),
+        postedMinor: posted.toString(),
+        heldMinor: held.toString(),
+        bankName: String(account.bank_name),
+      }]
+    })),
     fetchedAt: new Date().toISOString(),
   })
 })

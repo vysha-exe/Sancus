@@ -4,10 +4,8 @@ import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { getCompany } from "@/lib/sancus/company-api"
 import {
-  branchBank,
   executeInternalTransfer,
   fixedRate,
-  isLocalCurrency,
   localMinorForUsdc,
   toInternalTransferDto,
   type InternalTransferRow,
@@ -16,6 +14,8 @@ import { evaluatePayout, loadCompanyPolicy, spentToday } from "@/lib/sancus/poli
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { notifyApprovers } from "@/lib/sancus/approval-notify"
 import { serviceClient } from "@/lib/sancus/service-client"
+import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
+import type { CompanyRow } from "@/lib/sancus/companies"
 
 const createSchema = z.object({
   sourceCompanyId: z.string().uuid(),
@@ -47,6 +47,21 @@ async function walletFor(
     .limit(1)
     .maybeSingle()
   return data
+}
+
+async function bankAccountFor(
+  supabase: Parameters<Parameters<typeof withAuth>[0]>[1]["supabase"],
+  company: CompanyRow
+) {
+  const account = await ensureCompanyReceiveAccount(supabase, company)
+  if (account.currency !== company.base_currency) return null
+  return {
+    id: account.id,
+    bank_name: account.bank_name,
+    account_label: account.account_type,
+    account_last4: account.account_number.slice(-4),
+    currency: account.currency,
+  }
 }
 
 async function namesFor(
@@ -128,21 +143,23 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const account = await loadAccount(supabase, user)
   const globalAdmin = account.type === "ADMIN" && account.manageableCompanyIds().includes(source.id)
 
-  const [sourceWallet, destinationWallet] = await Promise.all([
+  const sourceCurrency = source.parent_id ? source.base_currency : "USDC"
+  const destinationCurrency = destination.parent_id ? destination.base_currency : "USDC"
+  const [sourceWallet, destinationWallet, sourceBank, destinationBank] = await Promise.all([
     walletFor(supabase, source.id),
     walletFor(db, destination.id),
+    source.parent_id ? bankAccountFor(db, source) : Promise.resolve(null),
+    destination.parent_id ? bankAccountFor(db, destination) : Promise.resolve(null),
   ])
   if (!sourceWallet || !destinationWallet) {
     return NextResponse.json({ error: "Both accounts need an Arc treasury wallet" }, { status: 409 })
   }
 
-  const sourceCurrency = source.parent_id ? source.base_currency : "USDC"
-  const destinationCurrency = destination.parent_id ? destination.base_currency : "USDC"
-  if (source.parent_id && !isLocalCurrency(sourceCurrency)) {
-    return NextResponse.json({ error: `${source.name} does not have a supported local settlement token yet` }, { status: 409 })
+  if (source.parent_id && !sourceBank) {
+    return NextResponse.json({ error: `${source.name} needs a ${sourceCurrency} operating bank account` }, { status: 409 })
   }
-  if (destination.parent_id && !isLocalCurrency(destinationCurrency)) {
-    return NextResponse.json({ error: `${destination.name} does not have a supported local settlement token yet` }, { status: 409 })
+  if (destination.parent_id && !destinationBank) {
+    return NextResponse.json({ error: `${destination.name} needs a ${destinationCurrency} operating bank account` }, { status: 409 })
   }
 
   const usdcAmountMinor = BigInt(Math.round(amountUsdc * 1_000_000))
@@ -170,7 +187,6 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     }
   }
 
-  const bank = source.parent_id ? branchBank(source.country, sourceWallet.address) : null
   const status = evaluation.decision === "NEEDS_APPROVAL" ? "PENDING_APPROVAL" : "QUEUED"
   // Written with the service client: a branch admin can't see (so RLS can't check) the destination.
   const { data: inserted, error } = await db
@@ -193,9 +209,11 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       source_address: sourceWallet.address,
       destination_wallet_id: destinationWallet.circle_wallet_id,
       destination_address: destinationWallet.address,
-      source_bank_name: bank?.name ?? null,
-      source_bank_label: bank?.label ?? null,
-      source_bank_last4: bank?.last4 ?? null,
+      source_bank_account_id: sourceBank?.id ?? null,
+      destination_bank_account_id: destinationBank?.id ?? null,
+      source_bank_name: sourceBank?.bank_name ?? null,
+      source_bank_label: sourceBank?.account_label ?? null,
+      source_bank_last4: sourceBank?.account_last4 ?? null,
       status,
       approval_reason: evaluation.reason,
       simulated: Boolean(source.parent_id || destination.parent_id),

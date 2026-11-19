@@ -11,6 +11,7 @@ import { serviceClient } from "./service-client"
 import { formatMinor, USDC_DECIMALS } from "./money"
 import { getAppKitSendError, sendUsdcOnSameChainWithAppKit } from "@/lib/circle/app-kit-send"
 import { FIXED_USD_RATES } from "./fixed-rates"
+import { releaseSpendFunds, settleSpendFunds } from "./spend-funding"
 
 const FIXED_SGD_FX_CONFIG: FxConfig = {
   midRateMicro: BigInt(Math.round(FIXED_USD_RATES.SGD * 1_000_000)),
@@ -62,6 +63,7 @@ export function preparePayout(input: QuoteInput, fx?: FxConfig): PreparedPayout 
 export type PayoutRow = {
   id: string
   user_id: string
+  company_id: string | null
   idempotency_key: string
   recipient_name: string
   proxy_type: "MOBILE" | "UEN" | "BANK"
@@ -76,6 +78,10 @@ export type PayoutRow = {
   client_rate: string
   spread_bps: number
   source_wallet_id: string | null
+  source_bank_account_id: string | null
+  funding_status: "UNFUNDED" | "HELD" | "SETTLED" | "RELEASED"
+  funding_amount_minor: number | string | null
+  funding_hold_reference: string | null
   source_address: string | null
   blockchain: string | null
   settlement_address: string | null
@@ -128,6 +134,7 @@ export async function refreshPayoutStatuses(supabase: SupabaseClient, rows: Payo
       const updated = error || !data ? { ...row, status: next, failure_reason } : (data as PayoutRow)
       if (error || !data) console.error("Failed to update payout status", row.id, error)
       await syncPayoutLedger(supabase, updated)
+      await syncPayoutBankFunding(supabase, updated)
       return updated
     })
   )
@@ -158,6 +165,18 @@ export async function syncPayoutLedger(supabase: SupabaseClient, row: PayoutRow)
   if (row.status === "COMPLETED") await post(payoutJournal("completed", view))
   if (row.status === "FAILED") await post(payoutJournal("failed", view))
   if (row.status === "REJECTED") await post(payoutJournal("rejected", view))
+}
+
+/** Keeps a branch payout's operating-bank hold aligned with provider state. */
+export async function syncPayoutBankFunding(supabase: SupabaseClient, row: PayoutRow): Promise<void> {
+  if (!row.source_bank_account_id || !row.funding_hold_reference || row.funding_status !== "HELD") return
+  if (row.status === "COMPLETED") {
+    await settleSpendFunds(supabase, { ref: row.funding_hold_reference })
+    await supabase.from("sancus_payouts").update({ funding_status: "SETTLED" }).eq("id", row.id)
+  } else if (row.status === "FAILED" || row.status === "REJECTED") {
+    await releaseSpendFunds(supabase, { ref: row.funding_hold_reference })
+    await supabase.from("sancus_payouts").update({ funding_status: "RELEASED" }).eq("id", row.id)
+  }
 }
 
 /** Updates a payout row and returns the fresh copy (falls back to a local merge on error). */
@@ -217,18 +236,29 @@ export async function executePayout(supabase: SupabaseClient, userId: string, ro
         failure_reason: `USDC transfer failed: ${mapped.userMessage ?? mapped.error}`,
       })
       await syncPayoutLedger(supabase, current)
+      await syncPayoutBankFunding(supabase, current)
       return current
     }
   }
 
-  const { providerRef } = await getPayoutProvider().submit({
-    id: current.id,
-    rail: current.rail,
-    status: current.status,
-    createdAt: new Date(current.approved_at ?? current.created_at),
-    sgdAmountMinor: BigInt(current.sgd_amount_minor),
-  })
-  return updatePayout(supabase, current, { provider_ref: providerRef })
+  try {
+    const { providerRef } = await getPayoutProvider().submit({
+      id: current.id,
+      rail: current.rail,
+      status: current.status,
+      createdAt: new Date(current.approved_at ?? current.created_at),
+      sgdAmountMinor: BigInt(current.sgd_amount_minor),
+    })
+    return updatePayout(supabase, current, { provider_ref: providerRef })
+  } catch (error) {
+    current = await updatePayout(supabase, current, {
+      status: "FAILED",
+      failure_reason: error instanceof Error ? error.message.slice(0, 500) : "Payout provider rejected the transfer",
+    })
+    await syncPayoutLedger(supabase, current)
+    await syncPayoutBankFunding(supabase, current)
+    return current
+  }
 }
 
 /** Shape returned to the browser. Minor-unit amounts stay strings to avoid float loss. */

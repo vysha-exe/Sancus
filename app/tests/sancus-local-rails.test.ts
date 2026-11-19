@@ -65,40 +65,43 @@ function fakeDb(row: CollectionRow) {
 }
 
 const base: CollectionRow = {
-  id: "c1", user_id: "u1", rail: "PROMPTPAY", currency: "THB", amount_minor: "50000", provider: "omise",
+  id: "c1", user_id: "u1", company_id: "bangkok", receive_account_id: "bank", rail: "PROMPTPAY", currency: "THB", amount_minor: "50000", provider: "omise",
   provider_ref: "chrg_test", status: "PENDING", simulated: false, qr_image_url: null, qr_payload: null,
   simulator_url: null, destination_address: "0x000000000000000000000000000000000000dEaD", destination_label: "Treasury",
-  token_address: "0x0", mint_tx: null, error: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  token_address: "0x0", mint_tx: null, bank_credited_at: null, error: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
 }
 
 describe("refreshCollection", () => {
-  it("stays pending while the rail is pending (no mint)", async () => {
+  it("stays pending while the rail is pending (no bank credit)", async () => {
     const { client, db } = fakeDb(base)
-    const mint = vi.fn()
-    const out = await refreshCollection(client, base, { mint, status: async () => "PENDING" })
+    const credit = vi.fn()
+    const out = await refreshCollection(client, base, { credit, status: async () => "PENDING" })
     expect(out.status).toBe("PENDING")
-    expect(mint).not.toHaveBeenCalled()
+    expect(credit).not.toHaveBeenCalled()
     expect(db.row.status).toBe("PENDING")
   })
-  it("mints exactly once when paid, with the right token, amount and ref", async () => {
+  it("credits the branch bank account exactly once when paid", async () => {
     const { client, db } = fakeDb(base)
-    const mint = vi.fn(async () => "0xabc" as const)
-    const out = await refreshCollection(client, base, { mint, status: async () => "PAID" })
-    expect(out.status).toBe("MINTED")
-    expect(db.row.mint_tx).toBe("0xabc")
-    expect(mint).toHaveBeenCalledWith("THB", base.destination_address, 50000n, "sancus:PROMPTPAY:chrg_test")
-    // A second (or concurrent) refresh of the stale row must not mint again.
-    await refreshCollection(client, { ...base, status: "PAID" }, { mint, status: async () => "PAID" })
-    expect(mint).toHaveBeenCalledTimes(1)
+    let deposits = 0
+    const credit = vi.fn(async (_client, row: CollectionRow) => {
+      if (db.row.status !== "PAID") return { ...db.row }
+      deposits++
+      db.row = { ...db.row, status: "CREDITED", bank_credited_at: new Date().toISOString() }
+      return { ...row, ...db.row }
+    })
+    const out = await refreshCollection(client, base, { credit, status: async () => "PAID" })
+    expect(out.status).toBe("CREDITED")
+    await refreshCollection(client, { ...base, status: "PAID" }, { credit, status: async () => "PAID" })
+    expect(deposits).toBe(1)
   })
-  it("puts it back to PAID with the error if the mint fails, so it retries", async () => {
+  it("keeps it PAID with the error if the bank credit fails, so it retries", async () => {
     const { client, db } = fakeDb(base)
     const out = await refreshCollection(client, base, {
-      mint: async () => { throw new Error("out of gas") },
+      credit: async () => { throw new Error("bank unavailable") },
       status: async () => "PAID",
     })
     expect(out.status).toBe("PAID")
     expect(db.row.status).toBe("PAID")
-    expect(db.row.error).toContain("out of gas")
+    expect(db.row.error).toContain("bank unavailable")
   })
 })

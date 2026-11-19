@@ -5,6 +5,7 @@ import { createAdminContext, withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { toEmployeeCardPurchaseDto, type EmployeeCardPurchaseRow } from "@/lib/sancus/employee-spending"
 import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
+import { reserveSpendFunds } from "@/lib/sancus/spend-funding"
 
 const schema = z.object({
   methodId: z.string().uuid(),
@@ -56,6 +57,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (parsed.data.source === "SPENDING_METHOD" && (method.method_type !== "CARD" || method.status !== "ACTIVE")) {
     return NextResponse.json({ error: `Declined: card access is ${String(method.status).toLowerCase()}` }, { status: 403 })
   }
+  if (!method.company_id || !method.funding_account_id) {
+    return NextResponse.json({ error: "This card is not linked to a branch operating bank account" }, { status: 409 })
+  }
 
   const currency = String(method.currency)
   const scale = zeroDecimal.has(currency) ? 1 : 100
@@ -94,11 +98,32 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     employee_name: method.employee_name,
     card_id: parsed.data.source === "CARD" ? method.id : null,
     spending_method_id: parsed.data.source === "SPENDING_METHOD" ? method.id : null,
+    company_id: method.company_id,
+    funding_account_id: method.funding_account_id,
     merchant_name: parsed.data.merchantName,
     amount_minor: amountMinor,
     currency,
     status: "HELD",
   }).select("*").single()
   if (error || !data) return NextResponse.json({ error: "Could not create the card authorization" }, { status: 500 })
+  try {
+    const holdRef = `card:${data.id}`
+    await reserveSpendFunds(admin, {
+      accountId: method.funding_account_id,
+      amountMinor: BigInt(data.amount_minor),
+      ref: holdRef,
+      sourceType: "CARD_PURCHASE",
+      sourceId: data.id,
+    })
+    await admin.from("sancus_card_purchases").update({
+      funding_status: "HELD", funding_amount_minor: String(data.amount_minor), funding_hold_tx_hash: holdRef,
+    }).eq("id", data.id)
+  } catch (cause) {
+    await admin.from("sancus_card_purchases").update({
+      status: "DECLINED", funding_status: "UNFUNDED",
+      decline_reason: cause instanceof Error ? cause.message : "Insufficient bank balance",
+    }).eq("id", data.id)
+    return NextResponse.json({ error: cause instanceof Error ? cause.message : "Insufficient bank balance" }, { status: 409 })
+  }
   return NextResponse.json({ purchase: toEmployeeCardPurchaseDto(data as EmployeeCardPurchaseRow) }, { status: 201 })
 })

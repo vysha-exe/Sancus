@@ -1,3 +1,6 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import type { CompanyRow } from "./companies"
+
 export type ReceiveAccount = {
   companyId: string
   bankName: string
@@ -7,6 +10,24 @@ export type ReceiveAccount = {
   routingLabel: string
   routingValue: string
   currency: string
+  balanceMinor: string
+  postedMinor: string
+  heldMinor: string
+  provider: string
+  simulated: boolean
+}
+
+export type ReceiveAccountRow = {
+  id: string
+  company_id: string
+  bank_name: string
+  account_name: string
+  account_number: string
+  account_type: string
+  routing_label: string
+  routing_value: string
+  currency: string
+  balance_minor: number | string
   provider: string
   simulated: boolean
 }
@@ -53,7 +74,64 @@ export function sandboxReceiveAccount(company: { id: string; name: string; count
     routingLabel: preset.routingLabel,
     routingValue: preset.routingValue,
     currency: company.currency,
+    balanceMinor: "0",
+    postedMinor: "0",
+    heldMinor: "0",
     provider: "Sancus sandbox",
     simulated: true,
   }
+}
+
+const RECEIVE_ACCOUNT_COLUMNS = "id, company_id, bank_name, account_name, account_number, account_type, routing_label, routing_value, currency, balance_minor, provider, simulated"
+
+/**
+ * Return the branch operating account, creating its deterministic sandbox
+ * account when an older branch predates the database seed trigger.
+ */
+export async function ensureCompanyReceiveAccount(
+  supabase: SupabaseClient,
+  company: Pick<CompanyRow, "id" | "name" | "country" | "base_currency">
+): Promise<ReceiveAccountRow> {
+  const existing = await supabase
+    .from("sancus_receive_accounts")
+    .select(RECEIVE_ACCOUNT_COLUMNS)
+    .eq("company_id", company.id)
+    .maybeSingle()
+  if (existing.data) return existing.data as ReceiveAccountRow
+  if (existing.error) throw new Error(existing.error.message)
+
+  const fallback = sandboxReceiveAccount({
+    id: company.id,
+    name: company.name,
+    country: company.country,
+    currency: company.base_currency,
+  })
+  const inserted = await supabase
+    .from("sancus_receive_accounts")
+    .insert({
+      company_id: company.id,
+      bank_name: fallback.bankName,
+      account_name: fallback.accountName,
+      account_number: fallback.accountNumber,
+      account_type: fallback.accountType,
+      routing_label: fallback.routingLabel,
+      routing_value: fallback.routingValue,
+      currency: fallback.currency,
+      provider: fallback.provider,
+      simulated: fallback.simulated,
+    })
+    .select(RECEIVE_ACCOUNT_COLUMNS)
+    .single()
+  if (inserted.data) return inserted.data as ReceiveAccountRow
+
+  // Another concurrent request may have created the unique company account.
+  if (inserted.error?.code === "23505") {
+    const replay = await supabase
+      .from("sancus_receive_accounts")
+      .select(RECEIVE_ACCOUNT_COLUMNS)
+      .eq("company_id", company.id)
+      .single()
+    if (replay.data) return replay.data as ReceiveAccountRow
+  }
+  throw new Error(inserted.error?.message ?? "Could not create the branch operating bank account")
 }

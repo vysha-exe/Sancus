@@ -80,6 +80,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
     "postcss": "^8",
+    "solc": "^0.8.38",
     "supabase": "^2.93.0",
     "tailwindcss": "^4.1.17",
     "tailwindcss-animate": "^1.0.7",

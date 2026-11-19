@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { readFileSync } from "node:fs"
 import { sandboxReceiveAccount } from "@/lib/sancus/receive-accounts"
 
 describe("sandbox receive accounts", () => {
@@ -43,5 +44,26 @@ describe("sandbox receive accounts", () => {
     expect(account.bankName).toBe("Local operating bank")
     expect(account.routingValue).toBe("SANCUS00")
     expect(account.accountNumber).toHaveLength(12)
+  })
+
+  it("creates the expected THB operating account for Bangkok", () => {
+    const account = sandboxReceiveAccount({
+      id: "f64e7840-a66e-408f-8175-c22cc53853f5",
+      name: "Lion City Bangkok",
+      country: "TH",
+      currency: "THB",
+    })
+
+    expect(account.bankName).toBe("Kasikornbank")
+    expect(account.routingValue).toBe("004")
+    expect(account.currency).toBe("THB")
+  })
+
+  it("auto-provisions missing branch accounts before internal transfers", () => {
+    const source = readFileSync(new URL("../app/api/sancus/internal-transfers/route.ts", import.meta.url), "utf8")
+    expect(source).toContain("ensureCompanyReceiveAccount")
+    expect(source).toContain("account.account_type")
+    expect(source).toContain("account.account_number.slice(-4)")
+    expect(source).not.toContain('.select("id, bank_name, account_label, account_last4, currency")')
   })
 })

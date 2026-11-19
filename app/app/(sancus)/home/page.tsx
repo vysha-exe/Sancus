@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { HomeBalance } from "@/components/sancus-ui/home-balance"
+import { useEffect, useState } from "react"
+import { HomeBalance, type HomeTreasuryPositions } from "@/components/sancus-ui/home-balance"
 import { LatestPayments } from "@/components/sancus-ui/latest-payments"
 import { NeedsYou } from "@/components/sancus-ui/needs-you"
 import {
@@ -14,7 +15,12 @@ import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { accountDisplayName, useAccount } from "@/lib/sancus/use-account"
 import { countryByCode } from "@/lib/sancus/countries"
 import type { CompanyNode } from "@/lib/sancus/companies"
-import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
+
+function decimalUsdcMinor(value: string): string {
+  const match = value.trim().match(/^(\d+)(?:\.(\d+))?$/)
+  if (!match) return "0"
+  return (BigInt(match[1]) * 1_000_000n + BigInt(`${match[2] ?? ""}000000`.slice(0, 6))).toString()
+}
 
 export default function HomePage() {
   const ws = useWorkspace()
@@ -24,6 +30,48 @@ export default function HomePage() {
   const personal = isAdmin ? false : ws.ready ? ws.isPersonal : !ws.hasBusiness
   const activeName = ws.activeNode?.name ?? accountDisplayName(account, workspace.name)
   const showBranchOverview = !personal && ws.activeNode?.parentId === null
+  const [rootAssets, setRootAssets] = useState<(HomeTreasuryPositions & { companyId: string }) | null>(null)
+  const rootCompanyId = showBranchOverview ? ws.activeNode?.id ?? null : null
+
+  useEffect(() => {
+    if (!rootCompanyId) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const [rootResponse, equityResponse, yieldResponse] = await Promise.all([
+          fetch("/api/sancus/treasury/root", { cache: "no-store" }),
+          fetch("/api/sancus/treasury/equities", { cache: "no-store" }).catch(() => null),
+          fetch("/api/sancus/treasury/yield", { cache: "no-store" }).catch(() => null),
+        ])
+        if (!rootResponse.ok) return
+        const root = await rootResponse.json() as { assets?: { fUsdcMinor?: string } }
+        const equity = equityResponse?.ok
+          ? await equityResponse.json() as { portfolio?: { symbol: string; valueMinor: string }[] }
+          : null
+        const earn = yieldResponse?.ok
+          ? await yieldResponse.json() as {
+              vaults?: { vaultAddress: string; name: string; protocol: string }[]
+              positions?: { vaultAddress: string; currentBalance: string }[]
+            }
+          : null
+        if (cancelled || root.assets?.fUsdcMinor === undefined) return
+        const yieldPositions = (earn?.vaults ?? []).map((vault) => {
+          const current = earn?.positions?.find((item) => item.vaultAddress.toLowerCase() === vault.vaultAddress.toLowerCase())
+          return { ...vault, valueMinor: decimalUsdcMinor(current?.currentBalance ?? "0") }
+        })
+        setRootAssets({
+          companyId: rootCompanyId,
+          fUsdcMinor: String(root.assets.fUsdcMinor),
+          equities: equity?.portfolio?.map((item) => ({ symbol: item.symbol, valueMinor: String(item.valueMinor) })) ?? [],
+          yield: yieldPositions.map((item) => ({ name: item.name, protocol: item.protocol, valueMinor: item.valueMinor })),
+        })
+      } catch {
+        // The bank-first dashboard remains usable if an optional Treasury provider is unavailable.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [rootCompanyId])
+  const positions = rootAssets?.companyId === rootCompanyId ? rootAssets : null
 
   return (
     <div className="page home-page">
@@ -46,12 +94,12 @@ export default function HomePage() {
       </header>
 
       <div className="grid home-dashboard">
-        <HomeBalance />
+        <HomeBalance positions={positions} />
 
         <NeedsYou />
 
         {showBranchOverview ? (
-          <ParentBranchBalances tree={ws.tree} ready={ws.ready && ws.balancesReady} formatBalance={ws.formatBalance} />
+          <ParentBranchBalances tree={ws.tree} ready={ws.ready && ws.balancesReady} formatBalance={ws.formatBalance} positions={positions} />
         ) : null}
 
         <section className={`tile s8${personal ? " r2" : ""}`} aria-labelledby="latest">
@@ -185,21 +233,30 @@ export default function HomePage() {
     </div>
   )
 }
-
 function ParentBranchBalances({
   tree,
   ready,
   formatBalance,
+  positions,
 }: {
   tree: CompanyNode[]
   ready: boolean
   formatBalance: (minor: string) => string
+  positions: HomeTreasuryPositions | null
 }) {
   const parent = tree.find((node) => node.parentId === null) ?? tree[0] ?? null
   const branches = parent?.children ?? []
   const rows = parent
     ? [{ node: parent, level: "Parent" }, ...branches.map((node) => ({ node, level: "Branch" }))]
     : []
+  const bankMoney = (node: CompanyNode) => {
+    const balanceMinor = node.bankBalance?.balanceMinor ?? "0"
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: node.bankBalance?.currency ?? node.currency,
+      maximumFractionDigits: (node.bankBalance?.currency ?? node.currency) === "IDR" ? 0 : 2,
+    }).format(Number(balanceMinor) / 100)
+  }
 
   return (
     <section className="tile s12 home-branches" aria-labelledby="branch-balances" aria-busy={!ready}>
@@ -224,11 +281,14 @@ function ParentBranchBalances({
                 </div>
                 <div className="home-branch-card__identity">
                   <strong>{node.name}</strong>
-                  <span>{isParent ? "Global treasury · USDC" : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}</span>
+                  <span>{isParent ? `Global treasury · ${node.bankBalance?.currency ?? node.currency}` : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}</span>
                 </div>
                 <div className="home-branch-card__balance">
-                  <span>{formatBalance(node.ownMinor)}</span>
-                  <small>{isParent ? `${node.wallets.length} ${node.wallets.length === 1 ? "wallet" : "wallets"}` : localBalance(node.ownMinor, node.currency)}</small>
+                  <span>{bankMoney(node)}</span>
+                  <small>{node.bankBalance?.bankName ?? "Local bank"} operating account</small>
+                  <small className="home-branch-card__stablecoin">Stablecoin liquidity · {formatBalance(node.ownMinor)} USDC · {node.wallets.length} {node.wallets.length === 1 ? "wallet" : "wallets"}</small>
+                  {isParent && positions ? <small className="home-branch-card__stablecoin">Internal liquidity · {formatBalance(positions.fUsdcMinor)} fUSDC</small> : null}
+                  {isParent && positions ? <small className="home-branch-card__stablecoin">Investments · {formatBalance(positions.equities.reduce((sum, item) => sum + BigInt(item.valueMinor), 0n).toString())} stocks · {formatBalance(positions.yield.reduce((sum, item) => sum + BigInt(item.valueMinor), 0n).toString())} yield</small> : null}
                 </div>
                 <span className="home-branch-card__open" aria-hidden>Open →</span>
               </Link>
@@ -239,7 +299,6 @@ function ParentBranchBalances({
     </section>
   )
 }
-
 function CompanySnapshot({ tree, ready }: { tree: CompanyNode[]; ready: boolean }) {
   const parent = tree.find((node) => node.parentId === null) ?? tree[0] ?? null
   const branches = parent?.children ?? []
@@ -271,16 +330,4 @@ function CompanySnapshot({ tree, ready }: { tree: CompanyNode[]; ready: boolean 
     </section>
   )
 }
-
-function localBalance(usdcMinor: string, currency: string): string {
-  const rate = FIXED_USD_RATES[currency as keyof typeof FIXED_USD_RATES]
-  if (!rate) return `Local balance unavailable · ${currency}`
-  const localAmount = Number(BigInt(usdcMinor)) / 1_000_000 * rate
-  const zeroDecimal = new Set(["IDR", "JPY", "KRW", "VND"])
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency", currency, currencyDisplay: "narrowSymbol",
-    minimumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
-    maximumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
-  }).format(localAmount)
-  return `${formatted} ${currency}`
-}
+CompanySnapshot.displayName = "CompanySnapshot"

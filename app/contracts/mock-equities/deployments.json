@@ -1,0 +1,16 @@
+{
+  "nvda": {
+    "address": "0x337a410f3a881b41d4a1c10e4bcea5516777a0d2",
+    "deployTx": "0xbd06f508ccd70e944e86e3b3881f04392f149c24948d97c8734a5e50caed4fd8"
+  },
+  "googl": {
+    "address": "0xf14a659386a00d9bb4e51b73a822c25c098a2e53",
+    "deployTx": "0x2edad352cd0918e5f07cf2a39fd8abf55581226a270f4f9c73cc41e322049259"
+  },
+  "broker": {
+    "address": "0x92a9e4cfaa4d35dd1f27a28c1728bdf1d5719a04",
+    "deployTx": "0xa834121239dc341b3542790021c818bfb60a5285055c2ba4c91a843d722024eb"
+  },
+  "chainId": 5042002,
+  "fUsdc": "0x5ae6d882b075628ea839e57cf422172434f27e0c"
+}

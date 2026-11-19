@@ -31,6 +31,11 @@ export const ACCOUNTS = {
   fees: "fees:partner",
   funding: "funding:external",
   revenueX402: "revenue:x402",
+  gatewayUsdc: "treasury:gateway_usdc",
+  walletUsdc: "treasury:wallet_usdc",
+  walletFusdc: "treasury:wallet_fusdc",
+  allocationUsdc: "assets:allocation_usdc",
+  allocationFusdc: "assets:allocation_fusdc",
   external: (rail: string) => `external:${rail.toLowerCase()}`,
 } as const
 
@@ -42,8 +47,58 @@ export function x402Journal(earningId: string, amountMinor: bigint, endpoint: st
     event: "settled",
     memo: `Agent paid for ${endpoint}`,
     entries: [
-      { account: ACCOUNTS.available, direction: "DEBIT", amountMinor },
+      { account: ACCOUNTS.gatewayUsdc, direction: "DEBIT", amountMinor },
       { account: ACCOUNTS.revenueX402, direction: "CREDIT", amountMinor },
+    ],
+  }
+}
+
+export function gatewayMintJournal(moveId: string, amountMinor: bigint): Journal {
+  return {
+    sourceType: "treasury_gateway",
+    sourceId: moveId,
+    event: "confirmed",
+    memo: "Gateway USDC moved into the parent Arc treasury",
+    entries: [
+      { account: ACCOUNTS.walletUsdc, direction: "DEBIT", amountMinor },
+      { account: ACCOUNTS.gatewayUsdc, direction: "CREDIT", amountMinor },
+    ],
+  }
+}
+
+export function equityAllocationJournal(
+  allocationId: string,
+  action: "BUY" | "SELL",
+  amountMinor: bigint,
+  symbol: string
+): Journal {
+  const buy = action === "BUY"
+  return {
+    sourceType: "treasury_equity",
+    sourceId: allocationId,
+    event: action.toLowerCase(),
+    memo: `${action === "BUY" ? "Bought" : "Sold"} ${symbol}`,
+    entries: [
+      { account: buy ? ACCOUNTS.allocationFusdc : ACCOUNTS.walletFusdc, direction: "DEBIT", amountMinor, currency: "fUSDC" },
+      { account: buy ? ACCOUNTS.walletFusdc : ACCOUNTS.allocationFusdc, direction: "CREDIT", amountMinor, currency: "fUSDC" },
+    ],
+  }
+}
+
+export function yieldAllocationJournal(
+  actionId: string,
+  action: "DEPOSIT" | "WITHDRAW",
+  amountMinor: bigint
+): Journal {
+  const deposit = action === "DEPOSIT"
+  return {
+    sourceType: "treasury_yield",
+    sourceId: actionId,
+    event: action.toLowerCase(),
+    memo: `${action === "DEPOSIT" ? "Deposited into" : "Withdrew from"} a parent treasury yield vault`,
+    entries: [
+      { account: deposit ? ACCOUNTS.allocationUsdc : ACCOUNTS.walletUsdc, direction: "DEBIT", amountMinor },
+      { account: deposit ? ACCOUNTS.walletUsdc : ACCOUNTS.allocationUsdc, direction: "CREDIT", amountMinor },
     ],
   }
 }

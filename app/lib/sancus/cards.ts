@@ -2,6 +2,9 @@ export type SancusCardStatus = "ACTIVE" | "SUSPENDED" | "TERMINATED"
 
 export type SancusCardDto = {
   id: string
+  companyId: string | null
+  fundingAccountId: string | null
+  fundingWalletId: string | null
   employeeId: string
   employeeName: string
   label: string
@@ -17,6 +20,9 @@ export type SancusCardDto = {
 
 export type SancusCardRow = {
   id: string
+  company_id: string | null
+  funding_account_id?: string | null
+  funding_wallet_id: string | null
   employee_id: string
   employee_name: string
   label: string
@@ -33,6 +39,9 @@ export type SancusCardRow = {
 export function toSancusCardDto(row: SancusCardRow): SancusCardDto {
   return {
     id: row.id,
+    companyId: row.company_id,
+    fundingAccountId: row.funding_account_id ?? null,
+    fundingWalletId: row.funding_wallet_id,
     employeeId: row.employee_id,
     employeeName: row.employee_name,
     label: row.label,

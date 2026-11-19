@@ -1,8 +1,8 @@
 "use client"
 
 // Receive › Local rails: charge a customer by QRIS (Indonesia), PromptPay (Thailand) or Pix
-// (Brazil) in sandbox. When the rail reports paid, the rail bot mints the matching mock
-// stablecoin (mIDR / mTHB / mBRL) on Arc testnet into the wallet for that country.
+// (Brazil) in sandbox. When the rail reports paid, funds settle into the branch's
+// local operating bank account; Arc wallets remain a separate liquidity surface.
 import { useCallback, useEffect, useState } from "react"
 
 type Rail = "QRIS" | "PROMPTPAY" | "PIX"
@@ -22,7 +22,7 @@ type Collection = {
   currency: string
   amountMinor: string
   provider: string
-  status: "PENDING" | "PAID" | "MINTING" | "MINTED" | "FAILED" | "EXPIRED"
+  status: "PENDING" | "PAID" | "CREDITING" | "CREDITED" | "MINTING" | "MINTED" | "FAILED" | "EXPIRED"
   simulated: boolean
   qrImageUrl: string | null
   qrPayload: string | null
@@ -39,13 +39,15 @@ const DEFAULT_AMOUNT: Record<Rail, string> = { QRIS: "150000", PROMPTPAY: "500",
 const FLAG: Record<Rail, string> = { QRIS: "🇮🇩", PROMPTPAY: "🇹🇭", PIX: "🇧🇷" }
 const STATUS_LABEL: Record<Collection["status"], string> = {
   PENDING: "Waiting for payment",
-  PAID: "Paid · minting",
-  MINTING: "Minting on Arc",
-  MINTED: "Received",
+  PAID: "Paid · depositing",
+  CREDITING: "Depositing to bank",
+  CREDITED: "Received in bank",
+  MINTING: "Legacy Arc settlement",
+  MINTED: "Legacy receipt",
   FAILED: "Failed",
   EXPIRED: "Expired",
 }
-const live = (s: Collection["status"]) => s === "PENDING" || s === "PAID" || s === "MINTING"
+const live = (s: Collection["status"]) => s === "PENDING" || s === "PAID" || s === "CREDITING" || s === "MINTING"
 const money = (minor: string, cur: string) =>
   `${(Number(minor) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${cur}`
 
@@ -137,8 +139,7 @@ export function LocalCollectCard() {
         </h2>
       </div>
       <p className="body-s muted" style={{ margin: 0 }}>
-        Your customer pays by their local QR rail. When it settles, a matching test stablecoin is minted on Arc
-        into your wallet for that country.
+        Your customer pays by their local QR rail. When it settles, the branch&apos;s local operating bank account is credited.
       </p>
 
       {state === "signed-out" ? (
@@ -171,7 +172,7 @@ export function LocalCollectCard() {
                 {outOfRange && info
                   ? `Between ${money(info.minMinor, info.currency)} and ${money(info.maxMinor, info.currency)}`
                   : info
-                    ? `Mints ${info.token.symbol} · ${info.label}`
+                    ? `Deposits to the branch bank · ${info.label}`
                     : "Loading rails…"}
               </span>
             </label>
@@ -223,10 +224,10 @@ export function LocalCollectCard() {
                   </span>
                   <span className="body-s" role="status">
                     {STATUS_LABEL[latest.status]}
-                    {latest.status === "MINTED" ? ` · ${money(latest.amountMinor, latest.token.symbol)} in ${latest.destination.label}` : ""}
+                    {latest.status === "CREDITED" ? ` · ${money(latest.amountMinor, latest.currency)} in ${latest.destination.label}` : ""}
                   </span>
                   <span className="body-s muted">
-                    Into {latest.destination.label} · {latest.destination.address.slice(0, 6)}…{latest.destination.address.slice(-4)}
+                    Into {latest.destination.label} · account ending {latest.destination.address.slice(-4)}
                   </span>
                   <div className="tile-foot" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
                     {latest.status === "PENDING" && latest.provider !== "midtrans" ? (
