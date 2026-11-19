@@ -37,7 +37,7 @@ export function StaticReceiveLinks() {
   useEffect(() => {
     let current = true
     if (!publicUrl) return
-    void QRCode.toDataURL(publicUrl, { width: 260, margin: 1, errorCorrectionLevel: "M" }).then((value) => {
+    void QRCode.toDataURL(publicUrl, { width: 260, margin: 1, errorCorrectionLevel: "M" }).then((value: string) => {
       if (current) setQrUrl(value)
     })
     return () => { current = false }
