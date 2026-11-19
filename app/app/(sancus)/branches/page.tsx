@@ -1,6 +1,6 @@
 "use client"
 
-// Sancus: one global treasury → direct country branches, each with its own wallet.
+// Sancus: one global treasury → direct country branches with operating accounts and cross-border wallets.
 import { useState, type FormEvent } from "react"
 import Link from "next/link"
 import {
@@ -19,6 +19,12 @@ import { useAccount } from "@/lib/sancus/use-account"
 import { useCompanies } from "@/lib/sancus/use-companies"
 
 const usd = (minor: string) => `$${displayMinor(BigInt(minor), USDC_DECIMALS, "", 2)}`
+const primaryBalance = (node: CompanyNode) => {
+  if (node.parentId === null) return usd(node.ownMinor)
+  const currency = node.bankBalance?.currency ?? node.currency
+  return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: currency === "IDR" ? 0 : 2 })
+    .format(Number(node.bankBalance?.balanceMinor ?? "0") / 100)
+}
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
 const flag = (code: string) => countryByCode(code)?.flag ?? "🏳️"
 
@@ -62,7 +68,6 @@ export default function BranchesPage() {
   const mode = !ws.ready || !accountState.ready ? "loading" : accountState.signedOut ? "demo" : "live"
 
   const tree = mode === "demo" ? demoTree : ws.tree
-  const total = tree.reduce((s, n) => s + BigInt(n.totalMinor), 0n)
   const nodes = mode === "demo" ? 2 : tree.reduce((sum, root) => sum + root.children.length, 0)
   const walletCount = mode === "demo" ? 3 : companiesData.walletCount
   const balancesReady = mode === "demo" || companiesData.balancesReady
@@ -73,7 +78,7 @@ export default function BranchesPage() {
         <div>
           <h1 className="sx-h heading-2">Branches</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            One global treasury with a direct branch for each country. Every branch keeps its own wallet and balance.
+            Every country branch has a local operating bank account and separate wallet liquidity for cross-border movement.
           </p>
         </div>
         {mode === "live" ? <span className="sx-pill sx-pill--settled">Live</span> : null}
@@ -81,8 +86,8 @@ export default function BranchesPage() {
 
       <div className="grid">
         <div className="tile s4">
-          <span className="sx-label">Across every branch</span>
-          <span className="big">{balancesReady ? usd(total.toString()) : "***"}</span>
+          <span className="sx-label">Operating accounts</span>
+          <span className="big">{balancesReady ? nodes : "***"}</span>
         </div>
         <div className="tile s4">
           <span className="sx-label">Branches</span>
@@ -280,10 +285,8 @@ function BranchNode({
           </span>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div className="body-strong">{balancesReady ? usd(node.ownMinor) : "***"}</div>
-          {node.children.length ? (
-            <div className="body-s muted">{balancesReady ? usd(node.totalMinor) : "***"} with branches</div>
-          ) : null}
+          <div className="body-strong">{balancesReady ? primaryBalance(node) : "***"}</div>
+          <div className="body-s muted">{isRoot ? "Wallet treasury" : "Available bank balance"}</div>
         </div>
       </div>
 
@@ -303,6 +306,7 @@ function BranchNode({
 
       {node.wallets.length ? (
         <div className="sx-rows">
+          <span className="sx-label">Wallet liquidity · cross-border and on-chain only</span>
           {node.wallets.map((w) => (
             <div key={w.walletId} className="sx-row">
               <span className="sx-row__who">{w.name}</span>

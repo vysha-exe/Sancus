@@ -21,6 +21,12 @@ function TreeNodes({
   balancesReady: boolean
   depth?: number
 }) {
+  const nodeBalance = (node: CompanyNode) => {
+    if (node.parentId === null) return formatBalance(node.ownMinor)
+    const currency = node.bankBalance?.currency ?? node.currency
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: currency === "IDR" ? 0 : 2 })
+      .format(Number(node.bankBalance?.balanceMinor ?? "0") / 100)
+  }
   return (
     <ul className="tree" style={depth === 0 ? undefined : { margin: 0, paddingLeft: 12, listStyle: "none" }}>
       {nodes.map((n) => (
@@ -36,7 +42,7 @@ function TreeNodes({
             <span className="trunc" style={{ paddingLeft: depth * 8 }}>
               {n.name}
             </span>
-            <span className="amt">{balancesReady ? formatBalance(n.totalMinor) : "***"}</span>
+            <span className="amt">{balancesReady ? nodeBalance(n) : "***"}</span>
           </button>
           {n.children.length > 0 ? (
             <TreeNodes

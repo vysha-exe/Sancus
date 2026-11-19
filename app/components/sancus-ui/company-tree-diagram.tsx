@@ -12,6 +12,12 @@ const { boxWidth: W, boxHeight: H } = DEFAULT_LAYOUT
 
 const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s)
 const usd = (minor: string) => `$${displayMinor(BigInt(minor), USDC_DECIMALS, "", 2)}`
+const balance = (node: CompanyNode) => {
+  if (node.parentId === null) return usd(node.ownMinor)
+  const currency = node.bankBalance?.currency ?? node.currency
+  return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: currency === "IDR" ? 0 : 2 })
+    .format(Number(node.bankBalance?.balanceMinor ?? "0") / 100)
+}
 
 function level(n: CompanyNode) {
   if (n.parentId === null) return "Global account"
@@ -57,7 +63,7 @@ export function CompanyTreeDiagram({ tree, balancesReady }: { tree: CompanyNode[
           const root = node.parentId === null
           const left = x - W / 2
           const walletLabel = `${node.wallets.length} wallet${node.wallets.length === 1 ? "" : "s"}`
-          const balanceLabel = balancesReady ? usd(node.totalMinor) : "***"
+          const balanceLabel = balancesReady ? balance(node) : "***"
           return (
             <g
               key={node.id}
@@ -86,13 +92,13 @@ export function CompanyTreeDiagram({ tree, balancesReady }: { tree: CompanyNode[
                 {clip(node.name, 15)}
               </text>
               <text x={10} y={46} fontSize={10} fill="var(--ink-muted)" letterSpacing="0.06em" style={{ fontFamily: "var(--font-mono)", textTransform: "uppercase" }}>
-                {root ? "Global treasury · USDC" : `${level(node)} · ${node.currency}`}
+                {root ? "Global treasury · USDC" : `${level(node)} bank · ${node.currency}`}
               </text>
               <text x={10} y={66} fontSize={13} fontWeight={600} fill="var(--ink)" style={{ fontFamily: "var(--font-sans)", fontVariantNumeric: "tabular-nums" }}>
                 {balanceLabel}
               </text>
               <text x={W - 10} y={66} textAnchor="end" fontSize={11} fill="var(--ink-muted)" style={{ fontFamily: "var(--font-sans)" }}>
-                {walletLabel}
+                {root ? walletLabel : "bank first"}
               </text>
             </g>
           )

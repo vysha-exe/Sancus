@@ -67,8 +67,8 @@ export interface AppKitSendInput {
   sourceWalletAddress: string;
   recipientAddress: string;
   amount: string;
-  /** Defaults to "USDC". "EURC" sends the EURC contract address for the chain instead. */
-  token?: Currency;
+  /** Defaults to canonical USDC. fUSDC is an explicit internal testnet asset. */
+  token?: Currency | "fUSDC";
 }
 
 export interface AppKitSendResult {
@@ -87,6 +87,7 @@ export function buildAppKitSendParams(
   input: AppKitSendInput,
   adapter: CircleWalletsAdapter
 ): SendParams {
+  if (input.token === "fUSDC") throw new Error("fUSDC uses the explicit rail-bot transfer path")
   const appKitChain = APP_KIT_CHAIN_BY_BLOCKCHAIN[input.sourceBlockchain];
   if (!appKitChain) {
     throw new Error(`Unsupported source blockchain: ${input.sourceBlockchain}`);
@@ -183,8 +184,9 @@ export async function sendUsdcOnSameChainWithAppKit(
   input: AppKitSendInput,
   dependencies: SendDependencies = defaultDependencies
 ): Promise<AppKitSendResult> {
-  // Test mode: move Face USDC via the rail bot (burn treasury → mint recipient) instead of Circle App Kit.
-  if ((input.token ?? "USDC") === "USDC" && input.sourceBlockchain === "ARC-TESTNET") {
+  // Internal test mode: move fUSDC via the rail bot. Canonical USDC always
+  // continues through Circle App Kit.
+  if (input.token === "fUSDC" && input.sourceBlockchain === "ARC-TESTNET") {
     try {
       const { faceUsdcEnabled, sendFaceUsdc } = await import("@/lib/sancus/face-usdc");
       if (faceUsdcEnabled()) {

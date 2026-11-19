@@ -1,12 +1,13 @@
 // Sancus: payout route quotes sold to agents over x402.
-// Indonesia (BI-FAST) and Thailand (PromptPay), quoted with the same USDC math as the app's payouts.
+// Singapore uses the same quoting as real Sancus payouts. Indonesia and Thailand
+// are indicative (configured rates, simulated rails) until partners are live.
 
 import { formatRate, quoteSgdPayout, RATE_SCALE, type FxConfig } from "./fx"
 import { displayMinor, parseToMinor, USDC_DECIMALS } from "./money"
 import { FIXED_USD_RATES } from "./fixed-rates"
 
-export type Country = "ID" | "TH"
-export type RecipientType = "MOBILE" | "BANK"
+export type Country = "SG" | "ID" | "TH"
+export type RecipientType = "UEN" | "MOBILE" | "BANK"
 
 type RailOption = { rail: string; feeMinor: bigint; eta: string; needs: RecipientType[] }
 
@@ -20,6 +21,17 @@ type Corridor = {
 }
 
 const CORRIDORS: Record<Country, Corridor> = {
+  SG: {
+    country: "SG",
+    currency: "SGD",
+    symbol: "S$",
+    live: true,
+    defaultRate: String(FIXED_USD_RATES.SGD),
+    rails: [
+      { rail: "PayNow", feeMinor: 50n, eta: "seconds", needs: ["UEN", "MOBILE"] },
+      { rail: "FAST", feeMinor: 50n, eta: "seconds", needs: ["BANK"] },
+    ],
+  },
   ID: {
     country: "ID",
     currency: "IDR",
@@ -78,13 +90,13 @@ export function routeQuote(
   now: Date = new Date()
 ): RouteQuoteResult {
   void _env // Kept in the signature for API compatibility; demo rates are fixed.
-  const country = (params.country || "TH").toUpperCase() as Country
+  const country = (params.country || "SG").toUpperCase() as Country
   const corridor = CORRIDORS[country]
-  if (!corridor) return { ok: false, error: `Unsupported country "${params.country}". Use ID or TH.` }
+  if (!corridor) return { ok: false, error: `Unsupported country "${params.country}". Use SG, ID or TH.` }
 
-  const recipientType = (params.recipientType || "MOBILE").toUpperCase() as RecipientType
-  if (!["MOBILE", "BANK"].includes(recipientType)) {
-    return { ok: false, error: "recipientType must be MOBILE or BANK" }
+  const recipientType = (params.recipientType || "UEN").toUpperCase() as RecipientType
+  if (!["UEN", "MOBILE", "BANK"].includes(recipientType)) {
+    return { ok: false, error: "recipientType must be UEN, MOBILE or BANK" }
   }
 
   const amountMinor = parseToMinor(params.amount || "", 2)

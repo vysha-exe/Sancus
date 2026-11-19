@@ -1,13 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { CARD_ROUTE_USD, type DestinationKind } from "@/lib/sancus/process-pipeline"
+import type { DestinationKind } from "@/lib/sancus/process-pipeline"
 import { useProcessLog, type ProcessLogEntry } from "@/lib/sancus/use-process-log"
 import { signalSancusDataChanged } from "@/lib/sancus/live-refresh"
 
 const DEST_LABEL: Record<DestinationKind, string> = {
   bank: "Bank via local rail",
-  card: "Virtual card",
+  card: "Card network",
   collection: "Inbound collection",
   internal: "Branch transfer",
 }
@@ -47,8 +47,14 @@ export function ProcessDashboard() {
   }, [])
 
   useEffect(() => {
-    void refreshFace()
-  }, [refreshFace])
+    let current = true
+    void fetch("/api/sancus/face-usdc", { cache: "no-store" })
+      .then(async (res) => {
+        if (current && res.ok) setFace((await res.json()) as FaceStatus)
+      })
+      .catch(() => undefined)
+    return () => { current = false }
+  }, [])
 
   async function mintFaceUsdc() {
     setFaucetBusy(true)
@@ -85,9 +91,8 @@ export function ProcessDashboard() {
         <div>
           <h1 className="sx-h heading-2">Process</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            Activity log for every settlement: USD → Face USDC (fUSDC) → local currency → bank rail (large) or virtual
-            card (under ${CARD_ROUTE_USD}). Open a row for on-ramp, off-ramp, and local rail steps, plus Arc testnet
-            links when a hash exists.
+            Activity log for every settlement. Bank payouts may use fUSDC and local rails; cards authorize and settle
+            directly against the issuing branch&apos;s local balance.
           </p>
         </div>
         <span className="sx-pill">{source === "live" ? "Live activity" : "Demo corridors"}</span>
@@ -132,7 +137,8 @@ export function ProcessDashboard() {
         <section className="tile s12 proc-legend" aria-label="Settlement path">
           <div className="proc-flow" role="list">
             <span className="proc-flow__leg" role="listitem">
-              USD
+              <b>Bank payout</b>
+              <small>USD treasury</small>
             </span>
             <span className="proc-flow__arrow" aria-hidden>
               →
@@ -155,8 +161,15 @@ export function ProcessDashboard() {
             </span>
             <span className="proc-flow__or">or</span>
             <span className="proc-flow__leg proc-flow__leg--split" role="listitem">
-              <b>Virtual card</b>
-              <small>under ${CARD_ROUTE_USD}</small>
+              <b>Issuing branch balance</b>
+              <small>local card currency</small>
+            </span>
+            <span className="proc-flow__arrow" aria-hidden>
+              →
+            </span>
+            <span className="proc-flow__leg proc-flow__leg--split" role="listitem">
+              <b>Card network</b>
+              <small>authorization · clearing</small>
             </span>
           </div>
         </section>
@@ -229,6 +242,8 @@ export function ProcessDashboard() {
                             <a className="sx-btn sx-btn--quiet" href={e.explorerUrl} target="_blank" rel="noreferrer">
                               Arc testnet tx
                             </a>
+                          ) : e.destinationKind === "card" ? (
+                            <span className="body-s muted">Local card rail</span>
                           ) : (
                             <span className="body-s muted">No on-chain hash yet</span>
                           )}

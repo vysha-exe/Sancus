@@ -396,7 +396,7 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
     defineTool({
       name: "propose_collection",
       description:
-        "Prepare a local QR collection for the person to confirm: a customer pays by QRIS (Indonesia, IDR), PromptPay (Thailand, THB) or Pix (Brazil, BRL); a matching local stablecoin is minted into that country's branch wallet.",
+        "Prepare a local QR collection for the person to confirm: a customer pays by QRIS (Indonesia, IDR), PromptPay (Thailand, THB) or Pix (Brazil, BRL); settlement credits that branch's operating bank account.",
       inputSchema: z.object({ rail: z.enum(["QRIS", "PROMPTPAY", "PIX"]), amount: z.string().describe("Local currency amount, e.g. 500") }),
       run: step(ctx, "propose_collection", (i) => `Prepared a ${i.rail} collection`, async (i) => {
         if (!ctx.account.can("money.receive")) return "This account can't collect payments."
@@ -412,7 +412,7 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
             { label: "Amount", value: `${i.amount} ${cur}` },
           ],
           { method: "POST", path: "/api/sancus/rails/collections", idempotent: false, body: { rail: i.rail, amountMinor: String(minor) } },
-          "Creates a QR for your customer; the matching test stablecoin is minted when it's paid."
+          "Creates a QR for your customer; the local operating account is credited when it's paid."
         )
       }),
     }),

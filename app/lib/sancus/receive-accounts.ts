@@ -7,6 +7,9 @@ export type ReceiveAccount = {
   routingLabel: string
   routingValue: string
   currency: string
+  balanceMinor: string
+  postedMinor: string
+  heldMinor: string
   provider: string
   simulated: boolean
 }
@@ -53,6 +56,9 @@ export function sandboxReceiveAccount(company: { id: string; name: string; count
     routingLabel: preset.routingLabel,
     routingValue: preset.routingValue,
     currency: company.currency,
+    balanceMinor: "0",
+    postedMinor: "0",
+    heldMinor: "0",
     provider: "Sancus sandbox",
     simulated: true,
   }

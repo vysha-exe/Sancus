@@ -50,6 +50,10 @@ export function StaticReceiveLinks() {
     window.setTimeout(() => setCopied(null), 1500)
   }
 
+  const bankBalance = selected
+    ? new Intl.NumberFormat(undefined, { style: "currency", currency: selected.bankAccount.currency }).format(Number(selected.bankAccount.balanceMinor) / 100)
+    : ""
+
   return (
     <section className="tile s12" aria-labelledby="static-receive-links">
       <div className="tile-head">
@@ -62,6 +66,7 @@ export function StaticReceiveLinks() {
           <label className="sx-field"><span className="sx-label">Business branch receiving this</span><select className="sx-field__input" value={selected.id} onChange={(event) => setSelectedId(event.target.value)}>{links.map((link) => <option key={link.id} value={link.id}>{link.companyName} · {link.companyCurrency} · {link.rail}</option>)}</select><span className="sx-field__help">Each organization keeps its own permanent receive identity and bank instructions.</span></label>
           <div className="tile" style={{ display: "grid", gap: 0 }}>
             <div className="tile-head"><div><strong>{selected.bankAccount.bankName}</strong><p className="body-s muted" style={{ margin: "4px 0 0" }}>{selected.bankAccount.accountType} · {selected.bankAccount.currency}</p></div><span className="sx-pill">{selected.bankAccount.simulated ? "Sandbox bank details" : selected.bankAccount.provider}</span></div>
+            <div className="kv"><span>Available bank balance</span><span className="data">{bankBalance}</span></div>
             <div className="kv"><span>Account name</span><span className="data">{selected.bankAccount.accountName}</span></div>
             <div className="kv"><span>Account number</span><span className="data">{selected.bankAccount.accountNumber}</span></div>
             <div className="kv"><span>{selected.bankAccount.routingLabel}</span><span className="data">{selected.bankAccount.routingValue}</span></div>
