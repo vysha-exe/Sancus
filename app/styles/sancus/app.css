@@ -435,14 +435,124 @@ body:has(.frame) {
 .ag-rb--go { background: var(--accent); color: var(--on-accent); }
 .ag-rb--go:hover { background: var(--accent); color: var(--on-accent); opacity: .9; }
 .ag-vc { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 32px 24px; }
-.ag-orb { position: relative; width: 132px; height: 132px; display: grid; place-items: center; }
-.ag-orb::before, .ag-orb::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--accent); opacity: .35; }
-.ag-orb::before { inset: -16px; opacity: .2; }
-.ag-orb::after { inset: -32px; opacity: .1; }
-.ag-orb > button { width: 132px; height: 132px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent) 65%); color: var(--on-accent); box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 35%, transparent); border: 0; cursor: pointer; padding: 0; }
-.ag-orb[data-phase="thinking"] > button { background: var(--surface-200); color: var(--ink-muted); box-shadow: none; cursor: default; }
-.ag-orb[data-phase="speaking"] > button { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--brand-bronze) 70%, #fff), var(--brand-bronze) 65%); box-shadow: 0 10px 30px color-mix(in srgb, var(--brand-bronze) 35%, transparent); }
-.ag-orb[data-phase="paused"] > button { background: var(--surface-200); color: var(--ink); box-shadow: none; }
+/* Soft voice blob — the whole control is the glow; --ag-level (0–1) breathes with audio. */
+.ag-orb {
+  --ag-level: 0;
+  --ag-core: var(--brand-deep);
+  --ag-mid: var(--brand-verdigris);
+  --ag-rim: var(--brand-signal);
+  --ag-fringe: color-mix(in srgb, var(--brand-signal) 55%, var(--brand-limestone));
+  position: relative;
+  width: min(42vw, 240px);
+  height: min(42vw, 240px);
+  display: grid;
+  place-items: center;
+}
+.ag-orb[data-phase="speaking"] {
+  --ag-core: color-mix(in srgb, var(--brand-bronze) 70%, var(--brand-deep));
+  --ag-mid: var(--brand-bronze);
+  --ag-rim: color-mix(in srgb, var(--brand-bronze) 55%, #f0d5b0);
+  --ag-fringe: color-mix(in srgb, var(--brand-bronze) 35%, var(--brand-limestone));
+}
+.ag-orb[data-phase="thinking"],
+.ag-orb[data-phase="paused"] {
+  --ag-core: color-mix(in srgb, var(--brand-deep) 50%, var(--surface-200));
+  --ag-mid: color-mix(in srgb, var(--brand-verdigris) 40%, var(--surface-200));
+  --ag-rim: color-mix(in srgb, var(--brand-signal) 35%, var(--surface-200));
+  --ag-fringe: var(--surface-200);
+}
+.ag-blob {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 50% 48%,
+      var(--ag-core) 0%,
+      var(--ag-mid) 28%,
+      var(--ag-rim) 52%,
+      var(--ag-fringe) 68%,
+      color-mix(in srgb, var(--ag-fringe) 30%, transparent) 78%,
+      transparent 88%
+    );
+  filter: blur(22px);
+  opacity: calc(0.72 + var(--ag-level) * 0.28);
+  transform: scale(calc(0.82 + var(--ag-level) * 0.38));
+  transition: transform 80ms linear, opacity 80ms linear, filter 80ms linear;
+}
+.ag-orb::before {
+  content: "";
+  position: absolute;
+  inset: 16%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 45% 40%,
+    color-mix(in srgb, var(--ag-mid) 55%, #fff) 0%,
+    var(--ag-mid) 38%,
+    color-mix(in srgb, var(--ag-rim) 70%, transparent) 70%,
+    transparent 100%
+  );
+  filter: blur(10px);
+  opacity: calc(0.55 + var(--ag-level) * 0.45);
+  transform: scale(calc(0.88 + var(--ag-level) * 0.28));
+  transition: transform 80ms linear, opacity 80ms linear;
+}
+.ag-orb::after {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    transparent 48%,
+    color-mix(in srgb, var(--ag-fringe) 45%, transparent) 62%,
+    color-mix(in srgb, var(--ag-fringe) 18%, transparent) 74%,
+    transparent 86%
+  );
+  filter: blur(14px);
+  opacity: calc(0.35 + var(--ag-level) * 0.55);
+  transform: scale(calc(0.9 + var(--ag-level) * 0.32));
+  transition: transform 80ms linear, opacity 80ms linear;
+}
+.ag-orb[data-phase="thinking"] .ag-blob,
+.ag-orb[data-phase="paused"] .ag-blob {
+  opacity: 0.4;
+  transform: scale(0.78);
+  filter: blur(26px);
+}
+.ag-orb[data-phase="thinking"]::before,
+.ag-orb[data-phase="paused"]::before { opacity: 0.25; transform: scale(0.8); }
+.ag-orb[data-phase="thinking"]::after,
+.ag-orb[data-phase="paused"]::after { opacity: 0.15; }
+.ag-orb-hit {
+  position: relative;
+  z-index: 1;
+  width: 70%;
+  height: 70%;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.ag-orb-hit:disabled { cursor: default; }
+.ag-orb-hit:focus-visible { outline: 2px solid var(--focus); outline-offset: 8px; }
+.ag-orb--sm {
+  width: 72px;
+  height: 72px;
+  flex: none;
+}
+.ag-orb--sm .ag-blob { filter: blur(12px); }
+.ag-orb--sm::before { filter: blur(6px); inset: 18%; }
+.ag-orb--sm::after { filter: blur(8px); }
+@media (prefers-reduced-motion: reduce) {
+  .ag-blob, .ag-orb::before, .ag-orb::after { transition: none; filter: blur(16px); }
+  .ag-blob { transform: scale(calc(0.9 + var(--ag-level) * 0.12)); }
+  .ag-orb--sm .ag-blob { filter: blur(10px); }
+}
 .ag-vturns { list-style: none; margin: 0; padding: 0 24px; display: grid; gap: 10px; max-width: 520px; width: 100%; }
 .ag-vturns li { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: baseline; font-size: 14px; line-height: 20px; }
 .ag-vturns .now span:last-child { color: var(--ink-muted); }
@@ -469,11 +579,6 @@ body:has(.frame) {
 .ag-callbtn[aria-pressed="true"] .dot { background: color-mix(in srgb, var(--on-accent) 20%, transparent); color: var(--on-accent); }
 .ag-call { position: fixed; right: 20px; bottom: 20px; z-index: 60; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 110px); overflow: auto; display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-100); color: var(--ink); box-shadow: var(--shadow-card); }
 .ag-call-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.ag-call-orb { width: 56px; height: 56px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: var(--on-accent); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent) 65%); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 15%, transparent); }
-.ag-call-orb[data-phase="listening"] { animation: ag-ring 1.6s ease-in-out infinite; }
-.ag-call-orb[data-phase="speaking"] { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--brand-bronze) 70%, #fff), var(--brand-bronze) 65%); box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand-bronze) 15%, transparent); }
-.ag-call-orb[data-phase="thinking"], .ag-call-orb[data-phase="paused"] { background: var(--surface-200); color: var(--ink-muted); box-shadow: none; }
-@keyframes ag-ring { 50% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 8%, transparent); } }
 .ag-call-said { font-size: 14px; line-height: 20px; }
 .ag-call .ag-flow, .ag-call .ag-card { max-width: none; }
 @media (max-width: 720px) { .ag-callbtn .lbl { display: none; } .ag-callbtn { padding: 0 9px; } .ag-call { right: 16px; bottom: 16px; } }

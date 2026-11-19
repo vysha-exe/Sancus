@@ -27,6 +27,7 @@ import {
   StepList,
   useAgentChat,
   useSpeaker,
+  useVoiceGlow,
   VOICE_GREETINGS,
   waitingProposal,
   type Phase,
@@ -42,13 +43,6 @@ type Status = {
 
 const usd6 = (m: string | number) => `$${(Number(m) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
 
-const SUGGESTIONS = [
-  "What's due this week?",
-  "How much do we have across all branches?",
-  "Pay Lim Trading S$250 for invoice INV-88",
-  "What did we pay out recently?",
-]
-
 const IconChat = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
@@ -56,12 +50,6 @@ const IconChat = () => (
 )
 const IconMic = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="9" y="3" width="6" height="11" rx="3" />
-    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-  </svg>
-)
-const IconMicLg = () => (
-  <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="9" y="3" width="6" height="11" rx="3" />
     <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
   </svg>
@@ -120,8 +108,9 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
   const phaseRef = useRef<Phase>("off")
   const recRef = useRef<Recognition | null>(null)
   const listenRef = useRef<() => void>(() => {})
+  const { orbRef, tapOutput } = useVoiceGlow(phase)
   const isActive = useCallback(() => phaseRef.current !== "off", [])
-  const { eleven, say, stopSpeaking, prefetchPhrases } = useSpeaker(isActive)
+  const { eleven, say, stopSpeaking, prefetchPhrases } = useSpeaker(isActive, { onAudio: tapOutput })
 
   const setPhaseBoth = (p: Phase) => {
     phaseRef.current = p
@@ -418,16 +407,6 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
           </div>
         ) : null}
 
-        {turns.length === 0 ? (
-          <div className="ag-sugg" role="group" aria-label="Try one">
-            {SUGGESTIONS.map((s) => (
-              <button key={s} type="button" className="chip" onClick={() => void ask(s)} disabled={busy || paused || status?.aiConfigured === false}>
-                {s}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
         <form className="ag-comp" onSubmit={submit}>
           <label style={{ flex: 1, display: "flex" }}>
             <span className="vh">Message</span>
@@ -455,10 +434,15 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
             {phaseLabel}
             {eleven ? " · ElevenLabs" : ""}
           </span>
-          <div className="ag-orb" data-phase={phase}>
-            <button type="button" onClick={onOrb} disabled={phase === "thinking"} aria-label={phase === "paused" ? "Resume listening" : phase === "speaking" ? "Interrupt" : "Pause listening"}>
-              <IconMicLg />
-            </button>
+          <div ref={orbRef} className="ag-orb" data-phase={phase} style={{ ["--ag-level" as string]: 0 }}>
+            <span className="ag-blob" aria-hidden="true" />
+            <button
+              type="button"
+              className="ag-orb-hit"
+              onClick={onOrb}
+              disabled={phase === "thinking"}
+              aria-label={phase === "paused" ? "Resume listening" : phase === "speaking" ? "Interrupt" : "Pause listening"}
+            />
           </div>
           {interim ? (
             <span className="body-s" style={{ fontStyle: "italic" }}>
