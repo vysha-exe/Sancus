@@ -199,6 +199,11 @@
 .card-delete-dialog__actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
 .card-delete-dialog__confirm { background: var(--failed); color: #fff; }
 .card-delete-dialog__confirm:hover { background: color-mix(in srgb, var(--failed) 88%, #000); }
+.card-details-dialog { width: min(100%, 520px); }
+.card-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-000); }
+.card-details-grid > div { display: grid; gap: 5px; }
+.card-details-pan { grid-column: 1 / -1; }
+.card-details-grid .data { font-size: 18px; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
 @media (max-width: 1100px) {
   .s3, .s4 { grid-column: span 6; }
   .s5, .s6, .s7, .s8 { grid-column: 1 / -1; }
