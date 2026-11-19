@@ -3,9 +3,9 @@
 import { FIXED_USD_RATES, fixedUsdRateLabel } from "./fixed-rates"
 
 export const workspace = {
-  name: "Café Paulista Ltda",
-  country: "Brazil",
-  homeCurrency: "BRL",
+  name: "Lion City Trading",
+  country: "United States",
+  homeCurrency: "USD",
   balanceCurrency: "USD",
   actor: { firstName: "Admin", role: "Admin", initial: "A" },
   sandbox: true,

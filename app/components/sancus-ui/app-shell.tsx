@@ -94,10 +94,12 @@ export function AppShell({
   const actorName = account ? ACCOUNT_TYPE_LABEL[account.type] : ACCOUNT_TYPE_LABEL.ADMIN
   const actorRole = accountDisplayName(account, workspace.name)
 
-  // Business admin (and guest admin demo): always work in the company — never "Personal".
+  // Business admin (and guest admin demo): never stay in Personal — pin to HQ.
+  // Demo login also sets the HQ company cookie so a leftover branch selection doesn't stick.
   const isBusinessAdmin = !account || account.type === "ADMIN"
   useEffect(() => {
-    if (!isBusinessAdmin || !ws.ready || !ws.isPersonal || !ws.hasBusiness) return
+    if (!isBusinessAdmin || !ws.ready || !ws.hasBusiness) return
+    if (!ws.isPersonal && ws.companyId) return
     const rootId = account?.scopes.find((s) => s.isRoot)?.companyId ?? ws.tree[0]?.id
     if (rootId) ws.selectCompany(rootId)
   }, [account, isBusinessAdmin, ws])

@@ -16,6 +16,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { requirePermission } from "@/lib/sancus/accounts-server"
 import { quoteInputSchema, toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
 import { prepareAch, settlementWallets } from "@/lib/sancus/ach-api"
+import { faceUsdcEnabled } from "@/lib/sancus/face-usdc"
 import { workspaceCompany } from "@/lib/sancus/workspace-server"
 import { ACH_PROVIDER, executeAch, refreshAchPayments, syncAchLedger } from "@/lib/sancus/ach-server"
 
@@ -55,9 +56,12 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   // Acting for a company (workspace switcher): the payment is the company's, paid from its treasury.
   const companyId = await workspaceCompany(req, supabase, user.id)
-  const testnet = quote.settlementMode === "TESTNET_SETTLEMENT"
-  const wallets = testnet ? await settlementWallets(supabase, user.id, companyId) : { treasury: null, settlement: null }
-  if (testnet && (!wallets.treasury || !wallets.settlement)) {
+  const wantsOnchain = quote.settlementMode === "TESTNET_SETTLEMENT" || faceUsdcEnabled()
+  const wallets = wantsOnchain ? await settlementWallets(supabase, user.id, companyId) : { treasury: null, settlement: null }
+  if (wantsOnchain && !wallets.treasury) {
+    return NextResponse.json({ error: "Testnet settlement needs a Treasury wallet (set up your Treasury first)" }, { status: 409 })
+  }
+  if (quote.settlementMode === "TESTNET_SETTLEMENT" && !wallets.settlement && !faceUsdcEnabled()) {
     return NextResponse.json({ error: "Testnet settlement needs a Treasury and a settlement wallet (set up your Treasury first)" }, { status: 409 })
   }
 
