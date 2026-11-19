@@ -60,15 +60,18 @@ export function usdMinorToReportingMinor(minor: string | bigint, reportingCurren
   return roundedDivide(BigInt(minor) * reportingRate, RATE_SCALE)
 }
 
-/** Combines one company's local bank balance and own wallet liquidity in its local currency. */
-export function calculateCompanyNodeTotal(node: CompanyNode): CompanyNodeTotal {
+/** Combines one company's local bank balance and own wallet liquidity in the requested currency. */
+export function calculateCompanyNodeTotal(
+  node: CompanyNode,
+  reportingCurrency = node.currency,
+): CompanyNodeTotal {
   const bankMinor = node.bankBalance
-    ? localBankMinorToReportingMinor(node.bankBalance.balanceMinor, node.bankBalance.currency, node.currency)
+    ? localBankMinorToReportingMinor(node.bankBalance.balanceMinor, node.bankBalance.currency, reportingCurrency)
     : 0n
-  const walletMinor = usdMinorToReportingMinor(node.ownMinor, node.currency)
+  const walletMinor = usdMinorToReportingMinor(node.ownMinor, reportingCurrency)
 
   return {
-    currency: node.currency,
+    currency: reportingCurrency,
     totalMinor: (bankMinor + walletMinor).toString(),
     bankMinor: bankMinor.toString(),
     walletMinor: walletMinor.toString(),
