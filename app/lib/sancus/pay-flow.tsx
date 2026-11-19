@@ -116,7 +116,7 @@ const defaultState: PayState = {
   usdAmount: "",
   localAmount: "",
   rail: julianaQuote.rail,
-  memo: "November design hours",
+  memo: "",
   side: "send",
 }
 
