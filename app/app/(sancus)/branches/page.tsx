@@ -12,6 +12,7 @@ import {
 } from "@/lib/sancus/companies"
 import { COUNTRIES, countryByCode } from "@/lib/sancus/countries"
 import { CompanyTreeDiagram } from "@/components/sancus-ui/company-tree-diagram"
+import { OrgChart } from "@/components/sancus-ui/org-chart"
 import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 
@@ -181,6 +182,17 @@ export default function BranchesPage() {
             </div>
             <CompanyTreeDiagram tree={tree} />
           </section>
+          {mode === "live" ? (
+            <section className="tile s12" aria-labelledby="org">
+              <div className="tile-head">
+                <h2 className="tile-title" id="org">
+                  Who works where
+                </h2>
+                <span className="body-s muted">Every branch and the people in it, with their spending limits</span>
+              </div>
+              <OrgChart />
+            </section>
+          ) : null}
           {tree.map((root) => (
             <section key={root.id} className="tile s12" aria-label={root.name} style={{ gap: 12 }}>
               <BranchNode node={root} live={mode === "live"} onChanged={load} />

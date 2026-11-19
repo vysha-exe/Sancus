@@ -14,6 +14,7 @@ import {
   safeNextPath,
 } from "@/lib/sancus/demo-login"
 import { DEMO_HOME, ensureDemoAccount, parseDemoAs } from "@/lib/sancus/demo-accounts"
+import { SANCUS_ADMIN_COOKIE, SANCUS_EMPLOYEE_COOKIE } from "@/lib/sancus/simple-auth"
 // Do NOT statically import provision-circle / Circle SDKs here. On Vercel those
 // packages can fail to load as ESM and take down this whole route (Open demo → 500).
 
@@ -113,6 +114,10 @@ export async function GET(request: NextRequest) {
 
     const response = NextResponse.redirect(new URL(next, request.url))
     response.cookies.delete(DEMO_GUEST_COOKIE)
+    // Switching demo accounts: drop an admin@/employee@ simple-login session, which would
+    // otherwise win over this one.
+    response.cookies.set(SANCUS_ADMIN_COOKIE, "", { path: "/", maxAge: 0 })
+    response.cookies.set(SANCUS_EMPLOYEE_COOKIE, "", { path: "/", maxAge: 0 })
     return response
   } catch (err) {
     return enterAsGuest(request, next, err instanceof Error ? err.message : "unknown")

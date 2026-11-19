@@ -6,32 +6,33 @@
 //
 // Voice mode (button in the header): listens with the browser's speech recognition, speaks short
 // progress lines while the agent works, answers aloud (ElevenLabs when configured, otherwise the
-// browser voice) and listens again. A waiting card can be confirmed or cancelled by voice.
+// browser voice) and listens again. Cards to confirm and live progress show in voice mode too,
+// and can be confirmed by tapping or saying "confirm". The conversation is shared with the agent
+// call button on every page (see agent-shared.tsx).
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
-import { PROGRESS, VOICE_GREETINGS } from "@/lib/sancus/agent/progress"
-
-type Step = { tool: string; label: string; ok: boolean; costLabel?: string }
-type Proposal = {
-  id: string
-  kind: string
-  title: string
-  lines: { label: string; value: string }[]
-  note?: string
-  [key: string]: unknown
-}
-type Turn =
-  | { role: "user"; content: string; spoken?: boolean }
-  | { role: "assistant"; content: string; steps: Step[]; proposals: Proposal[] }
-type Outcome = { state: "running" | "done" | "error" | "dismissed"; text: string }
-type Phase = "off" | "listening" | "thinking" | "speaking" | "paused"
-type DoneEvent = { type: "done"; reply: string; steps: Step[]; proposals: Proposal[] }
-type StreamEvent =
-  | { type: "start"; tool: string; progress: string }
-  | { type: "step"; step: Step }
-  | { type: "proposal"; proposal: Proposal }
-  | DoneEvent
-  | { type: "error"; error: string }
+import {
+  askAgent,
+  CANCEL_RE,
+  CHANGED,
+  clearAgentChat,
+  CONFIRM_RE,
+  confirmProposal,
+  dismissProposal,
+  EXIT_RE,
+  ProposalCard,
+  recognitionCtor,
+  setChat,
+  StepList,
+  useAgentChat,
+  useSpeaker,
+  VOICE_GREETINGS,
+  waitingProposal,
+  type Phase,
+  type Proposal,
+  type Recognition,
+} from "@/components/sancus-ui/agent-shared"
 
 type Status = {
   aiConfigured: boolean
@@ -39,31 +40,7 @@ type Status = {
   actions: { id: string; kind: "x402" | "executed"; summary: string; cost_minor: string | number; created_at: string }[]
 }
 
-// Minimal Web Speech API typing (not in TypeScript's DOM lib everywhere).
-type Recognition = {
-  lang: string
-  interimResults: boolean
-  continuous: boolean
-  start(): void
-  stop(): void
-  abort(): void
-  onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null
-  onerror: ((e: { error: string }) => void) | null
-  onend: (() => void) | null
-}
-function recognitionCtor(): (new () => Recognition) | null {
-  if (typeof window === "undefined") return null
-  const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition }
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
-}
-
-const CHANGED = "sancus:agent-changed"
 const usd6 = (m: string | number) => `$${(Number(m) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
-const CONFIRM_RE = /^(yes[,.!]?\s*)?(please\s+)?(confirm|confirmed|go ahead|send it|do it|approve|yes)\b/i
-const CANCEL_RE = /^(no|nope|cancel|don'?t|do not|stop|never ?mind|forget it)\b/i
-const EXIT_RE = /\b(exit|leave|stop|end|close)\s+voice( mode)?\b/i
-/** Speech-friendly text: no bullets or line breaks. */
-const forSpeech = (t: string) => t.replace(/^\s*-\s+/gm, "").replace(/\*\*/g, "").replace(/\n+/g, ". ").replace(/\.\s*\./g, ".").trim()
 
 const SUGGESTIONS = [
   "What's due this week?",
@@ -92,11 +69,6 @@ const IconMicLg = () => (
 const IconStar = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" />
-  </svg>
-)
-const IconCheck = () => (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M5 12l4 4 10-10" />
   </svg>
 )
 const IconSend = () => (
@@ -131,208 +103,33 @@ export function useAgentStatus() {
   return status
 }
 
-/** POSTs to the agent in streaming mode and calls `onEvent` for each event. Returns the final result. */
-async function runAgentStream(messages: { role: string; content: string }[], voice: boolean, onEvent: (e: StreamEvent) => void): Promise<DoneEvent> {
-  const res = await fetch("/api/sancus/agent", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, voice, stream: true }),
-  })
-  if (!res.ok || !res.body) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? "The agent couldn't answer")
-  }
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buf = ""
-  let done: DoneEvent | null = null
-  for (;;) {
-    const { value, done: end } = await reader.read()
-    if (value) buf += decoder.decode(value, { stream: true })
-    let nl: number
-    while ((nl = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, nl).trim()
-      buf = buf.slice(nl + 1)
-      if (!line) continue
-      const e = JSON.parse(line) as StreamEvent
-      if (e.type === "error") throw new Error(e.error)
-      if (e.type === "done") done = e
-      onEvent(e)
-    }
-    if (end) break
-  }
-  if (!done) throw new Error("The agent stopped before answering")
-  return done
-}
-
 type AgentConsoleProps = { paused?: boolean }
 
 export function AgentConsole({ paused = false }: AgentConsoleProps) {
+  const router = useRouter()
   const status = useAgentStatus()
-  const [turns, setTurns] = useState<Turn[]>([])
+  const { turns, outcomes, busy, liveSteps } = useAgentChat()
   const [draft, setDraft] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [liveSteps, setLiveSteps] = useState<Step[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({})
   const logRef = useRef<HTMLDivElement>(null)
 
   // Voice mode
   const [phase, setPhase] = useState<Phase>("off")
   const [interim, setInterim] = useState("")
   const [voiceNote, setVoiceNote] = useState<string | null>(null)
-  const [eleven, setEleven] = useState(false)
   const phaseRef = useRef<Phase>("off")
-  const turnsRef = useRef<Turn[]>([])
-  const outcomesRef = useRef<Record<string, Outcome>>({})
   const recRef = useRef<Recognition | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const speakChain = useRef<Promise<void>>(Promise.resolve())
-  const speakGen = useRef(0)
   const listenRef = useRef<() => void>(() => {})
+  const isActive = useCallback(() => phaseRef.current !== "off", [])
+  const { eleven, say, stopSpeaking, prefetchPhrases } = useSpeaker(isActive)
 
   const setPhaseBoth = (p: Phase) => {
     phaseRef.current = p
     setPhase(p)
   }
   useEffect(() => {
-    turnsRef.current = turns
-  }, [turns])
-  useEffect(() => {
-    outcomesRef.current = outcomes
-  }, [outcomes])
-  useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" })
   }, [turns, busy, liveSteps])
-  useEffect(() => {
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch("/api/sancus/agent/speak", { cache: "no-store" })
-        if (res.ok) setEleven(Boolean((await res.json()).elevenlabs))
-      } catch {
-        /* browser voice */
-      }
-    }, 0)
-    return () => clearTimeout(t)
-  }, [])
-
-  // ---------- speaking ----------
-
-  const stopSpeaking = useCallback(() => {
-    speakGen.current++ // anything still queued is skipped
-    audioRef.current?.pause()
-    audioRef.current = null
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel()
-    speakChain.current = Promise.resolve()
-  }, [])
-
-  const speakBrowser = (text: string) =>
-    new Promise<void>((resolve) => {
-      const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined
-      if (!synth) return resolve()
-      const u = new SpeechSynthesisUtterance(text)
-      u.rate = 1.03
-      u.onend = () => resolve()
-      u.onerror = () => resolve()
-      synth.speak(u)
-    })
-
-  /** Pre-recorded fixed phrases (progress lines, greetings) → object URLs, so they play instantly. */
-  const phraseCache = useRef<Map<string, string>>(new Map())
-  const prefetchPhrases = useCallback(async () => {
-    if (!eleven) return
-    const phrases = [...VOICE_GREETINGS, ...Object.values(PROGRESS).map((p) => `${p}.`)]
-    await Promise.all(
-      phrases
-        .filter((p) => !phraseCache.current.has(p))
-        .map(async (p) => {
-          try {
-            const res = await fetch("/api/sancus/agent/speak", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text: p }),
-            })
-            if (res.ok) phraseCache.current.set(p, URL.createObjectURL(await res.blob()))
-          } catch {
-            /* that phrase streams live instead */
-          }
-        })
-    )
-  }, [eleven])
-
-  /** Plays an audio URL until it ends or is stopped. Resolves false if it never played. */
-  const playUrl = (url: string) =>
-    new Promise<boolean>((resolve) => {
-      const a = new Audio(url)
-      audioRef.current = a
-      let started = false
-      a.onplaying = () => {
-        started = true
-      }
-      a.onended = () => resolve(true)
-      a.onpause = () => resolve(true) // stopped by stopSpeaking()
-      a.onerror = () => resolve(started)
-      void a.play().catch(() => resolve(false))
-    })
-
-  const speakOnce = useCallback(
-    async (text: string) => {
-      if (phaseRef.current === "off" || !text.trim()) return
-      if (eleven) {
-        // Fixed phrases play from the cache.
-        const cached = phraseCache.current.get(text)
-        if (cached) {
-          if (await playUrl(cached)) return
-        } else {
-          // Anything else: split into sentences so the short first one starts sooner, and start
-          // downloading every sentence at once so they play back to back without gaps.
-          const gen = speakGen.current
-          const parts = (text.slice(0, 1400).match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [text]).map((s) => s.trim()).filter(Boolean)
-          const audios = parts.map((p) => {
-            const a = new Audio(`/api/sancus/agent/speak?text=${encodeURIComponent(p)}`)
-            a.preload = "auto"
-            return a
-          })
-          let playedAny = false
-          for (const a of audios) {
-            if (gen !== speakGen.current) break // interrupted or voice mode exited
-            const ok = await new Promise<boolean>((resolve) => {
-              audioRef.current = a
-              let started = false
-              a.onplaying = () => {
-                started = true
-              }
-              a.onended = () => resolve(true)
-              a.onpause = () => resolve(true)
-              a.onerror = () => resolve(started)
-              void a.play().catch(() => resolve(false))
-            })
-            playedAny ||= ok
-            if (!ok && !playedAny) break
-          }
-          audios.forEach((a) => a.removeAttribute("src"))
-          if (playedAny) return
-        }
-      }
-      await speakBrowser(text)
-    },
-    [eleven]
-  )
-
-  /**
-   * Queue speech so lines never talk over each other. `interrupt` (used for the actual answer)
-   * cuts off whatever is playing or queued, so a progress line never delays the reply.
-   */
-  const say = useCallback(
-    (text: string, opts: { interrupt?: boolean } = {}) => {
-      if (opts.interrupt) stopSpeaking()
-      const gen = speakGen.current
-      const next = speakChain.current.then(() => (gen === speakGen.current ? speakOnce(forSpeech(text)) : undefined))
-      speakChain.current = next.catch(() => {})
-      return next
-    },
-    [speakOnce, stopSpeaking]
-  )
 
   // ---------- the agent ----------
 
@@ -340,97 +137,44 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
     async (text: string, spoken = false) => {
       const content = text.trim()
       if (!content || paused) return
-      const next: Turn[] = [...turnsRef.current, { role: "user", content, spoken }]
-      turnsRef.current = next
-      setTurns(next)
       setDraft("")
-      setBusy(true)
-      setLiveSteps([])
       setError(null)
       const voice = phaseRef.current !== "off"
       if (voice) setPhaseBoth("thinking")
       const spokenProgress = new Set<string>()
       try {
-        const done = await runAgentStream(
-          next.map((t) => ({ role: t.role, content: t.content })),
+        const done = await askAgent(content, {
+          spoken,
           voice,
-          (e) => {
-            if (e.type === "step") setLiveSteps((s) => [...s, e.step])
+          onEvent: (e) => {
             // Fill the silence with what it's doing (at most two short lines a turn).
             if (e.type === "start" && voice && spokenProgress.size < 2 && !spokenProgress.has(e.progress)) {
               spokenProgress.add(e.progress)
               void say(`${e.progress}.`)
             }
-          }
-        )
-        const turn: Turn = { role: "assistant", content: done.reply, steps: done.steps ?? [], proposals: done.proposals ?? [] }
-        setTurns((prev) => {
-          const v = [...prev, turn]
-          turnsRef.current = v
-          return v
+          },
         })
-        if ((done.steps ?? []).some((s) => s.costLabel)) window.dispatchEvent(new Event(CHANGED))
         if (voice) {
           setPhaseBoth("speaking")
           await say(done.reply, { interrupt: true }) // the answer cuts off any progress line
-          if (phaseRef.current === "speaking") listenRef.current()
         }
+        // "Open the scan page": go there (after it's said so, in voice mode).
+        const nav = done.actions?.find((a) => a.type === "navigate")
+        if (nav) router.push(nav.path)
+        else if (voice && phaseRef.current === "speaking") listenRef.current()
       } catch (e) {
         const msg = (e as Error).message
         setError(msg)
-        setTurns((prev) => {
-          const v = prev.slice(0, -1)
-          turnsRef.current = v
-          return v
-        })
         if (!spoken) setDraft(content)
         if (voice) {
           setPhaseBoth("speaking")
           await say(`Sorry, ${msg}`, { interrupt: true })
           if (phaseRef.current === "speaking") listenRef.current()
         }
-      } finally {
-        setBusy(false)
-        setLiveSteps([])
       }
     },
-    [paused, say]
+    [paused, say, router]
   )
-
-  const confirm = useCallback(async (p: Proposal): Promise<string> => {
-    setOutcomes((o) => ({ ...o, [p.id]: { state: "running", text: "Working…" } }))
-    try {
-      const res = await fetch("/api/sancus/agent/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposal: p }),
-      })
-      const body = await res.json()
-      if (!res.ok || !body.ok) throw new Error(body.error ?? "That didn't go through")
-      const text = body.needsApproval
-        ? "Sent for approval. It moves once an approver says yes."
-        : p.kind === "collection"
-          ? "QR created. Find it under Receive."
-          : p.kind === "limits"
-            ? "Limits updated."
-            : `Done. Status: ${String(body.status).replace(/_/g, " ").toLowerCase()}.`
-      setOutcomes((o) => ({ ...o, [p.id]: { state: "done", text } }))
-      window.dispatchEvent(new Event(CHANGED))
-      return text
-    } catch (e) {
-      const text = (e as Error).message
-      setOutcomes((o) => ({ ...o, [p.id]: { state: "error", text } }))
-      return `That didn't go through. ${text}`
-    }
-  }, [])
-
-  /** The one card waiting for a decision, if there is exactly one. */
-  const waitingProposal = useCallback((): Proposal | null => {
-    const last = [...turnsRef.current].reverse().find((t) => t.role === "assistant")
-    if (!last || last.role !== "assistant") return null
-    const open = last.proposals.filter((p) => !outcomesRef.current[p.id] || outcomesRef.current[p.id].state === "error")
-    return open.length === 1 ? open[0]! : null
-  }, [])
 
   // ---------- listening ----------
 
@@ -449,17 +193,18 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
       if (EXIT_RE.test(text)) return exitVoice()
       const waiting = waitingProposal()
       if (waiting && CONFIRM_RE.test(text.trim())) {
-        setTurns((prev) => [...prev, { role: "user", content: text, spoken: true }])
+        setChat((s) => ({ turns: [...s.turns, { role: "user", content: text, spoken: true }] }))
         setPhaseBoth("thinking")
-        const outcome = await confirm(waiting)
+        void say("Sending it now.", { interrupt: true })
+        const outcome = await confirmProposal(waiting)
         setPhaseBoth("speaking")
         await say(outcome, { interrupt: true })
         if (phaseRef.current === "speaking") listenRef.current()
         return
       }
       if (waiting && CANCEL_RE.test(text.trim())) {
-        setTurns((prev) => [...prev, { role: "user", content: text, spoken: true }])
-        setOutcomes((o) => ({ ...o, [waiting.id]: { state: "dismissed", text: "Cancelled." } }))
+        setChat((s) => ({ turns: [...s.turns, { role: "user", content: text, spoken: true }] }))
+        dismissProposal(waiting)
         setPhaseBoth("speaking")
         await say("Okay, I won't do that.", { interrupt: true })
         if (phaseRef.current === "speaking") listenRef.current()
@@ -467,7 +212,27 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
       }
       await ask(text, true)
     },
-    [ask, confirm, exitVoice, paused, say, waitingProposal]
+    [ask, exitVoice, paused, say]
+  )
+
+  /** Tapping Confirm (chat or voice): in voice mode, say how it went and keep listening. */
+  const onConfirm = useCallback(
+    async (p: Proposal) => {
+      const voice = phaseRef.current !== "off"
+      if (voice) {
+        recRef.current?.abort()
+        recRef.current = null
+        setPhaseBoth("thinking")
+        void say("Sending it now.", { interrupt: true })
+      }
+      const outcome = await confirmProposal(p)
+      if (voice && phaseRef.current !== "off") {
+        setPhaseBoth("speaking")
+        await say(outcome, { interrupt: true })
+        if (phaseRef.current === "speaking") listenRef.current()
+      }
+    },
+    [say]
   )
 
   const listen = useCallback(() => {
@@ -526,7 +291,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
     setVoiceNote(recognitionCtor() ? null : "This browser can't listen (use Chrome or Edge). You can still type, and replies will be spoken.")
     setPhaseBoth("speaking")
     void prefetchPhrases() // record progress lines now so they play instantly later
-    await say(turnsRef.current.length ? VOICE_GREETINGS[1]! : VOICE_GREETINGS[0]!)
+    await say(turns.length ? VOICE_GREETINGS[1]! : VOICE_GREETINGS[0]!)
     if (phaseRef.current !== "off") {
       if (recognitionCtor()) listenRef.current()
       else setPhaseBoth("paused")
@@ -562,11 +327,11 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
   const voiceOn = phase !== "off"
   const phaseLabel = { off: "", listening: "Listening", thinking: "Working", speaking: "Speaking", paused: "Paused" }[phase]
   const recentVoice = turns.slice(-4)
+  const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant")
+  const voiceCards = lastAssistant && lastAssistant.role === "assistant" ? lastAssistant.proposals : []
 
   function clearChat() {
-    setTurns([])
-    turnsRef.current = []
-    setOutcomes({})
+    clearAgentChat()
     setError(null)
   }
 
@@ -613,39 +378,9 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
                 <div className="ag-body">
                   {t.steps.length ? <StepList steps={t.steps} title="What it did" /> : null}
                   <span style={{ whiteSpace: "pre-wrap" }}>{t.content}</span>
-                  {t.proposals.map((p) => {
-                    const o = outcomes[p.id]
-                    return (
-                      <div key={p.id} className="ag-card">
-                        <b>{p.title}</b>
-                        {p.lines.map((l) => (
-                          <div className="kv" key={l.label}>
-                            <span className="body-s">{l.label}</span>
-                            <span className="body-s">{l.value}</span>
-                          </div>
-                        ))}
-                        {p.note ? <span className="body-s muted">{p.note}</span> : null}
-                        {o?.state === "done" || o?.state === "dismissed" ? (
-                          <span className="body-s" role="status">
-                            {o.state === "done" ? "✓ " : ""}
-                            {o.text}
-                          </span>
-                        ) : (
-                          <div className="ag-acts">
-                            <button type="button" className="sx-btn sx-btn--primary sx-btn--sm" onClick={() => void confirm(p)} disabled={paused || o?.state === "running"}>
-                              {o?.state === "running" ? "Working…" : "Confirm"}
-                            </button>
-                            <span className="body-s muted">Nothing is sent until you confirm</span>
-                            {o?.state === "error" ? (
-                              <span className="body-s" role="alert" style={{ color: "var(--failed)" }}>
-                                {o.text}
-                              </span>
-                            ) : null}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                  {t.proposals.map((p) => (
+                    <ProposalCard key={p.id} p={p} outcome={outcomes[p.id]} disabled={paused} onConfirm={(x) => void onConfirm(x)} />
+                  ))}
                 </div>
               </div>
             ),
@@ -672,7 +407,7 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
             ) : null}
             {status?.aiConfigured === false ? (
               <span className="body-s" role="alert">
-                The agent needs an Anthropic API key: add <code>ANTHROPIC_API_KEY</code> to <code>.env.local</code> and restart the app.
+                The agent needs an OpenAI API key: add <code>OPENAI_API_KEY</code> to <code>.env.local</code> and restart the app.
               </span>
             ) : null}
             {error ? (
@@ -748,60 +483,40 @@ export function AgentConsole({ paused = false }: AgentConsoleProps) {
             </button>
           </div>
         </div>
+        {busy ? (
+          <div style={{ padding: "0 16px" }}>
+            <StepList steps={liveSteps} title="Working on it" running />
+          </div>
+        ) : null}
+        {voiceCards.length ? (
+          <div style={{ display: "grid", gap: 10, padding: "0 16px" }} aria-label="Waiting for you">
+            {voiceCards.map((p) => (
+              <ProposalCard
+                key={p.id}
+                p={p}
+                outcome={outcomes[p.id]}
+                disabled={paused}
+                onConfirm={(x) => void onConfirm(x)}
+                onCancel={(x) => dismissProposal(x)}
+              />
+            ))}
+          </div>
+        ) : null}
         {recentVoice.length ? (
           <ol className="ag-vturns" aria-label="Voice transcript">
             {recentVoice.map((t, i) => (
               <li key={i} className={i === recentVoice.length - 1 && t.role === "user" ? "now" : undefined}>
                 <span className="sx-label">{t.role === "user" ? "You" : "Sancus"}</span>
-                <span>{t.role === "user" ? t.content : t.content}</span>
+                <span>{t.content}</span>
               </li>
             ))}
           </ol>
         ) : null}
         <div className="ag-vnote">
-          <span className="body-s muted">Payments still need a tap to confirm · say “confirm”, “cancel”, or “exit voice”</span>
+          <span className="body-s muted">Tap Confirm or say “confirm” to send · “cancel” to drop it · “exit voice” to stop</span>
         </div>
       </div>
     </section>
-  )
-}
-
-function StepList({ steps, title, running = false }: { steps: Step[]; title: string; running?: boolean }) {
-  if (!steps.length && !running) return null
-  return (
-    <div className="ag-flow" role="status" aria-label={title}>
-      <div className="ag-flow-h">
-        <b>{title}</b>
-        {running ? (
-          <span className="ag-live">
-            <i aria-hidden="true" />
-            Working
-          </span>
-        ) : null}
-      </div>
-      <ol className="ag-flow-steps">
-        {steps.map((s, j) => (
-          <li key={j} className={s.ok ? "ok" : "todo"}>
-            <span className="ag-dot">{s.ok ? <IconCheck /> : null}</span>
-            <span className="ag-st">
-              {s.label}
-              {s.costLabel ? <small>x402 · {s.costLabel}</small> : null}
-            </span>
-            <span className="ag-tm" />
-          </li>
-        ))}
-        {running ? (
-          <li className="run">
-            <span className="ag-dot" />
-            <span className="ag-st">Working on it</span>
-            <span className="ag-tm">…</span>
-          </li>
-        ) : null}
-      </ol>
-      <div className="ag-flow-f">
-        <span className="body-s muted">Nothing is sent until you confirm</span>
-      </div>
-    </div>
   )
 }
 
