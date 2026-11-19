@@ -257,6 +257,105 @@ export function recognitionCtor(): (new () => Recognition) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
+/** iPhone Safari (and most iOS browsers) have no SpeechRecognition — use Whisper push-to-talk instead. */
+export function needsWhisperListen(): boolean {
+  if (typeof window === "undefined") return false
+  if (recognitionCtor()) return false
+  return typeof MediaRecorder !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia)
+}
+
+/** Call inside the tap that starts the call so iOS allows later TTS after awaits. */
+export async function unlockAudioPlayback(): Promise<void> {
+  if (typeof window === "undefined") return
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (AC) {
+      const ctx = new AC()
+      await ctx.resume()
+      const buffer = ctx.createBuffer(1, 1, 22050)
+      const src = ctx.createBufferSource()
+      src.buffer = buffer
+      src.connect(ctx.destination)
+      src.start(0)
+      // Keep context around briefly; speaker creates its own too.
+      setTimeout(() => void ctx.close().catch(() => {}), 2_000)
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    // Tiny silent wav — unlocks HTMLAudioElement.play() for ElevenLabs replies.
+    const a = new Audio(
+      "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAA=="
+    )
+    a.setAttribute("playsinline", "true")
+    ;(a as HTMLAudioElement & { playsInline?: boolean }).playsInline = true
+    a.volume = 0.01
+    await a.play().catch(() => {})
+    a.pause()
+  } catch {
+    /* ignore */
+  }
+}
+
+function preferredRecorderMime(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined
+  for (const type of ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg"]) {
+    if (MediaRecorder.isTypeSupported(type)) return type
+  }
+  return undefined
+}
+
+/** Record until `stop` is called (or maxMs), then Whisper-transcribe via /api/sancus/agent/listen. */
+export async function recordUtterance(opts: {
+  maxMs?: number
+  onStarted?: () => void
+  signal?: { stopped: boolean }
+}): Promise<{ text: string } | { error: string }> {
+  if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    return { error: "This browser can't record audio." }
+  }
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+  } catch {
+    return { error: "Microphone access is blocked. Allow it, then try again." }
+  }
+  const mime = preferredRecorderMime()
+  const chunks: BlobPart[] = []
+  const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+  const done = new Promise<Blob>((resolve, reject) => {
+    recorder.ondataavailable = (e) => {
+      if (e.data.size) chunks.push(e.data)
+    }
+    recorder.onerror = () => reject(new Error("Recording failed"))
+    recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || mime || "audio/webm" }))
+  })
+  try {
+    recorder.start(250)
+    opts.onStarted?.()
+    const maxMs = opts.maxMs ?? 12_000
+    const started = Date.now()
+    while (!opts.signal?.stopped && Date.now() - started < maxMs) {
+      await new Promise((r) => setTimeout(r, 120))
+    }
+    if (recorder.state !== "inactive") recorder.stop()
+    const blob = await done
+    stream.getTracks().forEach((t) => t.stop())
+    if (blob.size < 64) return { error: "I didn't catch that — hold the mic and speak." }
+    const form = new FormData()
+    form.append("audio", blob, "utterance.webm")
+    const res = await fetch("/api/sancus/agent/listen", { method: "POST", body: form })
+    const body = (await res.json().catch(() => ({}))) as { text?: string; error?: string }
+    if (!res.ok) return { error: body.error || "Could not hear that" }
+    if (!body.text?.trim()) return { error: "I didn't catch that — try again." }
+    return { text: body.text.trim() }
+  } catch (e) {
+    stream.getTracks().forEach((t) => t.stop())
+    return { error: e instanceof Error ? e.message : "Recording failed" }
+  }
+}
+
 /**
  * Soft voice orb: drives CSS `--ag-level` from mic input (listening) or spoken audio
  * (speaking). Pass `tapOutput` into `useSpeaker(..., { onAudio: tapOutput })`.
@@ -460,6 +559,9 @@ export function useSpeaker(isActive: () => boolean, opts?: { onAudio?: (a: HTMLA
   const play = useCallback(
     (a: HTMLAudioElement) =>
       new Promise<boolean>((resolve) => {
+        // iOS needs playsInline or replies after an await stay silent.
+        a.setAttribute("playsinline", "true")
+        ;(a as HTMLAudioElement & { playsInline?: boolean }).playsInline = true
         audioRef.current = a
         onAudioRef.current?.(a)
         let started = false

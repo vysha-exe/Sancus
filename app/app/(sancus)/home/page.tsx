@@ -78,7 +78,7 @@ export default function HomePage() {
       <header className="home-head">
         <div className="home-head__copy">
           <span className="sx-label">
-            {personal ? "Personal account" : showBranchOverview ? "Global treasury" : "Branch workspace"}
+            {personal ? "Personal account · United States" : showBranchOverview ? "Global treasury" : "Branch workspace"}
           </span>
           <h1 className="sx-h heading-2">
             {personal ? `Good morning, ${account?.type === "INDIVIDUAL" && account.firstName ? account.firstName : activeName}` : activeName}
