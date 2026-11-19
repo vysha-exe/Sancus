@@ -102,7 +102,7 @@ function BalanceHistoryChart({
   )
 }
 
-export function HomeBalance() {
+export function HomeBalance({ fUsdcMinor = null }: { fUsdcMinor?: string | null }) {
   const ws = useWorkspace()
   // Business workspace: that company plus its branches. Personal: your own wallets + Gateway.
   const scope = !ws.ready ? undefined : ws.isPersonal || !ws.activeNode ? null : ws.activeNode.id
@@ -142,7 +142,8 @@ export function HomeBalance() {
           <span className="home-balance__scope-mark" aria-hidden />
           <div>
             <strong>{bank ? `Stablecoin liquidity ${live.loading ? "***" : live.availableLabel}` : treasuryCount ? `${treasuryCount} treasury ${treasuryCount === 1 ? "account" : "accounts"}` : "Available now"}</strong>
-            <span>{bank ? `${treasuryCount ?? 1} company ${treasuryCount === 1 ? "account" : "accounts"} · kept separate from bank cash` : scope && ws.activeNode ? `${ws.activeNode.name} and direct branches` : "Ready for payments and transfers"}</span>
+            {bank && fUsdcMinor !== null ? <span className="body-s muted">Treasury wallet · {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(Number(fUsdcMinor) / 1_000_000)} fUSDC</span> : null}
+            <span>{bank ? `${treasuryCount ?? 1} company ${treasuryCount === 1 ? "account" : "accounts"} · assets kept separate from bank cash` : scope && ws.activeNode ? `${ws.activeNode.name} and direct branches` : "Ready for payments and transfers"}</span>
           </div>
         </div>
       </div>

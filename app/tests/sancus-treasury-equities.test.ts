@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { readFileSync } from "node:fs"
 import { equityBuyQuote, equitySellQuote } from "@/lib/sancus/treasury-equities"
 import { accountBalances, equityAllocationJournal, gatewayMintJournal, isBalanced, yieldAllocationJournal } from "@/lib/sancus/ledger"
 
@@ -34,5 +35,14 @@ describe("parent treasury equity quotes", () => {
     expect(balances["USDC:treasury:gateway_usdc"]).toBe(-3_000_000n)
     expect(balances["USDC:assets:allocation_usdc"]).toBe(2_000_000n)
     expect(balances["fUSDC:assets:allocation_fusdc"]).toBe(1_000_000n)
+  })
+
+  it("shows parent fUSDC separately on the bank-first home dashboard", () => {
+    const home = readFileSync(new URL("../app/(sancus)/home/page.tsx", import.meta.url), "utf8")
+    const balance = readFileSync(new URL("../components/sancus-ui/home-balance.tsx", import.meta.url), "utf8")
+    expect(home).toContain('/api/sancus/treasury/root')
+    expect(home).toContain("Internal liquidity")
+    expect(balance).toContain("Treasury wallet")
+    expect(balance).toContain("fUSDC")
   })
 })
