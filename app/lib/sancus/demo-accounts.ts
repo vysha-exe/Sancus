@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export type DemoAs = "admin" | "finance" | "branch" | "employee" | "individual"
 export const DEMO_AS: DemoAs[] = ["admin", "finance", "branch", "employee", "individual"]
 export const DEMO_HOME: Record<DemoAs, string> = { admin: "/home", finance: "/activity/approvals", branch: "/branch", employee: "/me", individual: "/home" }
-const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", finance: "Mei", branch: "Ploy", employee: "Niran", individual: "Jayden" }
+const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", finance: "Mei", branch: "Ploy", employee: "Niran", individual: "Vysha" }
 
 export function parseDemoAs(v: string | null | undefined): DemoAs {
   return DEMO_AS.includes(v as DemoAs) ? (v as DemoAs) : "admin"
@@ -44,10 +44,21 @@ async function findUserId(admin: SupabaseClient, email: string): Promise<string 
   return null
 }
 
-async function ensureUser(admin: SupabaseClient, email: string, password: string, firstName: string): Promise<string> {
+async function ensureUser(
+  admin: SupabaseClient,
+  email: string,
+  password: string,
+  firstName: string,
+  extraMeta: Record<string, string> = {}
+): Promise<string> {
+  const meta = { first_name: firstName, ...extraMeta }
   const existing = await findUserId(admin, email)
-  if (existing) return existing
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { first_name: firstName } })
+  if (existing) {
+    // Keep demo display names / country in sync when we rename them (e.g. Jayden → Vysha).
+    await admin.auth.admin.updateUserById(existing, { user_metadata: meta })
+    return existing
+  }
+  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: meta })
   if (error || !data.user) throw new Error(`couldn't create ${email}: ${error?.message}`)
   return data.user.id
 }
@@ -75,6 +86,11 @@ async function ensureDemoCompany(admin: SupabaseClient, adminId: string): Promis
     if (error || !root) throw new Error(`couldn't create demo company: ${error?.message}`)
     rootId = root.id as string
     await admin.from("sancus_memberships").insert({ company_id: rootId, user_id: adminId, role: "OWNER", status: "ACTIVE" })
+  } else {
+    // Existing demo roots (older seeds used SG, etc.) stay pinned to the US HQ.
+    await admin.from("sancus_companies").update({ country: "US", base_currency: "USD", name: "Lion City Trading" }).eq("id", rootId).is("parent_id", null)
+    const usBank = { bank_name: "JPMorgan Chase", routing_label: "Routing number", routing_value: "021000021", currency: "USD" }
+    await admin.from("sancus_receive_accounts").update(usBank).eq("company_id", rootId)
   }
   const { data: branches } = await admin.from("sancus_companies").select("id, country").eq("parent_id", rootId).order("created_at")
   let branchId = ((branches ?? []).find((b) => b.country === "TH") ?? branches?.[0])?.id as string | undefined
@@ -183,19 +199,35 @@ export async function ensureDemoPeople(admin: SupabaseClient, rootId: string, ad
   }
 }
 
+export type DemoAccountReady = {
+  email: string
+  password: string
+  /** HQ company id when this login belongs to the demo business. */
+  rootId?: string
+  /** First branch id (TH) for branch/employee demos. */
+  branchId?: string
+}
+
 /** Makes sure the demo login for `as` exists and has the right access. Returns its credentials. */
 export async function ensureDemoAccount(
   admin: SupabaseClient,
   base: { email: string; password: string },
   as: DemoAs,
   emailOverride?: string
-): Promise<{ email: string; password: string }> {
+): Promise<DemoAccountReady> {
   const email = emailOverride ?? demoEmailFor(base.email, as)
-  const userId = await ensureUser(admin, email, base.password, DEMO_NAMES[as])
+  // Individual is a US personal account (no company); business admin HQ is also US.
+  const userId = await ensureUser(
+    admin,
+    email,
+    base.password,
+    DEMO_NAMES[as],
+    as === "individual" ? { country: "US", home_currency: "USD" } : { country: "US" }
+  )
   if (as === "admin") {
-    const { rootId } = await ensureDemoCompany(admin, userId)
+    const { rootId, branchId } = await ensureDemoCompany(admin, userId)
     await ensureDemoPeople(admin, rootId, userId).catch((e) => console.error("demo people seed failed", e))
-    return { email, password: base.password }
+    return { email, password: base.password, rootId, branchId }
   }
   if (as === "individual") return { email, password: base.password }
 
@@ -204,9 +236,9 @@ export async function ensureDemoAccount(
   // Finance sits on the global account (HQ), so it can approve for every branch.
   if (as === "finance") {
     await ensureMembership(admin, rootId, userId, email, "FINANCE")
-    return { email, password: base.password }
+    return { email, password: base.password, rootId, branchId }
   }
   await ensureMembership(admin, branchId, userId, email, as === "branch" ? "ADMIN" : "EMPLOYEE")
   if (as === "employee") await ensureEmployeeMethods(admin, adminId, userId, DEMO_NAMES.employee, branchId)
-  return { email, password: base.password }
+  return { email, password: base.password, rootId, branchId }
 }

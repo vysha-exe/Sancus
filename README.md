@@ -96,9 +96,9 @@ sancus/
 │   ├── app/                 #   pages + API routes (wallets, Gateway, payouts, webhooks…)
 │   ├── lib/circle/          #   Circle wallets, Gateway, App Kit, EarnKit clients
 │   ├── supabase/            #   database migrations
+│   ├── contracts/           #   Arc Testnet contracts we deploy + use (see contracts/README.md)
 │   └── SANCUS-SETUP.md      #   how to run it locally
 ├── rails-demo/              # Sandbox checks: Marqeta cards, QRIS, PromptPay, Pix
-├── contracts/               # (planned) SancusTreasury.sol: limits, approvals, holds
 ├── docs/
 │   ├── brand/               # Logo, tokens, components
 │   └── research/            # Chain, ramp and building-block research

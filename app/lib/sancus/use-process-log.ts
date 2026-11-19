@@ -239,7 +239,9 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
               rail: "Pix",
               status: statusFrom(p.status, "local"),
               localAmountLabel: amount,
-              simulated: p.simulated,
+              txHash: p.txHash,
+              explorerUrl: p.explorer,
+              simulated: p.simulated && !p.txHash,
               destinationKind: "bank",
               source: "live",
             })
@@ -259,7 +261,9 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
               status: statusFrom(p.status, "local"),
               localAmountLabel: amount,
               destinationKind: "bank",
-              simulated: true,
+              txHash: p.txHash,
+              explorerUrl: p.explorer,
+              simulated: p.simulated && !p.txHash,
               source: "live",
             })
           )

@@ -16,11 +16,14 @@ import {
   currentPageContext,
   dismissProposal,
   EXIT_RE,
+  needsWhisperListen,
   openProposals,
   ProposalCard,
   recognitionCtor,
+  recordUtterance,
   setChat,
   StepList,
+  unlockAudioPlayback,
   useAgentChat,
   useSpeaker,
   useVoiceGlow,
@@ -45,9 +48,15 @@ export function AgentCallButton() {
   const [phase, setPhase] = useState<Phase>("off")
   const [interim, setInterim] = useState("")
   const [note, setNote] = useState<string | null>(null)
+  const [caption, setCaption] = useState<string | null>(null)
   const phaseRef = useRef<Phase>("off")
   const recRef = useRef<Recognition | null>(null)
   const listenRef = useRef<() => void>(() => {})
+  const whisperStopRef = useRef<{ stopped: boolean } | null>(null)
+  const [whisperMode, setWhisperMode] = useState(false)
+  useEffect(() => {
+    setWhisperMode(needsWhisperListen())
+  }, [])
   const { orbRef, tapOutput } = useVoiceGlow(phase)
   const isActive = useCallback(() => phaseRef.current !== "off", [])
   const { say, stopSpeaking, prefetchPhrases } = useSpeaker(isActive, { onAudio: tapOutput })
@@ -59,10 +68,13 @@ export function AgentCallButton() {
 
   const hangUp = useCallback(() => {
     setPhaseBoth("off")
+    if (whisperStopRef.current) whisperStopRef.current.stopped = true
+    whisperStopRef.current = null
     recRef.current?.abort()
     recRef.current = null
     stopSpeaking()
     setInterim("")
+    setCaption(null)
   }, [stopSpeaking])
 
   const afterSpeaking = useCallback(() => {
@@ -72,6 +84,9 @@ export function AgentCallButton() {
   const ask = useCallback(
     async (content: string) => {
       setPhaseBoth("thinking")
+      setCaption(null)
+      // Skip progress TTS on phones — speaking mid-await often burns iOS audio unlock.
+      const speakProgress = !whisperMode
       const spokenProgress = new Set<string>()
       try {
         const done = await askAgent(content, {
@@ -80,22 +95,25 @@ export function AgentCallButton() {
           page: currentPageContext(),
           onEvent: (e) => {
             if (e.type === "action" && e.action.type === "navigate") router.push(e.action.path) // take them there now
-            if (e.type === "start" && spokenProgress.size < 2 && !spokenProgress.has(e.progress)) {
+            if (speakProgress && e.type === "start" && spokenProgress.size < 2 && !spokenProgress.has(e.progress)) {
               spokenProgress.add(e.progress)
               void say(`${e.progress}.`)
             }
           },
         })
+        setCaption(done.reply)
         setPhaseBoth("speaking")
         await say(done.reply, { interrupt: true })
         afterSpeaking()
       } catch (e) {
+        const msg = `Sorry, ${(e as Error).message}`
+        setCaption(msg)
         setPhaseBoth("speaking")
-        await say(`Sorry, ${(e as Error).message}`, { interrupt: true })
+        await say(msg, { interrupt: true })
         afterSpeaking()
       }
     },
-    [router, say, afterSpeaking]
+    [router, say, afterSpeaking, whisperMode]
   )
 
   const runConfirm = useCallback(
@@ -138,8 +156,39 @@ export function AgentCallButton() {
   )
 
   const listen = useCallback(() => {
+    if (phaseRef.current === "off") return
+
+    // Phones without SpeechRecognition: push-to-talk → Whisper.
+    if (needsWhisperListen()) {
+      if (whisperStopRef.current) whisperStopRef.current.stopped = true
+      const signal = { stopped: false }
+      whisperStopRef.current = signal
+      setInterim("")
+      setNote("Listening… tap the orb when you're done speaking.")
+      setPhaseBoth("listening")
+      void (async () => {
+        const result = await recordUtterance({
+          maxMs: 15_000,
+          signal,
+          onStarted: () => setInterim("Recording…"),
+        })
+        if (phaseRef.current === "off") return
+        whisperStopRef.current = null
+        if ("error" in result) {
+          setNote(result.error)
+          setInterim("")
+          setPhaseBoth("paused")
+          return
+        }
+        setNote(null)
+        setInterim(result.text)
+        await handleUtterance(result.text)
+      })()
+      return
+    }
+
     const Ctor = recognitionCtor()
-    if (!Ctor || phaseRef.current === "off") return
+    if (!Ctor) return
     recRef.current?.abort()
     const rec = new Ctor()
     rec.lang = "en-US"
@@ -194,12 +243,22 @@ export function AgentCallButton() {
       setPhaseBoth("paused")
       return
     }
-    setNote(recognitionCtor() ? null : "This browser can't listen. Use Chrome or Edge for voice.")
+    // Must run in the same user gesture as the tap — otherwise iOS mutes later replies.
+    await unlockAudioPlayback()
+    const canListen = Boolean(recognitionCtor()) || needsWhisperListen()
+    setNote(
+      canListen
+        ? needsWhisperListen()
+          ? "On this phone: tap the orb to stop when you're done speaking."
+          : null
+        : "This browser can't listen. Open Agents and type, or try Chrome on desktop."
+    )
+    setCaption(null)
     setPhaseBoth("speaking")
     void prefetchPhrases()
     await say("Hi, I'm here. Ask me about this page, or tell me what to do.")
     if (phaseRef.current === "off") return
-    if (recognitionCtor()) listenRef.current()
+    if (canListen) listenRef.current()
     else setPhaseBoth("paused")
   }
 
@@ -208,6 +267,11 @@ export function AgentCallButton() {
       stopSpeaking()
       listen()
     } else if (phase === "listening") {
+      if (whisperStopRef.current) {
+        whisperStopRef.current.stopped = true
+        setInterim("Got it — hearing you…")
+        return
+      }
       recRef.current?.abort()
       recRef.current = null
       setPhaseBoth("paused")
@@ -277,7 +341,9 @@ export function AgentCallButton() {
 
           {busy ? <StepList steps={liveSteps} title="Working on it" running /> : null}
 
-          {!busy && last && last.role === "assistant" ? <span className="ag-call-said">{last.content}</span> : null}
+          {!busy && (caption || (last && last.role === "assistant")) ? (
+            <span className="ag-call-said">{caption || (last && last.role === "assistant" ? last.content : "")}</span>
+          ) : null}
 
           {cards.map((p) => (
             <ProposalCard key={p.id} p={p} outcome={outcomes[p.id]} onConfirm={(x) => void runConfirm(x)} onCancel={(x) => dismissProposal(x)} />
@@ -290,7 +356,9 @@ export function AgentCallButton() {
           ) : null}
 
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-            <span className="body-s muted">Say “confirm” to send · “end call” to hang up</span>
+            <span className="body-s muted">
+              {whisperMode ? "Tap orb to finish speaking · “confirm” to send" : "Say “confirm” to send · “end call” to hang up"}
+            </span>
             <Link href="/agents" className="body-s">
               Open chat
             </Link>
