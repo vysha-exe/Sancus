@@ -14,6 +14,8 @@ import { evaluatePayout, loadCompanyPolicy, spentToday } from "@/lib/sancus/poli
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { notifyApprovers } from "@/lib/sancus/approval-notify"
 import { serviceClient } from "@/lib/sancus/service-client"
+import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
+import type { CompanyRow } from "@/lib/sancus/companies"
 
 const createSchema = z.object({
   sourceCompanyId: z.string().uuid(),
@@ -49,16 +51,17 @@ async function walletFor(
 
 async function bankAccountFor(
   supabase: Parameters<Parameters<typeof withAuth>[0]>[1]["supabase"],
-  companyId: string,
-  currency: string
+  company: CompanyRow
 ) {
-  const { data } = await supabase
-    .from("sancus_receive_accounts")
-    .select("id, bank_name, account_label, account_last4, currency")
-    .eq("company_id", companyId)
-    .eq("currency", currency)
-    .maybeSingle()
-  return data
+  const account = await ensureCompanyReceiveAccount(supabase, company)
+  if (account.currency !== company.base_currency) return null
+  return {
+    id: account.id,
+    bank_name: account.bank_name,
+    account_label: account.account_type,
+    account_last4: account.account_number.slice(-4),
+    currency: account.currency,
+  }
 }
 
 async function namesFor(
@@ -145,8 +148,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const [sourceWallet, destinationWallet, sourceBank, destinationBank] = await Promise.all([
     walletFor(supabase, source.id),
     walletFor(db, destination.id),
-    source.parent_id ? bankAccountFor(supabase, source.id, sourceCurrency) : Promise.resolve(null),
-    destination.parent_id ? bankAccountFor(db, destination.id, destinationCurrency) : Promise.resolve(null),
+    source.parent_id ? bankAccountFor(db, source) : Promise.resolve(null),
+    destination.parent_id ? bankAccountFor(db, destination) : Promise.resolve(null),
   ])
   if (!sourceWallet || !destinationWallet) {
     return NextResponse.json({ error: "Both accounts need an Arc treasury wallet" }, { status: 409 })
