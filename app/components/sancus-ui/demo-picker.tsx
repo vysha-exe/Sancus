@@ -11,7 +11,7 @@ const COPY: Record<DemoAs, { title: string; detail: string }> = {
   finance: { title: "Finance", detail: "Approve payments and transfers for every branch. Can't approve your own." },
   branch: { title: "Branch admin", detail: "Run one branch and its people." },
   employee: { title: "Employee", detail: "Your card, your limits, your agent." },
-  individual: { title: "Individual (Vysha)", detail: "A personal US dollar account. No business needed." },
+  individual: { title: "Individual", detail: "A personal US dollar account. No business needed." },
 }
 
 export function DemoPicker() {
