@@ -2,14 +2,17 @@
 import { NextResponse } from "next/server"
 import { withAuth } from "@/lib/api/with-auth"
 import { PAID_ENDPOINTS, resolveSeller } from "@/lib/sancus/x402"
+import { resolveRootTreasury } from "@/lib/sancus/root-treasury"
 
 type Row = { id: string; endpoint: string; payer: string; amount_minor: number | string; gateway_tx: string | null; created_at: string }
 
 export const GET = withAuth(async (_req, { user, supabase }) => {
+  const root = await resolveRootTreasury(supabase, user)
+  if (!root) return NextResponse.json({ error: "Parent treasury access is required" }, { status: 403 })
   const { data, error } = await supabase
     .from("sancus_x402_earnings")
     .select("id, endpoint, payer, amount_minor, gateway_tx, created_at")
-    .eq("user_id", user.id)
+    .eq("company_id", root.companyId)
     .order("created_at", { ascending: false })
     .limit(500)
   if (error) {
@@ -28,7 +31,7 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
     last24hMinor: today.reduce((s, r) => s + BigInt(r.amount_minor), 0n).toString(),
     last24hCalls: today.length,
     payers: new Set(rows.map((r) => r.payer)).size,
-    configured: Boolean(seller),
+    configured: Boolean(seller?.companyId === root.companyId),
     payTo: seller?.payTo ?? null,
     endpoints: PAID_ENDPOINTS.map((e) => ({ path: e.path, price: e.price, description: e.description })),
     recent: rows.slice(0, 20).map((r) => ({

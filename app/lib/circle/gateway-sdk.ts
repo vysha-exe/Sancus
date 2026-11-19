@@ -268,6 +268,17 @@ async function initiateContractInteraction(
   return responseData.id;
 }
 
+/** Execute one contract call from a developer-controlled Circle wallet and wait for confirmation. */
+export async function executeCircleContract(
+  walletId: string,
+  contractAddress: Address,
+  abiFunctionSignature: string,
+  args: AbiParametersInner[]
+): Promise<Transaction> {
+  const challengeId = await initiateContractInteraction(walletId, contractAddress, abiFunctionSignature, args)
+  return waitForTransactionConfirmation(challengeId)
+}
+
 /**
  * Add EOA delegate for a depositor wallet
  * This allows the EOA to sign burn intents on behalf of the depositor
@@ -442,7 +453,8 @@ async function getCircleWalletAddress(walletId: string): Promise<Address> {
  */
 async function getSignerWalletIdForUser(
   userId: string,
-  chain: SupportedChain
+  chain: SupportedChain,
+  companyId?: string
 ): Promise<{ walletId: string; address: string }> {
   const { getGatewayEOAWalletId } = await import("@/lib/circle/create-gateway-eoa-wallets");
   
@@ -454,17 +466,18 @@ async function getSignerWalletIdForUser(
   };
 
   const blockchain = chainMap[chain];
-  return await getGatewayEOAWalletId(userId, blockchain);
+  return await getGatewayEOAWalletId(userId, blockchain, companyId);
 }
 
 async function signBurnIntentWithEOA(
   burnIntentData: BurnIntentData,
   sourceChain: SupportedChain,
-  userId: string
+  userId: string,
+  companyId?: string
 ): Promise<`0x${string}`> {
   const typedData = burnIntentTypedData(burnIntentData);
 
-  const { walletId, address } = await getSignerWalletIdForUser(userId, sourceChain);
+  const { walletId, address } = await getSignerWalletIdForUser(userId, sourceChain, companyId);
 
   console.log("Signing burn intent with EOA:", address);
 
@@ -549,14 +562,15 @@ export async function signAndSubmitGatewayBurnIntent(
   sourceChain: SupportedChain,
   destinationChain: SupportedChain,
   recipientAddress: Address,
-  depositorAddress: Address
+  depositorAddress: Address,
+  companyId?: string
 ): Promise<{
   transferId: string;
   attestation: `0x${string}`;
   attestationSignature: `0x${string}`;
 }> {
   // 1. Get EOA signer for source chain (used for signing only)
-  const { address } = await getSignerWalletIdForUser(userId, sourceChain);
+  const { address } = await getSignerWalletIdForUser(userId, sourceChain, companyId);
   const eoaSignerAddress = address as Address;
 
   console.log(`Transferring ${Number(amount) / 1_000_000} USDC from Gateway`);
@@ -594,7 +608,7 @@ export async function signAndSubmitGatewayBurnIntent(
   };
 
   // 4. Sign Intent with EOA
-  const signature = await signBurnIntentWithEOA(burnIntentData, sourceChain, userId);
+  const signature = await signBurnIntentWithEOA(burnIntentData, sourceChain, userId, companyId);
 
   // 5. Submit to Gateway
   const typedData = burnIntentTypedData(burnIntentData);
@@ -862,15 +876,8 @@ export async function getUsdcBalance(
   address: Address,
   chain: SupportedChain
 ): Promise<bigint> {
-  // Face USDC (rail-bot mintable) replaces Circle Arc USDC for Sancus test balances.
-  if (chain === "arcTestnet") {
-    try {
-      const { faceUsdcEnabled, getFaceUsdcBalance } = await import("@/lib/sancus/face-usdc");
-      if (faceUsdcEnabled()) return getFaceUsdcBalance(address);
-    } catch {
-      /* fall through to real USDC */
-    }
-  }
+  // Canonical Circle USDC only. fUSDC has an explicit balance path and must
+  // never be silently substituted into Gateway, x402, or Earn calculations.
   return getTokenBalance(address, chain, "USDC");
 }
 

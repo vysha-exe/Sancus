@@ -30,6 +30,7 @@ export type Permission =
   | "activity.view"
   | "invoices.use"
   | "agents.business"
+  | "treasury.manage"
   | "card.view"
   | "limits.view"
   | "agent.use"
@@ -37,6 +38,7 @@ export type Permission =
 
 export type NavKey =
   | "home"
+  | "treasury"
   | "branch"
   | "me"
   | "pay"
@@ -47,6 +49,7 @@ export type NavKey =
   | "team"
   | "invoices"
   | "agents"
+  | "dev" // original provider and payment test dashboard
   | "devqa" // REMOVE BEFORE SUBMISSION — temporary rail test dashboard
   | "settings"
 
@@ -55,13 +58,13 @@ export function isDevQaEnabled(): boolean {
   return process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_SANCUS_DEV_QA === "true"
 }
 
-/** Inserts Process before Settings when the flag is on. */
+/** Inserts Dev and Process before Settings when the flag is on. */
 export function navWithDevQa(nav: NavKey[]): NavKey[] {
   if (!isDevQaEnabled()) return [...nav]
-  const out: NavKey[] = nav.filter((k) => k !== "devqa")
+  const out: NavKey[] = nav.filter((k) => k !== "dev" && k !== "devqa")
   const i = out.indexOf("settings")
-  if (i >= 0) out.splice(i, 0, "devqa")
-  else out.push("devqa")
+  if (i >= 0) out.splice(i, 0, "dev", "devqa")
+  else out.push("dev", "devqa")
   return out
 }
 
@@ -104,6 +107,7 @@ const ALL: Permission[] = [
   "activity.view",
   "invoices.use",
   "agents.business",
+  "treasury.manage",
   "card.view",
   "limits.view",
   "agent.use",
@@ -115,6 +119,7 @@ export function navKeyForPath(pathname: string): NavKey | null {
   const seg = pathname.split("/").filter(Boolean)[0] ?? ""
   const map: Record<string, NavKey> = {
     home: "home",
+    treasury: "treasury",
     branch: "branch",
     me: "me",
     pay: "pay",
@@ -126,7 +131,7 @@ export function navKeyForPath(pathname: string): NavKey | null {
     invoices: "invoices",
     agents: "agents",
     "dev-qa": "devqa",
-    dev: "devqa",
+    dev: "dev",
     process: "devqa",
     settings: "settings",
   }
@@ -157,7 +162,7 @@ export abstract class SancusAccount {
   canAccessPath(pathname: string): boolean {
     const key = navKeyForPath(pathname)
     if (key === null) return true
-    if (key === "devqa" && isDevQaEnabled()) return true
+    if ((key === "dev" || key === "devqa") && isDevQaEnabled()) return true
     return this.paths.includes(key)
   }
 
@@ -209,7 +214,7 @@ export class AdminAccount extends SancusAccount {
   readonly type = "ADMIN" as const
   readonly label = "Admin"
   readonly homePath = "/home"
-  readonly nav: NavKey[] = ["home", "pay", "activity", "spending", "branches", "team", "invoices", "agents", "settings"]
+  readonly nav: NavKey[] = ["home", "treasury", "pay", "activity", "spending", "branches", "team", "invoices", "agents", "settings"]
   protected readonly paths: NavKey[] = [...this.nav, "receive", "branch"]
   protected readonly permissions = new Set<Permission>(ALL)
 
