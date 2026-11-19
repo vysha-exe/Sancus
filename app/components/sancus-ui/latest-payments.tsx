@@ -2,14 +2,16 @@
 
 // Home › Latest payments: live payouts from the backend, demo rows when there are none.
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
-import { latestPayments } from "@/lib/sancus/demo-data"
+import { latestPayments, personalLatestPayments } from "@/lib/sancus/demo-data"
+import { useAccount } from "@/lib/sancus/use-account"
 import { useLiveActivity } from "@/lib/sancus/use-live-activity"
 
 const CAP = 5
 
 export function LatestPayments() {
   const { source, payments, loading } = useLiveActivity()
-  const rows = source === "live" ? payments : latestPayments
+  const { account } = useAccount()
+  const rows = source === "live" ? payments : account?.type === "INDIVIDUAL" ? personalLatestPayments : latestPayments
 
   if (loading) {
     return (

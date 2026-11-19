@@ -6,8 +6,11 @@ import { AddPayeeSheet } from "@/components/sancus-ui/add-payee-sheet"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { recipientIsLive, type Recipient } from "@/lib/sancus/demo-data"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
+import { useAccount } from "@/lib/sancus/use-account"
 
-const filters = ["All", "Suppliers", "Contractors", "Team"] as const
+const businessFilters = ["All", "Suppliers", "Contractors", "Team"] as const
+const personalFilters = ["All", "Friends & family", "Shops & businesses"] as const
+type Filter = (typeof businessFilters)[number] | (typeof personalFilters)[number]
 
 function RecipientPayoutPill({ live }: { live: boolean }) {
   return live ? (
@@ -31,16 +34,37 @@ function RecipientKindRail({ r }: { r: Recipient }) {
   )
 }
 
-function matchesFilter(r: Recipient, filter: (typeof filters)[number]) {
+function matchesFilter(r: Recipient, filter: Filter) {
   if (filter === "All") return true
   if (filter === "Suppliers") return r.kind === "Supplier"
   if (filter === "Contractors") return r.kind === "Contractor"
+  if (filter === "Friends & family") return r.kind === "Friend" || r.kind === "Family"
+  if (filter === "Shops & businesses") return r.kind === "Shop" || r.kind === "Business"
   return r.kind === "Team"
+}
+
+/** Personal accounts: pay anyone by scanning their QR or typing their bank details. */
+function QuickPay() {
+  return (
+    <div className="grid" style={{ marginBottom: 16 }}>
+      <Link href="/pay/scan" className="tile s6" style={{ display: "grid", gap: 6, textDecoration: "none", color: "inherit" }}>
+        <span className="body-strong">Scan a QR code</span>
+        <span className="body-s muted">PayNow, PromptPay, QRIS or Pix: point your camera or upload a picture of the code.</span>
+      </Link>
+      <Link href="/pay/us-bank" className="tile s6" style={{ display: "grid", gap: 6, textDecoration: "none", color: "inherit" }}>
+        <span className="body-strong">Enter bank details</span>
+        <span className="body-s muted">Send to a company&apos;s US bank account by ACH. USDC becomes USD at 1:1.</span>
+      </Link>
+    </div>
+  )
 }
 
 export default function PayWhoPage() {
   const { recipient, recipients, setRecipientId, invoice } = usePayFlow()
-  const [filter, setFilter] = useState<(typeof filters)[number]>("All")
+  const { account } = useAccount()
+  const personal = account?.type === "INDIVIDUAL"
+  const filters: readonly Filter[] = personal ? personalFilters : businessFilters
+  const [filter, setFilter] = useState<Filter>("All")
   const [query, setQuery] = useState("")
   const [adding, setAdding] = useState(false)
 
@@ -70,8 +94,12 @@ export default function PayWhoPage() {
       ) : null}
 
       <p className="body-s muted" style={{ margin: "-8px 0 20px" }}>
-        Pick someone from your list, or add a new payee. Then continue to enter the amount.
+        {personal
+          ? "Scan a QR, enter bank details, or pick someone you've paid before."
+          : "Pick someone from your list, or add a new payee. Then continue to enter the amount."}
       </p>
+
+      {personal ? <QuickPay /> : null}
 
       <div className="grid">
         <section className="tile s8" aria-label="Choose a recipient">

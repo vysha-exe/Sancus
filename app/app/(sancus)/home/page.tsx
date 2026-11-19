@@ -60,19 +60,27 @@ export default function HomePage() {
         </section>
 
         {personal ? (
-          <section className="tile s4" aria-labelledby="local">
+          <section className="tile s4" aria-labelledby="quick">
             <div className="tile-head">
-              <h2 className="tile-title" id="local">
-                Get paid locally
+              <h2 className="tile-title" id="quick">
+                Pay or get paid
               </h2>
             </div>
-            <div className="kv">
-              <span>Pix, QRIS, PromptPay</span>
-              <span className="body-s muted">On Receive</span>
-            </div>
+            <Link href="/pay/scan" className="kv" style={{ color: "inherit", textDecoration: "none" }}>
+              <span>Scan a QR code</span>
+              <span className="body-s muted">PayNow, PromptPay, Pix</span>
+            </Link>
+            <Link href="/pay/us-bank" className="kv" style={{ color: "inherit", textDecoration: "none" }}>
+              <span>Enter bank details</span>
+              <span className="body-s muted">US bank by ACH</span>
+            </Link>
+            <Link href="/pay" className="kv" style={{ color: "inherit", textDecoration: "none" }}>
+              <span>Pay a friend</span>
+              <span className="body-s muted">Saved payees</span>
+            </Link>
             <div className="tile-foot">
               <Link href="/receive" className="sx-btn sx-btn--quiet">
-                Show QR
+                Show my QR
               </Link>
             </div>
           </section>

@@ -6,7 +6,7 @@ export const CUSTOM_PAYEES_KEY = "sancus:custom-payees"
 
 export type NewPayeeInput = {
   name: string
-  kind: "Supplier" | "Contractor" | "Team"
+  kind: "Supplier" | "Contractor" | "Team" | "Friend" | "Family" | "Business"
   proxyType: ProxyType
   proxyValue: string
   bankCode?: string

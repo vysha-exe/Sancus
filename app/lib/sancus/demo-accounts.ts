@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export type DemoAs = "admin" | "branch" | "employee" | "individual"
 export const DEMO_AS: DemoAs[] = ["admin", "branch", "employee", "individual"]
 export const DEMO_HOME: Record<DemoAs, string> = { admin: "/home", branch: "/branch", employee: "/me", individual: "/home" }
-const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", branch: "Ploy", employee: "Niran", individual: "Alex" }
+const DEMO_NAMES: Record<DemoAs, string> = { admin: "Admin", branch: "Ploy", employee: "Niran", individual: "Jayden" }
 
 export function parseDemoAs(v: string | null | undefined): DemoAs {
   return DEMO_AS.includes(v as DemoAs) ? (v as DemoAs) : "admin"
@@ -107,6 +107,64 @@ async function ensureEmployeeMethods(admin: SupabaseClient, adminId: string, emp
   if (missing.length) await admin.from("sancus_spending_methods").insert(missing)
 }
 
+/**
+ * Hardcoded people for the demo company, so the hierarchy (HQ → branches → people) looks like a
+ * real business. Each branch is matched by country (first branch of that country, or by name).
+ * They're placeholder logins (example.com, random password); nobody signs in as them.
+ */
+const DEMO_PEOPLE: { branch: { country: string; name?: string } | "HQ"; first: string; last: string; role: "ADMIN" | "FINANCE" | "EMPLOYEE" | "VIEWER"; perPayment?: number; daily?: number }[] = [
+  { branch: "HQ", first: "Wei Jie", last: "Tan", role: "FINANCE", perPayment: 25_000, daily: 50_000 },
+  { branch: "HQ", first: "Aisha", last: "Rahman", role: "ADMIN" },
+  { branch: "HQ", first: "Daniel", last: "Koh", role: "VIEWER" },
+  { branch: { country: "ID", name: "Lion City Jakarta" }, first: "Dewi", last: "Lestari", role: "ADMIN" },
+  { branch: { country: "ID", name: "Lion City Jakarta" }, first: "Budi", last: "Santoso", role: "EMPLOYEE", perPayment: 300, daily: 800 },
+  { branch: { country: "ID", name: "Lion City Jakarta" }, first: "Rizky", last: "Pratama", role: "EMPLOYEE", perPayment: 200, daily: 500 },
+  { branch: { country: "ID", name: "Jakarta Warehouse" }, first: "Agus", last: "Wibowo", role: "ADMIN" },
+  { branch: { country: "ID", name: "Jakarta Warehouse" }, first: "Siti", last: "Nurhaliza", role: "EMPLOYEE", perPayment: 150, daily: 400 },
+  { branch: { country: "TH" }, first: "Somsak", last: "Chaiyaporn", role: "EMPLOYEE", perPayment: 250, daily: 600 },
+  { branch: { country: "US" }, first: "Emily", last: "Carter", role: "ADMIN" },
+  { branch: { country: "US" }, first: "Marcus", last: "Johnson", role: "EMPLOYEE", perPayment: 1_000, daily: 2_500 },
+]
+
+const usdMinor = (usd: number | undefined) => (usd == null ? null : String(Math.round(usd * 1e6)))
+
+/** Seeds DEMO_PEOPLE into the demo company once (skips anyone already there). */
+export async function ensureDemoPeople(admin: SupabaseClient, rootId: string, adminId: string) {
+  const { data: nodes } = await admin.from("sancus_companies").select("id, name, country, parent_id").eq("root_id", rootId)
+  const branches = (nodes ?? []).filter((n) => n.parent_id)
+  // A bare "USA" branch reads oddly next to the others.
+  const usa = branches.find((b) => b.country === "US" && b.name === "USA")
+  if (usa) {
+    await admin.from("sancus_companies").update({ name: "Lion City New York" }).eq("id", usa.id)
+    usa.name = "Lion City New York"
+  }
+  const { data: existing } = await admin.from("sancus_memberships").select("invited_email").in("company_id", [rootId, ...branches.map((b) => b.id)])
+  const have = new Set((existing ?? []).map((m) => (m.invited_email as string | null)?.toLowerCase()).filter(Boolean))
+  for (const p of DEMO_PEOPLE) {
+    const email = `${p.first}.${p.last}`.toLowerCase().replace(/\s+/g, "") + "@lioncity.example"
+    if (have.has(email)) continue
+    const node =
+      p.branch === "HQ"
+        ? { id: rootId }
+        : (branches.find((b) => b.country === (p.branch as { country: string }).country && (!(p.branch as { name?: string }).name || b.name === (p.branch as { name?: string }).name)) ??
+          branches.find((b) => b.country === (p.branch as { country: string }).country))
+    if (!node) continue
+    const userId = await ensureUser(admin, email, `${crypto.randomUUID()}Aa1!`, p.first)
+    await admin.auth.admin.updateUserById(userId, { user_metadata: { first_name: p.first, last_name: p.last, demo_person: true } })
+    await admin.from("sancus_memberships").insert({
+      company_id: node.id,
+      user_id: userId,
+      invited_email: email,
+      invited_by: adminId,
+      role: p.role,
+      status: "ACTIVE",
+      accepted_at: new Date().toISOString(),
+      per_payment_limit_minor: usdMinor(p.perPayment),
+      daily_limit_minor: usdMinor(p.daily),
+    })
+  }
+}
+
 /** Makes sure the demo login for `as` exists and has the right access. Returns its credentials. */
 export async function ensureDemoAccount(
   admin: SupabaseClient,
@@ -117,7 +175,8 @@ export async function ensureDemoAccount(
   const email = emailOverride ?? demoEmailFor(base.email, as)
   const userId = await ensureUser(admin, email, base.password, DEMO_NAMES[as])
   if (as === "admin") {
-    await ensureDemoCompany(admin, userId)
+    const { rootId } = await ensureDemoCompany(admin, userId)
+    await ensureDemoPeople(admin, rootId, userId).catch((e) => console.error("demo people seed failed", e))
     return { email, password: base.password }
   }
   if (as === "individual") return { email, password: base.password }

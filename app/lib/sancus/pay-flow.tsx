@@ -21,10 +21,12 @@ import {
   getRecipient as getDemoRecipient,
   julianaQuote,
   recipients as demoRecipients,
+  recipientsFor,
   type Recipient,
 } from "@/lib/sancus/demo-data"
 import { buildCustomPayee, loadCustomPayees, saveCustomPayees, type NewPayeeInput } from "@/lib/sancus/custom-payees"
 import { validateRecipient } from "@/lib/sancus/paynow"
+import { useAccount } from "@/lib/sancus/use-account"
 import { displayMinor, parseToMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { SerializedQuote } from "@/lib/sancus/fx"
 import type { PayoutDto } from "@/lib/sancus/payouts"
@@ -211,8 +213,11 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer)
   }, [])
 
-  const recipients = useMemo(() => [...customPayees, ...demoRecipients], [customPayees])
-  const recipient = findRecipient(state.recipientId, customPayees) ?? recipients[0]!
+  // Personal accounts (Jayden) get their own payees; business accounts get suppliers and team.
+  const { account } = useAccount()
+  const personal = account?.type === "INDIVIDUAL"
+  const recipients = useMemo(() => [...customPayees, ...recipientsFor(personal)], [customPayees, personal])
+  const recipient = recipients.find((r) => r.id === state.recipientId) ?? recipients[0]!
   const isLive = Boolean(recipient.payout)
   const isPix = recipient.id === "juliana"
   const sourceAccounts = useMemo(
@@ -245,6 +250,13 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     },
     [customPayees, recipients]
   )
+
+  // The default payee isn't in this account's list (e.g. a personal account): select its first one.
+  useEffect(() => {
+    if (recipient.id === state.recipientId) return
+    const timer = window.setTimeout(() => setRecipientId(recipient.id), 0)
+    return () => window.clearTimeout(timer)
+  }, [recipient.id, state.recipientId, setRecipientId])
 
   const addPayee = useCallback((input: NewPayeeInput) => {
     const issues = validateRecipient({

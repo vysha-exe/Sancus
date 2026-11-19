@@ -10,6 +10,8 @@ export const PROGRESS: Record<string, string> = {
   propose_collection: "Setting up the collection",
   list_people: "Looking up your team",
   propose_limits: "Preparing the new limits",
+  my_spending: "Checking your card and limits",
+  open_page: "Opening that page",
 }
 
 export const VOICE_GREETINGS = ["Hi, I'm listening. What should I do?", "I'm listening."]

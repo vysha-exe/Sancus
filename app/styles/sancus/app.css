@@ -459,3 +459,21 @@ body:has(.frame) {
   .ag-thread, .ag-sugg { padding-left: 16px; padding-right: 16px; }
   .ag-comp { margin-left: 16px; margin-right: 16px; }
 }
+
+/* Agent call: the button at the top right of every page, and the floating call panel. */
+.ag-callbtn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 10px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--surface-000); color: var(--ink); font: 600 14px var(--font-sans); cursor: pointer; }
+.ag-callbtn:hover { background: var(--surface-200); }
+.ag-callbtn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.ag-callbtn:disabled { opacity: .5; cursor: not-allowed; }
+.ag-callbtn .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-subtle); color: var(--accent); }
+.ag-callbtn[aria-pressed="true"] .dot { background: color-mix(in srgb, var(--on-accent) 20%, transparent); color: var(--on-accent); }
+.ag-call { position: fixed; right: 20px; bottom: 20px; z-index: 60; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 110px); overflow: auto; display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-100); color: var(--ink); box-shadow: var(--shadow-card); }
+.ag-call-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ag-call-orb { width: 56px; height: 56px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: var(--on-accent); background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent) 65%); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 15%, transparent); }
+.ag-call-orb[data-phase="listening"] { animation: ag-ring 1.6s ease-in-out infinite; }
+.ag-call-orb[data-phase="speaking"] { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--brand-bronze) 70%, #fff), var(--brand-bronze) 65%); box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand-bronze) 15%, transparent); }
+.ag-call-orb[data-phase="thinking"], .ag-call-orb[data-phase="paused"] { background: var(--surface-200); color: var(--ink-muted); box-shadow: none; }
+@keyframes ag-ring { 50% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 8%, transparent); } }
+.ag-call-said { font-size: 14px; line-height: 20px; }
+.ag-call .ag-flow, .ag-call .ag-card { max-width: none; }
+@media (max-width: 720px) { .ag-callbtn .lbl { display: none; } .ag-callbtn { padding: 0 9px; } .ag-call { right: 16px; bottom: 16px; } }
