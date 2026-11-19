@@ -7,6 +7,12 @@ import { useWorkspace } from "@/lib/sancus/use-workspace"
 
 type BalancePoint = { at: number; minor: string }
 
+export type HomeTreasuryPositions = {
+  fUsdcMinor: string
+  equities: { symbol: string; valueMinor: string }[]
+  yield: { name: string; protocol: string; valueMinor: string }[]
+}
+
 const HISTORY_PREFIX = "sancus:balance-history:v1:"
 const HISTORY_DAYS = 30
 
@@ -102,7 +108,12 @@ function BalanceHistoryChart({
   )
 }
 
-export function HomeBalance({ fUsdcMinor = null }: { fUsdcMinor?: string | null }) {
+const usd = (minor: bigint | string) => new Intl.NumberFormat(undefined, {
+  style: "currency",
+  currency: "USD",
+}).format(Number(BigInt(minor)) / 1_000_000)
+
+export function HomeBalance({ positions = null }: { positions?: HomeTreasuryPositions | null }) {
   const ws = useWorkspace()
   // Business workspace: that company plus its branches. Personal: your own wallets + Gateway.
   const scope = !ws.ready ? undefined : ws.isPersonal || !ws.activeNode ? null : ws.activeNode.id
@@ -121,6 +132,12 @@ export function HomeBalance({ fUsdcMinor = null }: { fUsdcMinor?: string | null 
   const bankMeta = bank && BigInt(bank.heldMinor) > 0n
     ? `${new Intl.NumberFormat(undefined, { style: "currency", currency: bank.currency }).format(Number(bank.heldMinor) / 100)} held for payments`
     : bank?.bankName ?? ""
+  const equityMinor = positions?.equities.reduce((sum, item) => sum + BigInt(item.valueMinor), 0n) ?? 0n
+  const yieldMinor = positions?.yield.reduce((sum, item) => sum + BigInt(item.valueMinor), 0n) ?? 0n
+  const liquidMinor = BigInt(live.summary?.availableMinor ?? "0")
+  const portfolioMinor = positions ? liquidMinor + BigInt(positions.fUsdcMinor) + equityMinor + yieldMinor : null
+  const equitySymbols = positions?.equities.filter((item) => BigInt(item.valueMinor) > 0n).map((item) => item.symbol).join(" + ") || "NVDA + GOOGL"
+  const yieldNames = [...new Set(positions?.yield.filter((item) => BigInt(item.valueMinor) > 0n).map((item) => item.protocol || item.name) ?? [])].join(" + ") || "Yield vaults"
 
   return (
     <section className="tile s8 home-balance" aria-labelledby="bal" aria-busy={live.loading || bankLoading}>
@@ -141,16 +158,19 @@ export function HomeBalance({ fUsdcMinor = null }: { fUsdcMinor?: string | null 
         <div className="home-balance__scope">
           <span className="home-balance__scope-mark" aria-hidden />
           <div>
-            <strong>{bank ? `Stablecoin liquidity ${live.loading ? "***" : live.availableLabel}` : treasuryCount ? `${treasuryCount} treasury ${treasuryCount === 1 ? "account" : "accounts"}` : "Available now"}</strong>
-            {bank && fUsdcMinor !== null ? <span className="body-s muted">Treasury wallet · {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(Number(fUsdcMinor) / 1_000_000)} fUSDC</span> : null}
+            <strong>{bank && portfolioMinor !== null ? `On-chain Treasury ${usd(portfolioMinor)}` : bank ? `Stablecoin liquidity ${live.loading ? "***" : live.availableLabel}` : treasuryCount ? `${treasuryCount} treasury ${treasuryCount === 1 ? "account" : "accounts"}` : "Available now"}</strong>
+            {bank && positions ? <span className="body-s muted">Canonical USDC + Gateway · {live.loading ? "***" : live.availableLabel}</span> : null}
+            {bank && positions ? <span className="body-s muted">Treasury wallet · {usd(positions.fUsdcMinor)} fUSDC</span> : null}
+            {bank && positions ? <span className="body-s muted">{equitySymbols} positions · {usd(equityMinor)}</span> : null}
+            {bank && positions ? <span className="body-s muted">{yieldNames} positions · {usd(yieldMinor)}</span> : null}
             <span>{bank ? `${treasuryCount ?? 1} company ${treasuryCount === 1 ? "account" : "accounts"} · assets kept separate from bank cash` : scope && ws.activeNode ? `${ws.activeNode.name} and direct branches` : "Ready for payments and transfers"}</span>
           </div>
         </div>
       </div>
       <BalanceHistoryChart
-        scope={scope ?? null}
-        currentMinor={live.summary?.availableMinor ?? null}
-        label={bank ? "Stablecoin history" : "Balance history"}
+        scope={positions && scope ? `${scope}:portfolio` : scope ?? null}
+        currentMinor={portfolioMinor?.toString() ?? live.summary?.availableMinor ?? null}
+        label={positions ? "Treasury portfolio history" : bank ? "Stablecoin history" : "Balance history"}
       />
       {live.error ? (
         <span className="body-s" style={{ color: "var(--failed)" }}>
