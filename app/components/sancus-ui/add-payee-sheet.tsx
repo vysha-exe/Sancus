@@ -3,9 +3,13 @@
 import Link from "next/link"
 import { useState, type FormEvent } from "react"
 import type { ProxyType } from "@/lib/sancus/paynow"
+import type { NewPayeeInput } from "@/lib/sancus/custom-payees"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
+import { useAccount } from "@/lib/sancus/use-account"
 
-const KINDS = ["Supplier", "Contractor", "Team"] as const
+type Kind = NewPayeeInput["kind"]
+const BUSINESS_KINDS: Kind[] = ["Supplier", "Contractor", "Team"]
+const PERSONAL_KINDS: Kind[] = ["Friend", "Family", "Business"]
 const PROXY: { id: ProxyType; label: string; placeholder: string; help: string }[] = [
   { id: "MOBILE", label: "PayNow mobile", placeholder: "+65 9123 4567", help: "Singapore mobile registered with PayNow" },
   { id: "UEN", label: "PayNow UEN", placeholder: "201912345K", help: "Business UEN registered with PayNow" },
@@ -14,8 +18,10 @@ const PROXY: { id: ProxyType; label: string; placeholder: string; help: string }
 
 export function AddPayeeSheet({ onClose }: { onClose: () => void }) {
   const { addPayee } = usePayFlow()
+  const { account } = useAccount()
+  const KINDS = account?.type === "INDIVIDUAL" ? PERSONAL_KINDS : BUSINESS_KINDS
   const [name, setName] = useState("")
-  const [kind, setKind] = useState<(typeof KINDS)[number]>("Supplier")
+  const [kind, setKind] = useState<Kind>(KINDS[0]!)
   const [proxyType, setProxyType] = useState<ProxyType>("MOBILE")
   const [proxyValue, setProxyValue] = useState("")
   const [bankCode, setBankCode] = useState("")

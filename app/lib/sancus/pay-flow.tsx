@@ -21,11 +21,14 @@ import {
   getRecipient as getDemoRecipient,
   julianaQuote,
   recipients as demoRecipients,
+  recipientsFor,
   type Recipient,
 } from "@/lib/sancus/demo-data"
 import { buildCustomPayee, loadCustomPayees, saveCustomPayees, type NewPayeeInput } from "@/lib/sancus/custom-payees"
 import { validateRecipient } from "@/lib/sancus/paynow"
+import { useAccount } from "@/lib/sancus/use-account"
 import { displayMinor, parseToMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
+import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 import type { SerializedQuote } from "@/lib/sancus/fx"
 import type { PayoutDto } from "@/lib/sancus/payouts"
 import { notifyApprovalsChanged } from "@/lib/sancus/use-live-approvals"
@@ -212,8 +215,11 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer)
   }, [])
 
-  const recipients = useMemo(() => [...customPayees, ...demoRecipients], [customPayees])
-  const recipient = findRecipient(state.recipientId, customPayees) ?? recipients[0]!
+  // Personal accounts (Jayden) get their own payees; business accounts get suppliers and team.
+  const { account } = useAccount()
+  const personal = account?.type === "INDIVIDUAL"
+  const recipients = useMemo(() => [...customPayees, ...recipientsFor(personal)], [customPayees, personal])
+  const recipient = recipients.find((r) => r.id === state.recipientId) ?? recipients[0]!
   const isLive = Boolean(recipient.payout)
   const isPix = recipient.id === "juliana"
   const sourceAccounts = useMemo(
@@ -247,6 +253,13 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     [customPayees, recipients]
   )
 
+  // The default payee isn't in this account's list (e.g. a personal account): select its first one.
+  useEffect(() => {
+    if (recipient.id === state.recipientId) return
+    const timer = window.setTimeout(() => setRecipientId(recipient.id), 0)
+    return () => window.clearTimeout(timer)
+  }, [recipient.id, state.recipientId, setRecipientId])
+
   const addPayee = useCallback((input: NewPayeeInput) => {
     const issues = validateRecipient({
       name: input.name,
@@ -279,8 +292,11 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
         const r = findRecipient(s.recipientId, customPayees)
         const n = Number.parseFloat(v.replace(/,/g, ""))
         if (r?.payout) {
+          if (!Number.isFinite(n)) return { ...s, usdAmount: v }
+          // No live rate yet: estimate "They get" at the fixed demo rate so the first live quote can
+          // be requested (the quote API is priced in SGD). The quote callback below corrects it once it lands.
+          if (!liveQuote) return { ...s, usdAmount: v, localAmount: Math.max(0, n * FIXED_USD_RATES.SGD).toFixed(2) }
           // Live: convert at the last quoted rate, net of the fee.
-          if (!liveQuote || !Number.isFinite(n)) return { ...s, usdAmount: v }
           const rate = Number.parseFloat(liveQuote.quote.clientRate)
           const fee = Number(liveQuote.quote.feeSgdMinor) / 100
           const local = Math.max(0, n * rate - fee)
@@ -329,8 +345,19 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
         })
         const body = await res.json()
         if (res.ok) {
-          setLiveQuote(body as LiveQuote)
+          const fresh = body as LiveQuote
+          setLiveQuote(fresh)
           setQuoteError(null)
+          // USDC typed first: re-derive "They get" from the USDC amount at the live rate, net of the
+          // fee. That re-quotes once at the corrected SGD amount, then settles (same rate, same SGD).
+          setState((s) => {
+            const n = Number.parseFloat(s.usdAmount.replace(/,/g, ""))
+            if (!s.usdAmount.trim() || !Number.isFinite(n)) return s
+            const rate = Number.parseFloat(fresh.quote.clientRate)
+            const fee = Number(fresh.quote.feeSgdMinor) / 100
+            const local = Math.max(0, n * rate - fee).toFixed(2)
+            return local === s.localAmount ? s : { ...s, localAmount: local }
+          })
         } else {
           setLiveQuote(null)
           setQuoteError(

@@ -57,7 +57,7 @@ function detailFor(a: ApprovalItem): Detail {
   if (!a.live && demoDetails[a.id]) return demoDetails[a.id]!
   return {
     rail: a.rail,
-    headline: `Payment to ${a.to}`,
+    headline: a.mine ? `Payment to ${a.to}` : `${a.asker} wants to pay ${a.to}`,
     when: a.when,
     localAmount: a.localAmount,
     rate: a.rate,
@@ -93,7 +93,9 @@ export default function ApprovalsPage() {
     : live.waiting.map((a) => ({ ...a, decision: demoDecisions[a.id] }))
 
   const waiting = all.filter((a) => !a.decision)
-  const waitingTotal = waiting.reduce((sum, a) => sum + a.amountUsd, 0)
+  // "Approve all" only touches requests this person may decide (never their own).
+  const decidable = waiting.filter((a) => a.canDecide)
+  const waitingTotal = decidable.reduce((sum, a) => sum + a.amountUsd, 0)
   const visible = all.filter((a) => {
     if (filter === "waiting") return !a.decision
     if (filter === "expired") return false
@@ -133,7 +135,7 @@ export default function ApprovalsPage() {
       return
     }
     setBusy(true)
-    for (const a of waiting) {
+    for (const a of decidable) {
       const err = await live.decide(a.id, "approve")
       if (err) {
         setError(err)
@@ -236,7 +238,7 @@ export default function ApprovalsPage() {
               type="button"
               className="sx-btn sx-btn--secondary sx-btn--sm"
               onClick={approveAll}
-              disabled={waiting.length === 0 || busy}
+              disabled={decidable.length === 0 || busy}
             >
               {live.loading ? "***" : `Approve all I can · ${money.format(waitingTotal)}`}
             </button>
@@ -312,6 +314,13 @@ export default function ApprovalsPage() {
                   disabled={Boolean(decision) || busy}
                 />
               </label>
+              {!decision && !selected.canDecide && selected.cantDecideReason ? (
+                <p className="body-s muted" style={{ margin: 0 }}>
+                  {selected.mine
+                    ? "Waiting for another admin. You can't approve your own payment, but you can withdraw it."
+                    : selected.cantDecideReason}
+                </p>
+              ) : null}
               {error ? (
                 <p className="body-s" role="alert" style={{ margin: 0, color: "var(--danger, #c0392b)" }}>
                   {error}
@@ -321,15 +330,15 @@ export default function ApprovalsPage() {
                 <button
                   type="button"
                   className="sx-btn sx-btn--secondary"
-                  disabled={Boolean(decision) || busy}
+                  disabled={Boolean(decision) || busy || (!selected.canDecide && !selected.mine)}
                   onClick={() => decide(selected.id, "declined")}
                 >
-                  Decline
+                  {selected.mine && !selected.canDecide ? "Withdraw" : "Decline"}
                 </button>
                 <button
                   type="button"
                   className="sx-btn sx-btn--primary"
-                  disabled={Boolean(decision) || busy}
+                  disabled={Boolean(decision) || busy || !selected.canDecide}
                   onClick={() => decide(selected.id, "approved")}
                 >
                   {busy ? "Saving…" : `Approve ${selected.amountLabel}`}
