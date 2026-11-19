@@ -4,6 +4,7 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { serviceClient } from "./service-client"
 import { createClient } from "@supabase/supabase-js"
 import { getAppKitSendError, sendUsdcOnSameChainWithAppKit } from "@/lib/circle/app-kit-send"
 import { achJournalsFor, type AchPaymentRow } from "./ach"
@@ -16,9 +17,12 @@ export const ACH_PROVIDER = "bridge-simulated"
 type Poster = { kind: "user" } | { kind: "service"; userId: string }
 
 export async function syncAchLedger(db: SupabaseClient, row: AchPaymentRow, poster: Poster = { kind: "user" }): Promise<void> {
+  // Journals always land in the requester's books, even when another admin approves or declines.
+  const svc = poster.kind === "user" ? serviceClient() : null
   for (const j of achJournalsFor(row)) {
-    if (poster.kind === "user") await postJournal(db, j)
-    else await postJournalFor(db, poster.userId, j)
+    if (poster.kind === "service") await postJournalFor(db, poster.userId, j)
+    else if (svc) await postJournalFor(svc, row.user_id, j)
+    else await postJournal(db, j)
   }
 }
 
@@ -218,7 +222,8 @@ export async function processBridgeEvent(admin: SupabaseClient, event: BridgeEve
 /** Approve or decline an ACH payment waiting in Approvals (guarded against double decisions). */
 export async function decideAch(
   db: SupabaseClient,
-  userId: string,
+  /** The admin deciding (recorded as approved_by); the requester stays row.user_id. */
+  approverId: string,
   row: AchPaymentRow,
   action: "approve" | "decline",
   note?: string
@@ -232,7 +237,7 @@ export async function decideAch(
     .from("sancus_ach_payments")
     .update(
       action === "approve"
-        ? { status: "CREATED", approved_at: now, approved_by: userId, decided_at: now, decided_note: n }
+        ? { status: "CREATED", approved_at: now, approved_by: approverId, decided_at: now, decided_note: n }
         : { status: "REJECTED", decided_at: now, decided_note: n, failure_reason: n ? `Declined: ${n}` : "Declined by approver" }
     )
     .eq("id", row.id)
@@ -245,5 +250,5 @@ export async function decideAch(
     await syncAchLedger(db, claimed) // releases the reserve
     return { ok: true, row: claimed }
   }
-  return { ok: true, row: await executeAch(db, userId, claimed) }
+  return { ok: true, row: await executeAch(db, claimed.user_id, claimed) }
 }

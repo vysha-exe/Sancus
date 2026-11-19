@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { canOpenPath } from "@/lib/sancus/use-account"
 import { accountFromDto, AdminAccount, BranchAccount, EmployeeAccount, IndividualAccount, resolveAccount } from "@/lib/sancus/accounts"
 
 // Lion City Trading (root) → Thailand → Bangkok warehouse; Indonesia is a sibling branch.
@@ -55,7 +56,9 @@ describe("permissions", () => {
 
   it("routes each type to its own dashboard and keeps it out of the rest", () => {
     expect([admin, branch, employee, individual].map((a) => a.homePath)).toEqual(["/home", "/branch", "/me", "/home"])
-    expect(employee.canAccessPath("/pay")).toBe(false)
+    // Employees reach Pay from Me to request a payment (it isn't in their side navigation).
+    expect(employee.canAccessPath("/pay")).toBe(true)
+    expect(employee.nav).not.toContain("pay")
     expect(employee.canAccessPath("/me")).toBe(true)
     expect(employee.canAccessPath("/notifications")).toBe(true)
     expect(branch.canAccessPath("/pay/us-bank")).toBe(false)
@@ -70,5 +73,20 @@ describe("permissions", () => {
     expect(back).toBeInstanceOf(BranchAccount)
     expect(back.manageableCompanyIds().sort()).toEqual(["bkk", "th"])
     expect(dto.manageableCompanyIds.sort()).toEqual(["bkk", "th"])
+  })
+})
+
+describe("canOpenPath (browser) matches canAccessPath (server)", () => {
+  const accounts = [
+    as("maya", [m("maya", "root", "OWNER")]),
+    as("ploy", [m("ploy", "th", "ADMIN")]),
+    as("niran", [m("niran", "bkk", "EMPLOYEE")]),
+    as("alex", []),
+  ]
+  const paths = ["/home", "/branch", "/me", "/pay", "/pay/review", "/receive", "/activity", "/activity/approvals", "/spending",
+    "/branches", "/team", "/invoices", "/agents", "/settings", "/notifications"]
+  it.each(accounts.map((a) => [a.type, a] as const))("%s", (_type, account) => {
+    const dto = account.toJSON()
+    for (const p of paths) expect([p, canOpenPath(dto, p)]).toEqual([p, account.canAccessPath(p)])
   })
 })
