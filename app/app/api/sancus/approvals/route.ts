@@ -9,8 +9,9 @@ import { withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { checkApprover, type Approver } from "@/lib/sancus/approval-rules"
 import { toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
+import { refreshAchPayments } from "@/lib/sancus/ach-server"
 import { toInternalTransferDto, type InternalTransferRow } from "@/lib/sancus/internal-transfers"
-import { toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
+import { refreshPayoutStatuses, toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
 import { serviceClient } from "@/lib/sancus/service-client"
 
 type Owned = { id: string; user_id: string; company_id?: string | null }
@@ -71,9 +72,13 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
   }
 
   const payoutsWaiting = (waitingRes.data ?? []) as PayoutRow[]
-  const payoutsDecided = (decidedRes.data ?? []) as PayoutRow[]
+  // Approved payouts only move forward when something refreshes them (the partner is simulated),
+  // and nothing else loads a branch's or an employee's company payout. Refresh them here, with the
+  // service client because they belong to the requester. Finished ones are skipped inside.
+  const advancer = serviceClient() ?? supabase
+  const payoutsDecided = await refreshPayoutStatuses(advancer, (decidedRes.data ?? []) as PayoutRow[])
   const achWaiting = (achWaitingRes.data ?? []) as AchPaymentRow[]
-  const achDecided = (achDecidedRes.data ?? []) as AchPaymentRow[]
+  const achDecided = await refreshAchPayments(advancer, (achDecidedRes.data ?? []) as AchPaymentRow[])
   const others = [...payoutsWaiting, ...payoutsDecided, ...achWaiting, ...achDecided]
     .map((r) => r.user_id)
     .filter((id) => id !== user.id)
