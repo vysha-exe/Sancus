@@ -35,6 +35,11 @@ type MarqetaResponse = {
   data?: Array<{ token?: string; active?: boolean }>
   error_message?: string
   message?: string
+  transaction?: {
+    token?: string
+    state?: string
+    response?: { code?: string; memo?: string }
+  }
 }
 
 function readConfig(): MarqetaConfig {
@@ -51,6 +56,69 @@ function readConfig(): MarqetaConfig {
 
 export function isMarqetaConfigured() {
   return Boolean(process.env.MARQETA_APPLICATION_TOKEN?.trim() && process.env.MARQETA_ADMIN_ACCESS_TOKEN?.trim())
+}
+
+export function isMarqetaSandboxConfigured() {
+  const baseUrl = process.env.MARQETA_BASE_URL?.trim() || DEFAULT_BASE_URL
+  return isMarqetaConfigured() && /(^|[./-])sandbox([./-]|$)/i.test(baseUrl)
+}
+
+export type MarqetaSimulationResult = {
+  token: string
+  state: string
+  responseCode: string
+  approved: boolean
+  raw: MarqetaResponse
+}
+
+function simulationResult(body: MarqetaResponse): MarqetaSimulationResult {
+  const tx = body.transaction ?? body
+  const responseCode = "response" in tx ? String(tx.response?.code ?? "") : ""
+  const state = String(tx.state ?? body.state ?? body.status ?? "UNKNOWN")
+  return {
+    token: String(tx.token ?? body.token ?? ""),
+    state,
+    responseCode,
+    approved: responseCode === "0000" || responseCode === "0" || /approved|cleared|completion/i.test(state),
+    raw: body,
+  }
+}
+
+export async function simulateMarqetaAuthorizationWithConfig(config: MarqetaConfig, input: {
+  cardToken: string
+  amount: number
+  merchantName: string
+}, fetchImpl: typeof fetch = fetch) {
+  const body = await request(config, "/simulations/cardtransactions/authorization", {
+    method: "POST",
+    body: JSON.stringify({
+      card_token: input.cardToken,
+      amount: input.amount,
+      card_acceptor: { mid: "SANCUSDEV01", mcc: "5734", name: input.merchantName.slice(0, 40) },
+    }),
+  }, fetchImpl)
+  return simulationResult(body)
+}
+
+export async function simulateMarqetaClearingWithConfig(config: MarqetaConfig, input: {
+  authorizationToken: string
+  amount: number
+}, fetchImpl: typeof fetch = fetch) {
+  const body = await request(config, "/simulations/cardtransactions/authorization.clearing", {
+    method: "POST",
+    body: JSON.stringify({ preceding_related_transaction_token: input.authorizationToken, amount: input.amount }),
+  }, fetchImpl)
+  return simulationResult(body)
+}
+
+export function simulateMarqetaAuthorization(input: { cardToken: string; amount: number; merchantName: string }) {
+  if (!isMarqetaSandboxConfigured()) throw new Error("Marqeta Dev tests require sandbox credentials and a sandbox base URL")
+  return simulateMarqetaAuthorizationWithConfig(readConfig(), input)
+}
+
+export function simulateMarqetaClearing(input: { authorizationToken: string; amount: number }) {
+  if (!isMarqetaSandboxConfigured()) throw new Error("Marqeta Dev tests require sandbox credentials and a sandbox base URL")
+  return simulateMarqetaClearingWithConfig(readConfig(), input)
 }
 
 async function request(config: MarqetaConfig, path: string, init: RequestInit, fetchImpl: typeof fetch) {

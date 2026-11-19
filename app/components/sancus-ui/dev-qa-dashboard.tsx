@@ -1,9 +1,13 @@
 "use client"
 
 // Development tools for payment-rail and Arc testnet workflow validation.
-import { useCallback, useMemo, useState } from "react"
+import Link from "next/link"
+import Image from "next/image"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { can, useAccount } from "@/lib/sancus/use-account"
+import type { SancusCardDto } from "@/lib/sancus/cards"
 import type { CompanyNode } from "@/lib/sancus/companies"
+import type { SpendingMethodDto } from "@/lib/sancus/local-rails"
 import type { LocalRail } from "@/lib/sancus/local-sandboxes"
 import { signalSancusDataChanged } from "@/lib/sancus/live-refresh"
 import { encodeReceiveCode, RECEIVE_RAILS } from "@/lib/sancus/receive-code"
@@ -12,9 +16,32 @@ import { useWorkspace } from "@/lib/sancus/use-workspace"
 
 type Log = { at: string; rail: string; ok: boolean; status: number; body: unknown }
 type ReceiveWorkflow = {
-  collection?: { status?: string; mintExplorer?: string | null }
+  collection?: { id?: string; status?: string; mintExplorer?: string | null; qrImageUrl?: string | null; qrPayload?: string | null; simulatorUrl?: string | null }
   workflow?: Record<string, { ok: boolean; detail: string; transaction?: string | null }>
   error?: string
+  runId?: string
+}
+type WorkflowResult = { workflow?: Record<string, { ok: boolean; detail: string }>; error?: string; runId?: string; payment?: { id?: string; status?: string } }
+type SpendKind = "PIX" | "CARD"
+type ProviderReadiness = { id: string; label: string; ready: boolean; detail: string }
+type DevRun = { id: string; run_type: string; provider: string; status: string; error: string | null; created_at: string }
+type StoredPixQr = {
+  id: string
+  payload: string
+  label: string
+  status: string
+  amountBrlMinor: string
+  createdAt: string
+  source: "COLLECTION" | "DEV_COLLECTION"
+}
+type DevSpendMethod = {
+  id: string
+  kind: SpendKind
+  source: "CARD" | "SPENDING_METHOD"
+  employeeName: string
+  label: string
+  currency: string
+  detail: string
 }
 
 const RECEIVE_TEST_AMOUNT: Record<LocalRail, string> = { QRIS: "150000", PROMPTPAY: "100.00", PIX: "5.00" }
@@ -49,6 +76,16 @@ export function DevQaDashboard() {
   const [receiveBranchId, setReceiveBranchId] = useState("")
   const [receiveAmount, setReceiveAmount] = useState("5.00")
   const [receiveResult, setReceiveResult] = useState<ReceiveWorkflow | null>(null)
+  const [spendMethods, setSpendMethods] = useState<DevSpendMethod[]>([])
+  const [spendKind, setSpendKind] = useState<SpendKind>("PIX")
+  const [spendMethodId, setSpendMethodId] = useState("")
+  const [spendMerchant, setSpendMerchant] = useState("Dev Test Merchant")
+  const [spendAmount, setSpendAmount] = useState("10.00")
+  const [storedPixQrs, setStoredPixQrs] = useState<StoredPixQr[]>([])
+  const [spendPixQrId, setSpendPixQrId] = useState("")
+  const [spendResult, setSpendResult] = useState<WorkflowResult | null>(null)
+  const [providers, setProviders] = useState<ProviderReadiness[]>([])
+  const [recentRuns, setRecentRuns] = useState<DevRun[]>([])
 
   const push = useCallback((rail: string, result: { status: number; ok: boolean; body: unknown }) => {
     setLogs((prev) => [{ at: new Date().toLocaleTimeString(), rail, ...result }, ...prev].slice(0, 40))
@@ -74,6 +111,120 @@ export function DevQaDashboard() {
   )
   const receiveBranch = receiveBranches.find((node) => node.id === receiveBranchId) ?? receiveBranches[0] ?? null
   const receiveCode = receiveBranch ? encodeReceiveCode({ rail: receiveRail, companyId: receiveBranch.id }) : ""
+  const availableSpendMethods = useMemo(() => spendMethods.filter((method) => method.kind === spendKind), [spendKind, spendMethods])
+  const spendMethod = availableSpendMethods.find((method) => method.id === spendMethodId) ?? availableSpendMethods[0] ?? null
+  const spendPixQr = storedPixQrs.find((qr) => qr.id === spendPixQrId) ?? storedPixQrs[0] ?? null
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const [cardsResult, methodsResult, readinessResult, runsResult, pixQrsResult] = await Promise.all([
+        call("/api/sancus/cards"),
+        call("/api/sancus/spending-methods"),
+        call("/api/sancus/dev/readiness"),
+        call("/api/sancus/dev/runs"),
+        call("/api/sancus/dev/pix-qrs"),
+      ])
+      if (cancelled) return
+      const cards = ((cardsResult.body as { cards?: SancusCardDto[] })?.cards ?? [])
+        .filter((card) => card.status === "ACTIVE" && !card.simulated)
+        .map<DevSpendMethod>((card) => ({
+          id: card.id,
+          kind: "CARD",
+          source: "CARD",
+          employeeName: card.employeeName,
+          label: card.label,
+          currency: card.currency,
+          detail: `Card •••• ${card.lastFour}`,
+        }))
+      const methods = ((methodsResult.body as { methods?: SpendingMethodDto[] })?.methods ?? [])
+        .filter((method) => method.status === "ACTIVE" && method.type === "PIX")
+        .map<DevSpendMethod>((method) => ({
+          id: method.id,
+          kind: method.type as SpendKind,
+          source: "SPENDING_METHOD",
+          employeeName: method.employeeName,
+          label: method.label,
+          currency: method.currency,
+          detail: method.type === "PIX" ? "Pix QR access" : "Card access",
+        }))
+      setSpendMethods([...cards, ...methods])
+      setProviders((readinessResult.body as { providers?: ProviderReadiness[] })?.providers ?? [])
+      setRecentRuns((runsResult.body as { runs?: DevRun[] })?.runs ?? [])
+      setStoredPixQrs((pixQrsResult.body as { qrs?: StoredPixQr[] })?.qrs ?? [])
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  async function runSpendTest() {
+    if (!spendMethod || !Number.isFinite(Number(spendAmount)) || Number(spendAmount) <= 0 || !spendMerchant.trim()) return
+    const id = `spend-${spendKind.toLowerCase()}`
+    setBusy(id)
+    setSpendResult(null)
+    try {
+      const result = await call("/api/sancus/dev/spend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: spendKind,
+          source: spendMethod.source,
+          methodId: spendMethod.id,
+          merchantName: spendMerchant.trim(),
+          amount: Number(spendAmount),
+          ...(spendKind === "PIX" ? { qrPayload: spendPixQr?.payload ?? "" } : {}),
+        }),
+      })
+      setSpendResult(result.body as WorkflowResult)
+      push(id, result)
+      if (result.ok) signalSancusDataChanged()
+      const refreshed = await call("/api/sancus/dev/runs")
+      setRecentRuns((refreshed.body as { runs?: DevRun[] })?.runs ?? [])
+    } catch (error) {
+      const result = { status: 0, ok: false, body: { error: error instanceof Error ? error.message : String(error) } }
+      setSpendResult(result.body)
+      push(id, result)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function refreshPixSpend() {
+    const paymentId = spendResult?.payment?.id
+    if (!paymentId) return
+    setBusy("spend-pix-refresh")
+    try {
+      const result = await call(`/api/sancus/dev/spend/${paymentId}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ runId: spendResult?.runId }),
+      })
+      setSpendResult((previous) => ({ ...(previous ?? {}), ...(result.body as WorkflowResult) }))
+      push("spend-pix-refresh", result)
+      if (result.ok) signalSancusDataChanged()
+      const refreshed = await call("/api/sancus/dev/runs")
+      setRecentRuns((refreshed.body as { runs?: DevRun[] })?.runs ?? [])
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function refreshReceive(action: "REFRESH" | "MARK_PAID") {
+    const collectionId = receiveResult?.collection?.id
+    if (!collectionId) return
+    const id = "receive-refresh"
+    setBusy(id)
+    try {
+      const result = await call(`/api/sancus/dev/receive-payment/${collectionId}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, runId: receiveResult?.runId }),
+      })
+      setReceiveResult((previous) => ({ ...(previous ?? {}), ...(result.body as ReceiveWorkflow) }))
+      push(id, result)
+      if (result.ok) signalSancusDataChanged()
+      const refreshed = await call("/api/sancus/dev/runs")
+      setRecentRuns((refreshed.body as { runs?: DevRun[] })?.runs ?? [])
+    } finally {
+      setBusy(null)
+    }
+  }
 
   async function sendFakeReceivePayment() {
     if (!receiveBranch || !Number.isFinite(Number(receiveAmount)) || Number(receiveAmount) <= 0) return
@@ -90,6 +241,8 @@ export function DevQaDashboard() {
       setReceiveResult(result.body as ReceiveWorkflow)
       push(id, result)
       if (result.ok) signalSancusDataChanged()
+      const refreshed = await call("/api/sancus/dev/runs")
+      setRecentRuns((refreshed.body as { runs?: DevRun[] })?.runs ?? [])
     } catch (error) {
       const result = { status: 0, ok: false, body: { error: error instanceof Error ? error.message : String(error) } }
       setReceiveResult(result.body)
@@ -275,6 +428,22 @@ export function DevQaDashboard() {
       </header>
 
       <div className="grid">
+        <section className="tile s12" aria-labelledby="provider-readiness">
+          <div className="tile-head">
+            <div>
+              <h2 className="tile-title" id="provider-readiness">Provider readiness</h2>
+              <p className="body-s muted" style={{ margin: "4px 0 0" }}>A test runs only when its real sandbox credentials are available.</p>
+            </div>
+          </div>
+          <div className="grid" style={{ gap: 10 }}>
+            {providers.map((provider) => (
+              <div className="kv s4" key={provider.id}>
+                <span><b>{provider.label}</b><br /><span className="body-s muted">{provider.detail}</span></span>
+                <span className={provider.ready ? "sx-pill sx-pill--settled" : "sx-pill sx-pill--failed"}>{provider.ready ? "Ready" : "Unavailable"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
         <section className="tile s4">
           <span className="sx-label">Live Available</span>
           <span className="big">{treasury.availableLabel}</span>
@@ -294,12 +463,126 @@ export function DevQaDashboard() {
           </label>
         </section>
 
+        <section className="tile s12" aria-labelledby="test-employee-spending">
+          <div className="tile-head">
+            <div>
+              <h2 className="tile-title" id="test-employee-spending">Test employee spending</h2>
+              <p className="body-s muted" style={{ margin: "4px 0 0" }}>
+                Use an issued employee method, enforce its monthly limit, and record the sandbox transaction in Spending and Activity.
+              </p>
+            </div>
+            <span className="sx-rail">issued access → limit → payment</span>
+          </div>
+
+          <div className="filters" role="group" aria-label="Spending method">
+            {(["PIX", "CARD"] as SpendKind[]).map((kind) => (
+              <button
+                type="button"
+                className="chip"
+                aria-pressed={spendKind === kind}
+                key={kind}
+                onClick={() => {
+                  setSpendKind(kind)
+                  setSpendMethodId("")
+                  setSpendAmount(kind === "PIX" ? "10.00" : "25.00")
+                  setSpendResult(null)
+                }}
+              >
+                {kind === "PIX" ? "Pix spending" : "Credit card spending"}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid" style={{ gap: 12 }}>
+            <label className="sx-field s5">
+              <span className="sx-label">Issued to employee</span>
+              <select
+                className="sx-field__input"
+                value={spendMethod?.id ?? ""}
+                onChange={(event) => { setSpendMethodId(event.target.value); setSpendResult(null) }}
+                disabled={!availableSpendMethods.length}
+              >
+                {!availableSpendMethods.length ? <option value="">No active {spendKind === "PIX" ? "Pix access" : "cards"}</option> : null}
+                {availableSpendMethods.map((method) => (
+                  <option value={method.id} key={`${method.source}-${method.id}`}>
+                    {method.employeeName} · {method.detail} · {method.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="sx-field s4">
+              <span className="sx-label">Merchant</span>
+              <input className="sx-field__input" value={spendMerchant} onChange={(event) => setSpendMerchant(event.target.value)} />
+            </label>
+            <label className="sx-field s3">
+              <span className="sx-label">Amount · {spendMethod?.currency ?? (spendKind === "PIX" ? "BRL" : "local")}</span>
+              <input className="sx-field__input" inputMode="decimal" value={spendAmount} onChange={(event) => setSpendAmount(event.target.value)} />
+            </label>
+            {spendKind === "PIX" ? (
+              <label className="sx-field s12">
+                <span className="sx-label">Stored merchant Pix QR</span>
+                <select
+                  className="sx-field__input"
+                  value={spendPixQr?.id ?? ""}
+                  onChange={(event) => { setSpendPixQrId(event.target.value); setSpendResult(null) }}
+                  disabled={!storedPixQrs.length}
+                >
+                  {!storedPixQrs.length ? <option value="">No stored Pix QR codes</option> : null}
+                  {storedPixQrs.map((qr) => (
+                    <option value={qr.id} key={qr.id}>
+                      {qr.label} · R$ {(Number(qr.amountBrlMinor) / 100).toFixed(2)} · {qr.status.toLowerCase()}
+                    </option>
+                  ))}
+                </select>
+                <span className="sx-field__help">
+                  Select a PayZu EMV payload already stored by a Pix collection. Create one under Test incoming QR payments if this list is empty.
+                </span>
+              </label>
+            ) : null}
+          </div>
+
+          {!availableSpendMethods.length ? (
+            <p className="body-s muted" style={{ margin: 0 }}>
+              Issue {spendKind === "PIX" ? "Pix access" : "a card"} on <Link href="/spending">Spending</Link> before running this test.
+            </p>
+          ) : null}
+
+          <div className="tile-foot">
+            <span className="body-s muted">Sandbox only. No production card or Pix payment is sent.</span>
+            <button
+              type="button"
+              className="sx-btn sx-btn--primary"
+              disabled={Boolean(busy) || !spendMethod || Number(spendAmount) <= 0 || !spendMerchant.trim() || (spendKind === "PIX" && !spendPixQr)}
+              onClick={() => void runSpendTest()}
+            >
+              {busy === `spend-${spendKind.toLowerCase()}` ? "Running spend…" : `Run ${spendKind === "PIX" ? "Pix" : "card"} spend`}
+            </button>
+          </div>
+
+          {spendResult ? (
+            <div style={{ display: "grid", gap: 8 }} role="status">
+              {spendResult.error ? <span className="body-s" style={{ color: "var(--failed)" }}>{spendResult.error}</span> : null}
+              {Object.entries(spendResult.workflow ?? {}).map(([step, result]) => (
+                <div className="kv" key={step}>
+                  <span><b>{step}</b> · {result.detail}</span>
+                  <span className={result.ok ? "sx-pill sx-pill--settled" : "sx-pill sx-pill--failed"}>{result.ok ? "Passed" : "Failed"}</span>
+                </div>
+              ))}
+              <div className="filters">
+                {spendKind === "PIX" && spendResult.payment?.id && spendResult.payment.status === "PENDING" ? <button type="button" className="sx-btn sx-btn--quiet" disabled={Boolean(busy)} onClick={() => void refreshPixSpend()}>Refresh PayZu status</button> : null}
+                <Link href="/spending" className="sx-btn sx-btn--quiet">Open Spending</Link>
+                <Link href="/activity" className="sx-btn sx-btn--quiet">Open Activity</Link>
+              </div>
+            </div>
+          ) : null}
+        </section>
+
         <section className="tile s12" aria-labelledby="test-receive-qr">
           <div className="tile-head">
             <div>
-              <h2 className="tile-title" id="test-receive-qr">Send fake money to a receive QR</h2>
+              <h2 className="tile-title" id="test-receive-qr">Test incoming QR payments</h2>
               <p className="body-s muted" style={{ margin: "4px 0 0" }}>
-                Simulates a customer scan, records the local payment, then attempts the real mock-token mint on Arc testnet.
+                Creates a real provider sandbox charge. Complete it in the provider simulator, refresh it, and verify the Arc testnet mint.
               </p>
             </div>
             <span className="sx-rail">receive → rail → Arc</span>
@@ -342,9 +625,26 @@ export function DevQaDashboard() {
                   <span className={result.ok ? "sx-pill sx-pill--settled" : "sx-pill sx-pill--failed"}>{result.ok ? "Passed" : "Failed"}</span>
                 </div>
               ))}
+              {receiveResult.collection?.qrImageUrl ? <Image unoptimized width={220} height={220} src={receiveResult.collection.qrImageUrl} alt="Provider-generated payment QR" style={{ width: 220, maxWidth: "100%", height: "auto", border: "1px solid var(--line)", borderRadius: 12 }} /> : null}
+              {receiveResult.collection?.qrPayload ? <code className="body-s" style={{ overflowWrap: "anywhere" }}>{receiveResult.collection.qrPayload}</code> : null}
+              <div className="filters">
+                {receiveResult.collection?.simulatorUrl ? <a href={receiveResult.collection.simulatorUrl} target="_blank" rel="noreferrer" className="sx-btn sx-btn--quiet">Open provider simulator</a> : null}
+                {receiveResult.collection?.id ? <button type="button" className="sx-btn sx-btn--quiet" disabled={Boolean(busy)} onClick={() => void refreshReceive("REFRESH")}>Refresh provider status</button> : null}
+                {receiveRail === "PROMPTPAY" && receiveResult.collection?.id ? <button type="button" className="sx-btn sx-btn--quiet" disabled={Boolean(busy)} onClick={() => void refreshReceive("MARK_PAID")}>Mark paid in Omise test mode</button> : null}
+              </div>
               {receiveResult.collection?.mintExplorer ? <a href={receiveResult.collection.mintExplorer} target="_blank" rel="noreferrer" className="sx-btn sx-btn--quiet" style={{ justifySelf: "start" }}>View mint on Arc explorer</a> : null}
             </div>
           ) : null}
+        </section>
+
+        <section className="tile s12" aria-labelledby="recent-dev-runs">
+          <div className="tile-head"><h2 className="tile-title" id="recent-dev-runs">Recent Payment Lab runs</h2><span className="sx-rail">persisted audit trail</span></div>
+          {!recentRuns.length ? <span className="body-s muted">No runs yet.</span> : recentRuns.map((run) => (
+            <div className="kv" key={run.id}>
+              <span><b>{run.run_type.replaceAll("_", " ")}</b> · {run.provider}<br /><span className="body-s muted">{new Date(run.created_at).toLocaleString()}{run.error ? ` · ${run.error}` : ""}</span></span>
+              <span className={run.status === "PASSED" ? "sx-pill sx-pill--settled" : run.status === "FAILED" ? "sx-pill sx-pill--failed" : "sx-pill sx-pill--held"}>{run.status}</span>
+            </div>
+          ))}
         </section>
 
         {rows.map((r) => {

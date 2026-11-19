@@ -1,8 +1,98 @@
 "use client"
 
 import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
+
+type BalancePoint = { at: number; minor: string }
+
+const HISTORY_PREFIX = "sancus:balance-history:v1:"
+const HISTORY_DAYS = 30
+
+function moneyFromMinor(minor: string) {
+  return Number(minor) / 1_000_000
+}
+
+function observedHistoryKey(scope: string | null) {
+  return `${HISTORY_PREFIX}${scope ? `company:${scope}` : "personal"}`
+}
+
+function readObservedHistory(key: string): BalancePoint[] {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(key) ?? "[]") as BalancePoint[]
+    const cutoff = Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000
+    return value.filter((point) => Number.isFinite(point.at) && point.at >= cutoff && /^-?\d+$/.test(point.minor))
+  } catch {
+    return []
+  }
+}
+
+function BalanceHistoryChart({ scope, currentMinor }: { scope: string | null; currentMinor: string | null }) {
+  const [points, setPoints] = useState<BalancePoint[]>([])
+
+  useEffect(() => {
+    if (currentMinor === null) return
+    const key = observedHistoryKey(scope)
+    const stored = readObservedHistory(key)
+    const last = stored.at(-1)
+    const now = Date.now()
+    const next = !last || last.minor !== currentMinor || now - last.at >= 12 * 60 * 60 * 1000
+      ? [...stored, { at: now, minor: currentMinor }].slice(-90)
+      : stored
+    if (next !== stored) window.localStorage.setItem(key, JSON.stringify(next))
+    // The chart deliberately hydrates from browser-local observed balances.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPoints(next)
+  }, [currentMinor, scope])
+
+  const chart = useMemo(() => {
+    if (!points.length) return null
+    const values = points.map((point) => moneyFromMinor(point.minor))
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const span = max - min
+    const width = 600
+    const left = 10
+    const right = 590
+    const top = 12
+    const bottom = 106
+    const coordinates = values.map((value, index) => {
+      const x = values.length === 1 ? right : left + (index / (values.length - 1)) * (right - left)
+      const y = span === 0 ? 62 : bottom - ((value - min) / span) * (bottom - top)
+      return { x, y }
+    })
+    const line = points.length === 1
+      ? `M ${left} ${coordinates[0].y} L ${right} ${coordinates[0].y}`
+      : coordinates.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")
+    const last = coordinates.at(-1) ?? { x: right, y: 62 }
+    return { line, last, firstAt: points[0].at, lastAt: points.at(-1)?.at ?? points[0].at, width }
+  }, [points])
+
+  const dateLabel = (at: number) => new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+
+  return (
+    <div className="home-balance-chart">
+      <div className="home-balance-chart__head">
+        <span className="sx-label">Balance history</span>
+        <span className="body-s muted">Last {HISTORY_DAYS} days · observed balances</span>
+      </div>
+      <svg viewBox="0 0 600 120" preserveAspectRatio="none" role="img" aria-label="Observed treasury balance history">
+        <line x1="10" y1="107" x2="590" y2="107" className="home-balance-chart__axis" />
+        {chart ? (
+          <>
+            <path d={chart.line} className="home-balance-chart__line" />
+            <circle cx={chart.last.x} cy={chart.last.y} r="4" className="home-balance-chart__dot" vectorEffect="non-scaling-stroke" />
+          </>
+        ) : null}
+      </svg>
+      <div className="home-balance-chart__dates">
+        <span>{chart ? dateLabel(chart.firstAt) : "No history yet"}</span>
+        <span>{chart ? dateLabel(chart.lastAt) : ""}</span>
+      </div>
+    </div>
+  )
+}
 
 export function HomeBalance() {
   const ws = useWorkspace()
@@ -35,6 +125,10 @@ export function HomeBalance() {
           </div>
         </div>
       </div>
+      <BalanceHistoryChart
+        scope={scope ?? null}
+        currentMinor={live.summary?.availableMinor ?? null}
+      />
       {live.error ? (
         <span className="body-s" style={{ color: "var(--failed)" }}>
           {live.error}
@@ -43,7 +137,7 @@ export function HomeBalance() {
       <div className="tile-foot home-balance__actions">
         <Link href="/pay" className="sx-btn sx-btn--primary">Make a payment</Link>
         <Link href="/receive" className="sx-btn sx-btn--secondary">Add money</Link>
-        <Link href="/team/ana/methods/new" className="sx-btn sx-btn--quiet">Issue a card</Link>
+        <Link href="/team" className="sx-btn sx-btn--quiet">Issue a card</Link>
       </div>
     </section>
   )

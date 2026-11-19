@@ -17,7 +17,7 @@ const currencies = ["USD", "CAD", "BRL", "GBP", "EUR", "SEK", "CHF", "SGD", "HKD
 const zeroDecimalCurrencies = new Set(["JPY"])
 
 const schema = z.object({
-  employeeId: z.string().trim().min(1).max(80),
+  employeeId: z.string().uuid(),
   employeeName: z.string().trim().min(1).max(120),
   label: z.string().trim().min(1).max(120),
   country: z.string().trim().min(2).max(80),
@@ -141,6 +141,16 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   const parsed = await validateJsonBody(req, schema)
   if (!parsed.ok) return parsed.response
+
+  const { data: employee } = await supabase
+    .from("sancus_memberships")
+    .select("id")
+    .eq("user_id", parsed.data.employeeId)
+    .eq("status", "ACTIVE")
+    .in("role", ["EMPLOYEE", "FINANCE"])
+    .limit(1)
+    .maybeSingle()
+  if (!employee) return NextResponse.json({ error: "Choose an active employee from Team" }, { status: 400 })
 
   const names = parsed.data.employeeName.trim().split(/\s+/)
   const firstName = names.shift() || "Sancus"
