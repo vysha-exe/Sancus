@@ -11,12 +11,14 @@ function TreeNodes({
   activeId,
   onSelect,
   formatBalance,
+  balancesReady,
   depth = 0,
 }: {
   nodes: CompanyNode[]
   activeId: string | null
   onSelect: (id: string) => void
   formatBalance: (minor: string) => string
+  balancesReady: boolean
   depth?: number
 }) {
   return (
@@ -34,7 +36,7 @@ function TreeNodes({
             <span className="trunc" style={{ paddingLeft: depth * 8 }}>
               {n.name}
             </span>
-            <span className="amt">{formatBalance(n.totalMinor)}</span>
+            <span className="amt">{balancesReady ? formatBalance(n.totalMinor) : "***"}</span>
           </button>
           {n.children.length > 0 ? (
             <TreeNodes
@@ -42,6 +44,7 @@ function TreeNodes({
               activeId={activeId}
               onSelect={onSelect}
               formatBalance={formatBalance}
+              balancesReady={balancesReady}
               depth={depth + 1}
             />
           ) : null}
@@ -110,6 +113,7 @@ export function WorkspaceSwitcher({ allowPersonal = true }: { allowPersonal?: bo
                 nodes={ws.tree}
                 activeId={ws.isPersonal ? null : ws.companyId}
                 formatBalance={ws.formatBalance}
+                balancesReady={ws.balancesReady}
                 onSelect={(id) => {
                   ws.selectCompany(id)
                   setOpen(false)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { chargeStatus, normaliseMidtrans, normaliseOmise, normalisePayzu, RAIL_INFO } from "@/lib/sancus/local-sandboxes"
+import { chargeStatus, normaliseMidtrans, normaliseOmise, normalisePayzu, RAIL_INFO, strictRailConfigured } from "@/lib/sancus/local-sandboxes"
 import { refreshCollection, type CollectionRow } from "@/lib/sancus/rail-collections"
 import { MOCK_TOKENS } from "@/lib/sancus/mock-tokens"
 
@@ -20,6 +20,23 @@ describe("rail status mapping", () => {
   })
   it("each rail maps to a deployed mock token", () => {
     for (const r of Object.values(RAIL_INFO)) expect(MOCK_TOKENS[r.currency].address).toMatch(/^0x[0-9a-fA-F]{40}$/)
+  })
+})
+
+describe("strict sandbox readiness", () => {
+  it("does not report Pix ready without a token and sandbox URL", () => {
+    vi.stubEnv("PAYZU_SANDBOX_TOKEN", "")
+    vi.stubEnv("PAYZU_BASE_URL", "https://pix.sandbox.payzu.dev/v1")
+    expect(strictRailConfigured("PIX")).toBe(false)
+    vi.unstubAllEnvs()
+  })
+
+  it("requires an Omise test key", () => {
+    vi.stubEnv("OMISE_SECRET_KEY", "skey_live_not_allowed")
+    expect(strictRailConfigured("PROMPTPAY")).toBe(false)
+    vi.stubEnv("OMISE_SECRET_KEY", "skey_test_example")
+    expect(strictRailConfigured("PROMPTPAY")).toBe(true)
+    vi.unstubAllEnvs()
   })
 })
 

@@ -104,6 +104,7 @@ type PayContextValue = {
   providerBacked: boolean
   sourceAccounts: CompanyNode[]
   sourceAccount: CompanyNode | null
+  sourceBalancesReady: boolean
   setSourceCompanyId: (id: string) => void
   /** Invoice the user is paying, if they arrived from the invoice confirm screen. */
   invoice: PayInvoice | null
@@ -537,6 +538,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       providerBacked: isLive || isPix,
       sourceAccounts,
       sourceAccount,
+      sourceBalancesReady: workspace.balancesReady,
       setSourceCompanyId,
       invoice,
     }),
@@ -565,6 +567,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       isPix,
       sourceAccounts,
       sourceAccount,
+      workspace.balancesReady,
       setSourceCompanyId,
       invoice,
     ]
