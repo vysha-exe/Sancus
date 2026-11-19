@@ -6,11 +6,15 @@ import { useState } from "react"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
+import { can, useAccount } from "@/lib/sancus/use-account"
 
 export default function PayReviewPage() {
   const router = useRouter()
   const { recipient, state, view, liveQuote, quoteLoading, quoteError, submit, submitting, providerBacked, sourceAccount } = usePayFlow()
   const [error, setError] = useState<string | null>(null)
+  const { account } = useAccount()
+  // Employees can only ask: every payment they start waits for an admin.
+  const requestOnly = !can(account, "money.send") && can(account, "money.request")
   const quoteReady = !view.live || Boolean(liveQuote)
 
   async function pay() {
@@ -107,6 +111,12 @@ export default function PayReviewPage() {
             </p>
           ) : null}
 
+          {requestOnly ? (
+            <p className="body-s muted" style={{ margin: 0 }}>
+              An admin approves this before any money moves. You&apos;ll get a notification when they decide.
+            </p>
+          ) : null}
+
           <div className="tile-foot" style={{ borderTop: 0, paddingTop: 0 }}>
             {quoteReady && !quoteLoading && !quoteError ? (
               providerBacked ? (
@@ -117,7 +127,7 @@ export default function PayReviewPage() {
                   onClick={pay}
                   disabled={submitting}
                 >
-                  {submitting ? "Sending…" : `Pay ${view.localLabel}`}
+                  {submitting ? "Sending…" : requestOnly ? `Request ${view.localLabel}` : `Pay ${view.localLabel}`}
                 </button>
               ) : (
                 <Link href="/pay/done" className="sx-btn sx-btn--primary" style={{ width: "100%" }}>

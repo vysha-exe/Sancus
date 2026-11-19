@@ -57,10 +57,11 @@ export function canOpenPath(account: AccountDto | null, pathname: string): boole
   const key = navKeyForPath(pathname)
   if (key === null) return true
   if (key === "devqa" && account.nav.includes("devqa")) return true
+  // Must match each class's `paths` beyond its nav in accounts.ts (tests/sancus-accounts.test.ts checks).
   const extra: Record<AccountDto["type"], string[]> = {
     ADMIN: ["receive", "branch"],
     BRANCH: [],
-    EMPLOYEE: [],
+    EMPLOYEE: ["pay"], // Me → Request a payment
     INDIVIDUAL: ["receive", "branches"],
   }
   return account.nav.includes(key) || extra[account.type].includes(key)
