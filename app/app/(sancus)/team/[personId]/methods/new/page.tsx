@@ -4,7 +4,6 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { QrGlyph } from "@/components/sancus-ui/qr-glyph"
-import { getPerson, people } from "@/lib/sancus/demo-data"
 import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
 
 type Kind = "card" | "qr"
@@ -100,24 +99,28 @@ function parseNumber(raw: string, code: string): number {
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })
 
-const countryFor = (c: string): Country =>
-  c === "Indonesia" || c === "Thailand" ? c : "Brazil"
+const countryForCode = (code: string | undefined): Country => {
+  if (code === "ID") return "Indonesia"
+  if (code === "TH") return "Thailand"
+  if (code === "BR") return "Brazil"
+  if (code === "US") return "United States"
+  if (code === "SG") return "Singapore"
+  return "Brazil"
+}
 
 export default function AssignMethodPage() {
   const params = useParams<{ personId: string }>()
   const router = useRouter()
-  const initialId = params?.personId ?? "ana"
-  const initialPerson = getPerson(initialId)
+  const initialId = params?.personId ?? ""
+  const validInitialId = /^[0-9a-f-]{36}$/i.test(initialId)
   const [liveName, setLiveName] = useState<string | null>(null)
   const [liveUserId, setLiveUserId] = useState<string | null>(null)
   const [liveOk, setLiveOk] = useState(false)
-  const spenders = people.filter((p) => p.role === "Employee" || p.role === "Finance")
-  const [personId, setPersonId] = useState(
-    initialPerson ? initialPerson.id : /^[0-9a-f-]{36}$/i.test(initialId) ? initialId : "ana"
-  )
+  const [liveLoaded, setLiveLoaded] = useState(!validInitialId)
+  const [personId] = useState(initialId)
 
   useEffect(() => {
-    if (!/^[0-9a-f-]{36}$/i.test(initialId)) return
+    if (!validInitialId) return
     void fetch(`/api/sancus/companies/members/${initialId}`, { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) return
@@ -125,12 +128,14 @@ export default function AssignMethodPage() {
         setLiveName(body.member?.email ?? body.member?.userId ?? "Teammate")
         setLiveUserId(body.member?.userId ?? null)
         setLiveOk(true)
-        setPersonId(initialId)
+        changeCountry(countryForCode(body.company?.country))
       })
       .catch(() => undefined)
-  }, [initialId])
-  const demoPerson = getPerson(personId)
-  const person = demoPerson ?? {
+      .finally(() => setLiveLoaded(true))
+  // The membership id uniquely selects the database employee for this page.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialId, validInitialId])
+  const person = {
     id: personId,
     name: liveName ?? "Teammate",
     role: "Employee",
@@ -140,7 +145,7 @@ export default function AssignMethodPage() {
   const first = person.name.split(" ")[0]?.split("@")[0] ?? "them"
 
   const [kind, setKind] = useState<Kind>("qr")
-  const [country, setCountry] = useState<Country>(countryFor(initialPerson?.country ?? "Brazil"))
+  const [country, setCountry] = useState<Country>("Brazil")
   const info = countryInfo[country]
   const [name, setName] = useState("Market runs")
   const [limitRaw, setLimitRaw] = useState(formatLocal(info.code, info.defaultQr))
@@ -148,7 +153,7 @@ export default function AssignMethodPage() {
   const [issuing, setIssuing] = useState(false)
   const [issueError, setIssueError] = useState<string | null>(null)
 
-  if (!initialPerson && !liveOk && !/^[0-9a-f-]{36}$/i.test(initialId)) {
+  if (liveLoaded && !liveOk) {
     return (
       <div className="page">
         <header className="page-head">
@@ -189,14 +194,8 @@ export default function AssignMethodPage() {
     setLimitRaw(formatLocal(nextInfo.code, next === "card" ? nextInfo.defaultCard : nextInfo.defaultQr))
   }
 
-  function changePerson(id: string) {
-    const p = getPerson(id)
-    setPersonId(id)
-    if (p) changeCountry(countryFor(p.country))
-  }
-
   async function issueAccess() {
-    if (liveOk && !liveUserId) {
+    if (!liveUserId) {
       setIssueError("They need to accept the invite and create their employee login before you can issue spending access.")
       return
     }
@@ -208,7 +207,7 @@ export default function AssignMethodPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          employeeId: liveOk ? liveUserId : person.id,
+          employeeId: liveUserId,
           employeeName: person.name,
           label: name,
           methodType,
@@ -228,7 +227,7 @@ export default function AssignMethodPage() {
   }
 
   async function issueCard() {
-    if (liveOk && !liveUserId) {
+    if (!liveUserId) {
       setIssueError("They need to accept the invite and create their employee login before you can issue a card.")
       return
     }
@@ -242,7 +241,7 @@ export default function AssignMethodPage() {
           "Idempotency-Key": crypto.randomUUID(),
         },
         body: JSON.stringify({
-          employeeId: liveOk ? liveUserId : person.id,
+          employeeId: liveUserId,
           employeeName: person.name,
           label: name,
           country,
@@ -276,21 +275,7 @@ export default function AssignMethodPage() {
         <section className="tile s7" aria-label="Details">
           <label className="sx-field">
             <span className="sx-label">Who</span>
-            {liveOk ? (
-              <input className="sx-field__input" value={person.name} readOnly />
-            ) : (
-              <select
-                className="sx-field__input"
-                value={person.id}
-                onChange={(e) => changePerson(e.target.value)}
-              >
-                {spenders.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {p.role} · {p.country}
-                  </option>
-                ))}
-              </select>
-            )}
+            <input className="sx-field__input" value={person.name} readOnly />
           </label>
 
           <div style={{ display: "grid", gap: 8 }} role="radiogroup" aria-label="What kind">

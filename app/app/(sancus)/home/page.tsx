@@ -22,30 +22,37 @@ export default function HomePage() {
   const isAdmin = account?.type === "ADMIN"
   // A business admin's dashboard is always the company (never personal tiles).
   const personal = isAdmin ? false : ws.ready ? ws.isPersonal : !ws.hasBusiness
-  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
+  const activeName = ws.activeNode?.name ?? accountDisplayName(account, workspace.name)
+  const showBranchOverview = !personal && ws.activeNode?.parentId === null
 
   return (
-    <div className="page">
-      <header className="page-head">
-        <div>
+    <div className="page home-page">
+      <header className="home-head">
+        <div className="home-head__copy">
+          <span className="sx-label">
+            {personal ? "Personal account" : showBranchOverview ? "Global treasury" : "Branch workspace"}
+          </span>
           <h1 className="sx-h heading-2">
-            {isAdmin
-              ? `Welcome, ${accountDisplayName(account, workspace.name)} Admin`
-              : `Good morning, ${personal && account?.type === "INDIVIDUAL" && account.firstName ? account.firstName : !personal && ws.activeNode ? ws.activeNode.name : accountDisplayName(account, workspace.name)}`}
+            {personal ? `Good morning, ${account?.type === "INDIVIDUAL" && account.firstName ? account.firstName : activeName}` : activeName}
           </h1>
-          {!personal && ws.activeNode ? (
-            <span className="scope">{ws.activeNode.name}{ws.activeNode.children.length ? " and below" : ""}</span>
-          ) : null}
+          <p className="body-s muted">
+            {personal
+              ? "Your balance, payments, and spending in one place."
+              : showBranchOverview
+                ? "Monitor the treasury, direct branches, and recent money movement."
+                : "Monitor this branch, its payments, and available funds."}
+          </p>
         </div>
-        <span className="body-s muted" suppressHydrationWarning>
-          {today}
-        </span>
       </header>
 
-      <div className="grid">
+      <div className="grid home-dashboard">
         <HomeBalance />
 
         <NeedsYou />
+
+        {showBranchOverview ? (
+          <ParentBranchBalances tree={ws.tree} ready={ws.ready && ws.balancesReady} formatBalance={ws.formatBalance} />
+        ) : null}
 
         <section className={`tile s8${personal ? " r2" : ""}`} aria-labelledby="latest">
           <div className="tile-head">
@@ -86,38 +93,38 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        {account?.type === "ADMIN" ? (
-          <ParentBranchBalances tree={ws.tree} ready={ws.ready} formatBalance={ws.formatBalance} />
-        ) : null}
-
-        <section className="tile s4" aria-labelledby="month">
-          <div className="tile-head">
-            <h2 className="tile-title" id="month">
-              This month
-            </h2>
-            <span className="body-s muted">{monthStats.label}</span>
-          </div>
-          <div className="kv">
-            <span>Money in</span>
-            <span style={{ color: "var(--settled)" }}>{monthStats.moneyIn}</span>
-          </div>
-          <div className="kv">
-            <span>Money out</span>
-            <span>{monthStats.moneyOut}</span>
-          </div>
-          <div className="kv">
-            <span>Fees</span>
-            <span>{monthStats.fees}</span>
-          </div>
-          {!personal ? (
-            <div className="kv">
-              <span>Held for cards</span>
-              <span style={{ color: "var(--held)" }}>{monthStats.held}</span>
+        {showBranchOverview ? (
+          <CompanySnapshot tree={ws.tree} ready={ws.ready && ws.balancesReady} />
+        ) : (
+          <section className="tile s4" aria-labelledby="month">
+            <div className="tile-head">
+              <h2 className="tile-title" id="month">
+                This month
+              </h2>
+              <span className="body-s muted">{monthStats.label}</span>
             </div>
-          ) : null}
-        </section>
+            <div className="kv">
+              <span>Money in</span>
+              <span style={{ color: "var(--settled)" }}>{monthStats.moneyIn}</span>
+            </div>
+            <div className="kv">
+              <span>Money out</span>
+              <span>{monthStats.moneyOut}</span>
+            </div>
+            <div className="kv">
+              <span>Fees</span>
+              <span>{monthStats.fees}</span>
+            </div>
+            {!personal ? (
+              <div className="kv">
+                <span>Held for cards</span>
+                <span style={{ color: "var(--held)" }}>{monthStats.held}</span>
+              </div>
+            ) : null}
+          </section>
+        )}
 
-        {!personal ? (
+        {!personal && !showBranchOverview ? (
           <>
             <section className="tile s6" aria-labelledby="spend">
               <div className="tile-head">
@@ -195,37 +202,72 @@ function ParentBranchBalances({
     : []
 
   return (
-    <section className="tile s12" aria-labelledby="branch-balances" aria-busy={!ready}>
+    <section className="tile s12 home-branches" aria-labelledby="branch-balances" aria-busy={!ready}>
       <div className="tile-head">
         <div>
-          <h2 className="tile-title" id="branch-balances">Branch balances</h2>
-          <span className="body-s muted">Global treasury and direct country branches</span>
+          <h2 className="tile-title" id="branch-balances">Treasury by branch</h2>
+          <span className="body-s muted">One global treasury with direct country branches</span>
         </div>
         <Link href="/branches" className="sx-btn sx-btn--quiet">Manage branches</Link>
       </div>
       {!ready ? (
-        <div className="fill-grid"><div className="rail-tile"><span className="sx-label">Loading</span><span className="big">***</span></div></div>
+        <div className="home-branch-grid"><div className="home-branch-card"><span className="sx-label">Loading</span><span className="big">***</span></div></div>
       ) : rows.length ? (
-        <div className="fill-grid">
+        <div className="home-branch-grid">
           {rows.map(({ node, level }) => {
             const isParent = level === "Parent"
             return (
-              <Link href={`/branches/${node.id}`} className="rail-tile" style={{ color: "inherit", textDecoration: "none" }} key={node.id}>
-                <div className="tile-head" style={{ margin: 0 }}>
-                  <span className="sx-label">{level}</span>
-                  {!isParent ? <span aria-hidden>{countryByCode(node.country)?.flag ?? "🏳️"}</span> : null}
+              <Link href={`/branches/${node.id}`} className={`home-branch-card${isParent ? " home-branch-card--treasury" : ""}`} key={node.id}>
+                <div className="home-branch-card__head">
+                  <span className="home-branch-card__kind">{isParent ? "Treasury" : "Branch"}</span>
+                  <span className="home-branch-card__flag" aria-hidden>{isParent ? "HQ" : countryByCode(node.country)?.flag ?? "🏳️"}</span>
                 </div>
-                <span className="body-strong">{node.name}</span>
-                <span className="big">{formatBalance(node.ownMinor)}</span>
-                <span className="body-s muted">
-                  {isParent ? "Global treasury · USDC" : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}
-                </span>
-                {!isParent ? <span className="body-strong">{localBalance(node.ownMinor, node.currency)}</span> : null}
+                <div className="home-branch-card__identity">
+                  <strong>{node.name}</strong>
+                  <span>{isParent ? "Global treasury · USDC" : `${countryByCode(node.country)?.name ?? node.country} · ${node.currency}`}</span>
+                </div>
+                <div className="home-branch-card__balance">
+                  <span>{formatBalance(node.ownMinor)}</span>
+                  <small>{isParent ? `${node.wallets.length} ${node.wallets.length === 1 ? "wallet" : "wallets"}` : localBalance(node.ownMinor, node.currency)}</small>
+                </div>
+                <span className="home-branch-card__open" aria-hidden>Open →</span>
               </Link>
             )
           })}
         </div>
       ) : <div className="empty">No company branches yet.</div>}
+    </section>
+  )
+}
+
+function CompanySnapshot({ tree, ready }: { tree: CompanyNode[]; ready: boolean }) {
+  const parent = tree.find((node) => node.parentId === null) ?? tree[0] ?? null
+  const branches = parent?.children ?? []
+  const wallets = parent ? parent.wallets.length + branches.reduce((total, branch) => total + branch.wallets.length, 0) : 0
+  const currencies = new Set(branches.map((branch) => branch.currency)).size
+
+  return (
+    <section className="tile s4 home-network" aria-labelledby="network" aria-busy={!ready}>
+      <div className="tile-head">
+        <div>
+          <h2 className="tile-title" id="network">Treasury network</h2>
+          <span className="body-s muted">Live company structure</span>
+        </div>
+        <span className="sx-pill sx-pill--settled">Live</span>
+      </div>
+      <div className="home-network__metric">
+        <span>{ready ? branches.length : "***"}</span>
+        <small>Direct branches</small>
+      </div>
+      <div className="home-network__rows">
+        <div className="kv"><span>Connected wallets</span><span>{ready ? wallets : "***"}</span></div>
+        <div className="kv"><span>Local currencies</span><span>{ready ? currencies : "***"}</span></div>
+        <div className="kv"><span>Structure</span><span>HQ + branches</span></div>
+      </div>
+      <div className="tile-foot">
+        <span className="body-s muted">No nested sub-branches</span>
+        <Link href="/branches" className="sx-btn sx-btn--quiet">View structure</Link>
+      </div>
     </section>
   )
 }
@@ -240,5 +282,5 @@ function localBalance(usdcMinor: string, currency: string): string {
     minimumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
     maximumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
   }).format(localAmount)
-  return `${formatted} ${currency} at the fixed demo rate`
+  return `${formatted} ${currency}`
 }

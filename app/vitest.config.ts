@@ -16,6 +16,14 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     globals: true,
+    server: {
+      deps: {
+        inline: [
+          "@circle-fin/adapter-circle-wallets",
+          "@circle-fin/developer-controlled-wallets",
+        ],
+      },
+    },
   },
   resolve: {
     alias: {

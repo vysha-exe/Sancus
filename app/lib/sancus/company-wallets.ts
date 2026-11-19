@@ -9,7 +9,12 @@ import { mockTokenBalances, type LocalCurrency } from "./mock-tokens"
 import { circleConfigured, TREASURY_CHAIN } from "./provision"
 import type { CompanyRow, CompanyWallet } from "./companies"
 
-type WalletDbRow = { circle_wallet_id: string; name: string; address: string; blockchain: string; company_id: string }
+export type WalletDbRow = { circle_wallet_id: string; name: string; address: string; blockchain: string; company_id: string }
+
+const BALANCE_CACHE_MS = 20_000
+const BALANCE_TIMEOUT_MS = 2_500
+const BALANCE_CONCURRENCY = 3
+const balanceCache = new Map<string, { expiresAt: number; wallet: CompanyWallet }>()
 
 export async function listCompanyWallets(supabase: SupabaseClient, companyIds: string[]): Promise<WalletDbRow[]> {
   if (companyIds.length === 0) return []
@@ -23,30 +28,75 @@ export async function listCompanyWallets(supabase: SupabaseClient, companyIds: s
   return (data ?? []) as WalletDbRow[]
 }
 
-/** Live USDC balances (public RPC, no Circle key needed). Unreadable → null. */
-export async function withBalances(rows: WalletDbRow[]): Promise<CompanyWallet[]> {
-  const out: CompanyWallet[] = []
-  for (const r of rows) {
-    let usdcMinor: string | null = null
-    try {
-      const bal = await Promise.race([
-        getUsdcBalance(r.address as Address, "arcTestnet"),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 6000)),
-      ])
-      usdcMinor = bal.toString()
-    } catch {
-      /* leave null */
+/** Wallet metadata for the fast company-structure response. No RPC calls. */
+export function withoutBalances(rows: WalletDbRow[]): CompanyWallet[] {
+  return rows.map((row) => ({
+    walletId: row.circle_wallet_id,
+    name: row.name,
+    address: row.address,
+    blockchain: row.blockchain,
+    companyId: row.company_id,
+    usdcMinor: null,
+    local: {},
+  }))
+}
+
+function timeout<T>(promise: Promise<T>) {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), BALANCE_TIMEOUT_MS)),
+  ])
+}
+
+async function readBalance(row: WalletDbRow, now: number): Promise<CompanyWallet> {
+  const cacheKey = `${row.blockchain}:${row.address.toLowerCase()}`
+  const cached = balanceCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) return cached.wallet
+
+  let usdcMinor: string | null = null
+  const local: Partial<Record<LocalCurrency, string>> = {}
+  const [usdcResult, localResult] = await Promise.allSettled([
+    timeout(getUsdcBalance(row.address as Address, "arcTestnet")),
+    timeout(mockTokenBalances(row.address)),
+  ])
+  if (usdcResult.status === "fulfilled") usdcMinor = usdcResult.value.toString()
+  if (localResult.status === "fulfilled") {
+    for (const [currency, value] of Object.entries(localResult.value)) {
+      if (value && value !== "0") local[currency as LocalCurrency] = value
     }
-    const local: Partial<Record<LocalCurrency, string>> = {}
-    try {
-      const bals = await mockTokenBalances(r.address)
-      for (const [c, v] of Object.entries(bals)) if (v && v !== "0") local[c as LocalCurrency] = v
-    } catch {
-      /* mock tokens are optional */
-    }
-    out.push({ walletId: r.circle_wallet_id, name: r.name, address: r.address, blockchain: r.blockchain, companyId: r.company_id, usdcMinor, local })
   }
+
+  const wallet: CompanyWallet = {
+    walletId: row.circle_wallet_id,
+    name: row.name,
+    address: row.address,
+    blockchain: row.blockchain,
+    companyId: row.company_id,
+    usdcMinor,
+    local,
+  }
+  // Cache successful or partially successful public reads. A complete outage
+  // remains short-lived and will be retried after this small freshness window.
+  balanceCache.set(cacheKey, { expiresAt: now + BALANCE_CACHE_MS, wallet })
+  return wallet
+}
+
+/** Live balances with bounded concurrency. Unreadable values remain null. */
+export async function withBalances(rows: WalletDbRow[], now = Date.now()): Promise<CompanyWallet[]> {
+  const out = new Array<CompanyWallet>(rows.length)
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < rows.length) {
+      const index = cursor++
+      out[index] = await readBalance(rows[index]!, now)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(BALANCE_CONCURRENCY, rows.length) }, worker))
   return out
+}
+
+export function resetCompanyWalletBalanceCache() {
+  balanceCache.clear()
 }
 
 export type CreateWalletResult = { ok: true; wallet: WalletDbRow } | { ok: false; status: number; error: string }

@@ -21,8 +21,10 @@ function ConfirmInner() {
   const [currency, setCurrency] = useState("USD")
   const [due, setDue] = useState("")
   const [rail, setRail] = useState("ACH")
-  const [iban, setIban] = useState("")
-  const [bic, setBic] = useState("")
+  const [bankName, setBankName] = useState("")
+  const [accountName, setAccountName] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [swift, setSwift] = useState("")
   const amountValue = useMemo(() => Number(amount.replace(/,/g, "")), [amount])
   const amountLabel = useMemo(() => Number.isFinite(amountValue) && amountValue > 0 ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountValue) : "—", [amountValue, currency])
   const ready = Boolean(id) && !paid && supplier.trim().length > 0 && invoice.trim().length > 0 && amountLabel !== "—"
@@ -47,6 +49,10 @@ function ConfirmInner() {
         setCurrency(found.currency)
         setDue(found.dueDate ?? "")
         setRail(found.rail ?? "ACH")
+        setBankName(found.paymentDetails.bankName ?? "")
+        setAccountName(found.paymentDetails.accountName ?? "")
+        setAccountNumber(found.paymentDetails.accountNumber ?? "")
+        setSwift(found.paymentDetails.swift ?? "")
         setPaid(found.status === "PAID")
       } catch {
         if (!cancelled) setError("Could not reach Sancus. Try again.")
@@ -61,7 +67,7 @@ function ConfirmInner() {
     const res = await fetch(`/api/sancus/invoices/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ supplierName: supplier.trim(), invoiceNumber: invoice.trim() || null, amount: amountValue, currency, dueDate: due || null, rail }),
+      body: JSON.stringify({ supplierName: supplier.trim(), invoiceNumber: invoice.trim() || null, amount: amountValue, currency, dueDate: due || null, rail, paymentDetails: { bankName: bankName.trim() || null, accountName: accountName.trim() || null, accountNumber: accountNumber.trim() || null, swift: swift.trim() || null } }),
     })
     const body = (await res.json().catch(() => ({}))) as { invoice?: InvoiceDto; error?: string; issues?: { message: string }[] }
     if (!res.ok || !body.invoice) {
@@ -119,10 +125,13 @@ function ConfirmInner() {
             <label className="sx-field s6"><span className="sx-label">Supplier</span><input className="sx-field__input" value={supplier} disabled={loading || paid} onChange={(e) => setSupplier(e.target.value)} /></label>
             <label className="sx-field s6"><span className="sx-label">Invoice or order number</span><input className="sx-field__input" value={invoice} disabled={loading || paid} onChange={(e) => setInvoice(e.target.value)} /><span className="sx-field__help">Used to match this payment to the supplier&apos;s invoice in activity and reconciliation.</span></label>
             <label className="sx-field s6"><span className="sx-label">Amount</span><input className="sx-field__input" inputMode="decimal" value={amount} disabled={loading || paid} onChange={(e) => setAmount(e.target.value)} /></label>
-            <label className="sx-field s6"><span className="sx-label">Currency</span><select className="sx-field__input" value={currency} disabled={loading || paid} onChange={(e) => setCurrency(e.target.value)}><option value="USD">USD · US dollar</option><option value="EUR">EUR · euro</option><option value="BRL">BRL · real</option><option value="IDR">IDR · rupiah</option><option value="THB">THB · baht</option></select></label>
+            <label className="sx-field s6"><span className="sx-label">Currency</span><select className="sx-field__input" value={currency} disabled={loading || paid} onChange={(e) => setCurrency(e.target.value)}><option value="USD">USD · US dollar</option><option value="SGD">SGD · Singapore dollar</option><option value="EUR">EUR · euro</option><option value="BRL">BRL · real</option><option value="IDR">IDR · rupiah</option><option value="THB">THB · baht</option></select></label>
             <label className="sx-field s6"><span className="sx-label">Due date</span><input className="sx-field__input" type="date" value={due} disabled={loading || paid} onChange={(e) => setDue(e.target.value)} /></label>
-            <label className="sx-field s6"><span className="sx-label">Pay by</span><select className="sx-field__input" value={rail} disabled={loading || paid} onChange={(e) => setRail(e.target.value)}><option value="ACH">ACH</option><option value="SEPA">SEPA transfer</option><option value="WIRE">Wire transfer</option><option value="USDC">USDC</option><option value="PIX">Pix</option></select></label>
-            {rail === "SEPA" ? <><label className="sx-field s12"><span className="sx-label">IBAN</span><input className="sx-field__input" value={iban} onChange={(e) => setIban(e.target.value)} /></label><label className="sx-field s6"><span className="sx-label">BIC</span><input className="sx-field__input" value={bic} onChange={(e) => setBic(e.target.value)} /></label></> : null}
+            <label className="sx-field s6"><span className="sx-label">Pay by</span><select className="sx-field__input" value={rail} disabled={loading || paid} onChange={(e) => setRail(e.target.value)}><option value="ACH">ACH</option><option value="PAYNOW">PayNow</option><option value="SEPA">SEPA transfer</option><option value="WIRE">Wire transfer</option><option value="USDC">USDC</option><option value="PIX">Pix</option></select></label>
+            <label className="sx-field s6"><span className="sx-label">Bank</span><input className="sx-field__input" value={bankName} disabled={loading || paid} onChange={(e) => setBankName(e.target.value)} /></label>
+            <label className="sx-field s6"><span className="sx-label">Account name</span><input className="sx-field__input" value={accountName} disabled={loading || paid} onChange={(e) => setAccountName(e.target.value)} /></label>
+            <label className="sx-field s6"><span className="sx-label">Account number / IBAN</span><input className="sx-field__input" value={accountNumber} disabled={loading || paid} onChange={(e) => setAccountNumber(e.target.value)} /></label>
+            <label className="sx-field s6"><span className="sx-label">SWIFT / BIC</span><input className="sx-field__input" value={swift} disabled={loading || paid} onChange={(e) => setSwift(e.target.value)} /></label>
           </div>
           <div className="tile-foot"><span className="body-s muted">{saved ? "Saved." : "Check these details against the uploaded invoice."}</span><span style={{ display: "flex", gap: 8 }}><button type="button" className="sx-btn sx-btn--secondary" disabled={busy || loading || paid} onClick={() => void onSave()}>Save</button><button type="button" className="sx-btn sx-btn--quiet" onClick={() => router.push("/invoices")}>Upload a different file</button></span></div>
         </section>

@@ -128,7 +128,7 @@ export default function HomeEmptyPage() {
           </div>
           <div className="empty">
             No cards or QR yet.
-            <Link href="/team/ana/methods/new" className="sx-btn sx-btn--secondary sx-btn--sm">
+            <Link href="/team" className="sx-btn sx-btn--secondary sx-btn--sm">
               Give someone a card
             </Link>
           </div>

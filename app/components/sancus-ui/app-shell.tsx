@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useEffect, type ReactNode } from "react"
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react"
 import { ACCOUNT_TYPE_LABEL, navWithDevQa, type NavKey } from "@/lib/sancus/accounts"
 import { accountDisplayName, can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
@@ -55,7 +55,7 @@ const nav = [
     href: "/process",
     label: "Process",
     icon: IconDevQa,
-    match: (p: string) => p.startsWith("/process") || p.startsWith("/dev-qa"),
+    match: (p: string) => p.startsWith("/process") || p.startsWith("/dev-qa") || p.startsWith("/dev"),
   },
 ] as const
 
@@ -70,6 +70,8 @@ export function AppShell({
   headerExtra?: ReactNode
 }) {
   const pathname = usePathname()
+  const [pendingTransition, setPendingTransition] = useState<{ from: string; to: string } | null>(null)
+  const pendingRoute = pendingTransition?.from === pathname ? pendingTransition.to : null
   const { collapsed, toggleCollapsed, theme } = useSancusPrefs()
   // Live count of payments waiting for approval (demo count when signed out).
   const approvalCount = useLiveApprovals().waiting.length
@@ -102,11 +104,38 @@ export function AppShell({
     if (account && !canOpenPath(account, pathname)) router.replace(account.homePath)
   }, [account, pathname, router])
 
+  useEffect(() => {
+    if (!pendingRoute) return
+    const timeout = window.setTimeout(() => setPendingTransition(null), 10_000)
+    return () => window.clearTimeout(timeout)
+  }, [pendingRoute])
+
+  function beginLinkTransition(event: MouseEvent<HTMLDivElement>) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) return
+
+    const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>("a[href]")
+    if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return
+
+    const destination = new URL(anchor.href, window.location.href)
+    if (destination.origin !== window.location.origin) return
+    if (destination.pathname === window.location.pathname) return
+
+    setPendingTransition({ from: pathname, to: destination.pathname })
+  }
+
   return (
     <div className="frame">
       <div
         className={`sx shell${collapsed ? " shell--collapsed" : ""}`}
         data-theme={theme}
+        onClickCapture={beginLinkTransition}
         // Prefs hydrate from localStorage after mount; avoid a full tree redo.
         suppressHydrationWarning
       >
@@ -132,13 +161,15 @@ export function AppShell({
           <div className="nav">
             {navItems.map((item) => {
               const on = item.match(pathname)
+              const pending = pendingRoute ? item.match(pendingRoute) : false
               const Icon = item.icon
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`nav-item${on ? " nav-item--on" : ""}`}
+                  className={`nav-item${on ? " nav-item--on" : ""}${pending ? " nav-item--pending" : ""}`}
                   aria-current={on ? "page" : undefined}
+                  aria-busy={pending || undefined}
                   title={item.label}
                 >
                   <Icon />
@@ -155,8 +186,9 @@ export function AppShell({
           <div className="side-foot">
             <Link
               href="/settings"
-              className={`nav-item${pathname.startsWith("/settings") ? " nav-item--on" : ""}`}
+              className={`nav-item${pathname.startsWith("/settings") ? " nav-item--on" : ""}${pendingRoute?.startsWith("/settings") ? " nav-item--pending" : ""}`}
               aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+              aria-busy={pendingRoute?.startsWith("/settings") || undefined}
               title="Settings"
             >
               <IconSettings />
@@ -175,7 +207,29 @@ export function AppShell({
           </div>
         </nav>
 
-        <main className="main">{children}</main>
+        <main className="main" aria-busy={Boolean(pendingRoute)}>
+          {children}
+          {pendingRoute ? <RouteTransition /> : null}
+        </main>
+      </div>
+    </div>
+  )
+}
+
+export function RouteTransition() {
+  return (
+    <div className="route-transition" role="status" aria-live="polite" aria-label="Loading page">
+      <div className="route-transition__bar" aria-hidden="true" />
+      <div className="route-transition__card">
+        <span className="route-transition__mark" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="route-transition__copy">
+          <b>Opening page</b>
+          <small>Getting the latest information…</small>
+        </span>
       </div>
     </div>
   )

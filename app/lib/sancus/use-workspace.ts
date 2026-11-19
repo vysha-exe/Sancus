@@ -32,35 +32,41 @@ export function useWorkspace() {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    const cookieId = readCompanyCookie()
-    const storedMode = readAccountMode()
-    if (cookieId) {
-      setCompanyId(cookieId)
-      setMode("business")
-    } else {
-      setMode(storedMode)
-      setCompanyId(null)
-    }
-    setHydrated(true)
+    const timer = window.setTimeout(() => {
+      const cookieId = readCompanyCookie()
+      const storedMode = readAccountMode()
+      if (cookieId) {
+        setCompanyId(cookieId)
+        setMode("business")
+      } else {
+        setMode(storedMode)
+        setCompanyId(null)
+      }
+      setHydrated(true)
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   // If cookie points at a missing node, fall back to first root or personal.
   useEffect(() => {
     if (!companies.ready || !hydrated) return
     if (mode !== "business") return
-    if (!companies.hasBusiness) {
-      setWorkspacePersonal()
-      setMode("personal")
-      setCompanyId(null)
-      return
-    }
-    const all = flatten(companies.tree)
-    if (companyId && all.some((n) => n.id === companyId)) return
-    const root = companies.tree[0]
-    if (root) {
-      setWorkspaceCompany(root.id)
-      setCompanyId(root.id)
-    }
+    const timer = window.setTimeout(() => {
+      if (!companies.hasBusiness) {
+        setWorkspacePersonal()
+        setMode("personal")
+        setCompanyId(null)
+        return
+      }
+      const all = flatten(companies.tree)
+      if (companyId && all.some((n) => n.id === companyId)) return
+      const root = companies.tree[0]
+      if (root) {
+        setWorkspaceCompany(root.id)
+        setCompanyId(root.id)
+      }
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [companies.ready, companies.hasBusiness, companies.tree, companyId, hydrated, mode])
 
   const activeNode = useMemo(() => {
@@ -100,6 +106,7 @@ export function useWorkspace() {
 
   return {
     ready: companies.ready && hydrated,
+    balancesReady: companies.balancesReady,
     mode,
     isPersonal: mode === "personal",
     hasBusiness: companies.hasBusiness,

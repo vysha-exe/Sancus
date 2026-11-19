@@ -226,9 +226,9 @@ export default function SpendingPage() {
   const [rawPurchases, setRawPurchases] = useState<EmployeeCardPurchaseDto[]>([])
   const [liveNote, setLiveNote] = useState<string | null>(null)
   const [selectedCard, setSelectedCard] = useState("")
-  const [cardToDelete, setCardToDelete] = useState<Method | null>(null)
-  const [deletingCardId, setDeletingCardId] = useState<string | null>(null)
-  const [cardError, setCardError] = useState<string | null>(null)
+  const [methodToDelete, setMethodToDelete] = useState<Method | null>(null)
+  const [deletingMethodId, setDeletingMethodId] = useState<string | null>(null)
+  const [methodError, setMethodError] = useState<string | null>(null)
   const [limitCard, setLimitCard] = useState<Method | null>(null)
   const [limitAmount, setLimitAmount] = useState("")
   const [savingLimit, setSavingLimit] = useState(false)
@@ -283,13 +283,13 @@ export default function SpendingPage() {
   }, [loadCards, loadLive, loadPurchases])
 
   useEffect(() => {
-    if (!cardToDelete) return
+    if (!methodToDelete) return
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !deletingCardId) setCardToDelete(null)
+      if (event.key === "Escape" && !deletingMethodId) setMethodToDelete(null)
     }
     window.addEventListener("keydown", closeOnEscape)
     return () => window.removeEventListener("keydown", closeOnEscape)
-  }, [cardToDelete, deletingCardId])
+  }, [methodToDelete, deletingMethodId])
 
   useEffect(() => {
     if (!limitCard) return
@@ -334,28 +334,30 @@ export default function SpendingPage() {
     return true
   })
 
-  async function deleteCard(method: Method) {
-    setDeletingCardId(method.id)
-    setCardError(null)
+  async function deleteMethod(method: Method) {
+    setDeletingMethodId(method.id)
+    setMethodError(null)
+    const methodLabel = method.kind === "card" ? "card" : `${method.rail} access`
     try {
       if (method.source === "marqeta") {
         const response = await fetch(`/api/sancus/cards?id=${encodeURIComponent(method.id)}`, { method: "DELETE" })
-        if (!response.ok) throw new Error(await readError(response, "Could not delete card"))
-      } else {
+        if (!response.ok) throw new Error(await readError(response, `Could not delete ${methodLabel}`))
+      } else if (method.source === "local") {
         const response = await fetch(`/api/sancus/spending-methods/${method.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "revoke" }),
         })
-        if (!response.ok) throw new Error(await readError(response, "Could not delete card"))
+        if (!response.ok) throw new Error(await readError(response, `Could not delete ${methodLabel}`))
       }
 
       setMethods((current) => current.filter((item) => item.id !== method.id))
-      setCardToDelete(null)
+      setSelectedCard((current) => current === method.id ? "" : current)
+      setMethodToDelete(null)
     } catch (caught) {
-      setCardError(caught instanceof Error ? caught.message : "Could not delete card")
+      setMethodError(caught instanceof Error ? caught.message : `Could not delete ${methodLabel}`)
     } finally {
-      setDeletingCardId(null)
+      setDeletingMethodId(null)
     }
   }
 
@@ -511,21 +513,19 @@ export default function SpendingPage() {
               className="tile spending-method-tile"
               aria-label={`${m.holder}'s ${m.rail}${m.last4 ? ` ${m.last4}` : ""}${m.frozen ? ", frozen" : ""}`}
             >
-              {m.kind === "card" ? (
-                <button
-                  type="button"
-                  className="card-delete"
-                  aria-label={`Delete ${m.holder}'s card ending ${m.last4}`}
-                  title="Delete card"
-                  disabled={deletingCardId === m.id}
-                  onClick={() => {
-                    setCardError(null)
-                    setCardToDelete(m)
-                  }}
-                >
-                  <span aria-hidden="true">×</span>
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="card-delete"
+                aria-label={m.kind === "card" ? `Delete ${m.holder}'s card ending ${m.last4}` : `Delete ${m.holder}'s ${m.rail} access`}
+                title={m.kind === "card" ? "Delete card" : `Delete ${m.rail} access`}
+                disabled={deletingMethodId === m.id}
+                onClick={() => {
+                  setMethodError(null)
+                  setMethodToDelete(m)
+                }}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
               <Face method={m} />
               <div className="kv">
                 <span>{m.label}</span>
@@ -743,12 +743,12 @@ export default function SpendingPage() {
         </div>
       ) : null}
 
-      {cardToDelete ? (
+      {methodToDelete ? (
         <div
           className="card-delete-backdrop"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !deletingCardId) setCardToDelete(null)
+            if (event.target === event.currentTarget && !deletingMethodId) setMethodToDelete(null)
           }}
         >
           <section
@@ -760,49 +760,51 @@ export default function SpendingPage() {
           >
             <div className="card-delete-dialog__head">
               <div>
-                <span className="sx-label">Corporate card</span>
-                <h2 className="sx-h heading-3" id="delete-card-title">Delete this card?</h2>
+                <span className="sx-label">{methodToDelete.kind === "card" ? "Corporate card" : "Local payment access"}</span>
+                <h2 className="sx-h heading-3" id="delete-card-title">
+                  Delete this {methodToDelete.kind === "card" ? "card" : `${methodToDelete.rail} access`}?
+                </h2>
               </div>
               <button
                 type="button"
                 className="card-delete-dialog__close"
                 aria-label="Close delete confirmation"
-                disabled={Boolean(deletingCardId)}
-                onClick={() => setCardToDelete(null)}
+                disabled={Boolean(deletingMethodId)}
+                onClick={() => setMethodToDelete(null)}
               >
                 <span aria-hidden="true">×</span>
               </button>
             </div>
 
             <div className="card-delete-dialog__summary" id="delete-card-description">
-              <span className="body-strong">{cardToDelete.holder}</span>
-              <span className="data">•••• {cardToDelete.last4}</span>
-              <span className="body-s muted">{cardToDelete.label} · {cardToDelete.limit} monthly limit</span>
+              <span className="body-strong">{methodToDelete.holder}</span>
+              <span className="data">{methodToDelete.kind === "card" ? `•••• ${methodToDelete.last4}` : methodToDelete.rail}</span>
+              <span className="body-s muted">{methodToDelete.label} · {methodToDelete.limit} monthly limit</span>
             </div>
 
             <p className="body-s muted card-delete-dialog__copy">
-              This card will disappear from Spending and can no longer be assigned or managed in Sancus.
+              This {methodToDelete.kind === "card" ? "card" : `${methodToDelete.rail} access`} will disappear from Spending and can no longer be used or managed in Sancus.
             </p>
 
-            {cardError ? <p className="body-s card-delete-error" role="alert">{cardError}</p> : null}
+            {methodError ? <p className="body-s card-delete-error" role="alert">{methodError}</p> : null}
 
             <div className="card-delete-dialog__actions">
               <button
                 type="button"
                 className="sx-btn sx-btn--secondary"
                 autoFocus
-                disabled={Boolean(deletingCardId)}
-                onClick={() => setCardToDelete(null)}
+                disabled={Boolean(deletingMethodId)}
+                onClick={() => setMethodToDelete(null)}
               >
                 Cancel
               </button>
               <button
                 type="button"
                 className="sx-btn card-delete-dialog__confirm"
-                disabled={Boolean(deletingCardId)}
-                onClick={() => void deleteCard(cardToDelete)}
+                disabled={Boolean(deletingMethodId)}
+                onClick={() => void deleteMethod(methodToDelete)}
               >
-                {deletingCardId ? "Deleting…" : "Delete card"}
+                {deletingMethodId ? "Deleting…" : `Delete ${methodToDelete.kind === "card" ? "card" : `${methodToDelete.rail} access`}`}
               </button>
             </div>
           </section>

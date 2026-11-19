@@ -34,6 +34,18 @@ export function railConfigured(rail: LocalRail): boolean {
   return true // Pix falls back to simulated
 }
 
+export function strictRailConfigured(rail: LocalRail): boolean {
+  if (rail === "QRIS") {
+    const base = env("MIDTRANS_BASE_URL") || "https://api.sandbox.midtrans.com"
+    return Boolean(env("MIDTRANS_SERVER_KEY")) && /sandbox/i.test(base)
+  }
+  if (rail === "PROMPTPAY") {
+    return /^skey_test_/i.test(env("OMISE_SECRET_KEY"))
+  }
+  const base = env("PAYZU_BASE_URL") || "https://pix.sandbox.payzu.dev/v1"
+  return Boolean(env("PAYZU_SANDBOX_TOKEN")) && /sandbox/i.test(base)
+}
+
 async function call(provider: string, url: string, init: RequestInit = {}) {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(15_000) })
   const text = await res.text()

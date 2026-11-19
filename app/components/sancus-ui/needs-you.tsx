@@ -29,7 +29,11 @@ export function NeedsYou() {
           ))}
         </div>
       ) : oldest.length === 0 ? (
-        <div className="empty">Nothing needs you right now.</div>
+        <div className="empty home-needs-empty">
+          <span className="home-needs-empty__mark" aria-hidden>✓</span>
+          <strong>You&apos;re all caught up</strong>
+          <span>New approvals and account issues will appear here.</span>
+        </div>
       ) : (
         <div className="sx-rows">
           {oldest.map((a) => (
@@ -43,7 +47,7 @@ export function NeedsYou() {
         </div>
       )}
       <div className="tile-foot">
-        <span className="body-s muted">{loading ? "***" : `Shows the ${Math.min(3, waiting.length) || 3} oldest`}</span>
+        <span className="body-s muted">{loading ? "***" : waiting.length ? `Showing ${Math.min(3, waiting.length)} oldest` : "No action required"}</span>
         <Link href="/activity/approvals" className="sx-btn sx-btn--quiet">
           Review all
         </Link>
