@@ -25,7 +25,11 @@ const usd = (minor: string | null) => (minor ? `$${(Number(minor) / 1e6).toLocal
 const toMinor = (dollars: string) => (/^\d+(\.\d{1,2})?$/.test(dollars) ? String(Math.round(Number(dollars) * 100) * 10_000) : null)
 const TYPE_LABEL = { ADMIN: "Admin", BRANCH: "Branch admin", EMPLOYEE: "Employee" } as const
 
-export function AccountsManager({ title = "Logins" }: { title?: string }) {
+/**
+ * `scopeCompanyId`: the branch picked in the workspace switcher. A branch shows only its own people
+ * (and anything under it); the global account, or none, shows everyone.
+ */
+export function AccountsManager({ title = "Logins", scopeCompanyId = null }: { title?: string; scopeCompanyId?: string | null }) {
   const [state, setState] = useState<"loading" | "ready" | "signed-out" | "error">("loading")
   const [account, setAccount] = useState<AccountDto | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
@@ -77,6 +81,16 @@ export function AccountsManager({ title = "Logins" }: { title?: string }) {
   const branches = companies.filter((c) => c.parentId)
   const targets = type === "BRANCH" ? branches : companies
   const nameOf = (id: string) => companies.find((c) => c.id === id)?.name ?? ""
+  const scopeNode = scopeCompanyId ? companies.find((c) => c.id === scopeCompanyId) : undefined
+  const inScope = new Set<string>()
+  if (scopeNode?.parentId) {
+    inScope.add(scopeNode.id)
+    for (let added = true; added; ) {
+      added = false
+      for (const c of companies) if (c.parentId && inScope.has(c.parentId) && !inScope.has(c.id)) (inScope.add(c.id), (added = true))
+    }
+  }
+  const shown = inScope.size ? people.filter((p) => inScope.has(p.companyId)) : people
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -291,12 +305,13 @@ export function AccountsManager({ title = "Logins" }: { title?: string }) {
         <div className="tile-head">
           <h2 className="tile-title" id="logins">
             {title}
+            {inScope.size ? ` · ${scopeNode?.name}` : ""}
           </h2>
-          <span className="body-s muted">{people.length} {people.length === 1 ? "person" : "people"}</span>
+          <span className="body-s muted">{shown.length} {shown.length === 1 ? "person" : "people"}</span>
         </div>
-        {people.length ? (
+        {shown.length ? (
           <div className="sx-rows">
-            {people.map((p) => (
+            {shown.map((p) => (
               <div key={p.membershipId} className="sx-row" style={{ opacity: p.status === "DISABLED" ? 0.55 : 1 }}>
                 <span className="sx-row__who">
                   {p.email ?? "Invited"}
