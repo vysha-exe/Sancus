@@ -363,6 +363,20 @@ export function useVoiceGlow(phase: Phase) {
 // ---------- speech out ----------
 
 /**
+ * Browser fallback (no ElevenLabs key): an American English female voice, so it sounds like the
+ * ElevenLabs one instead of the system default (often a male voice on Windows).
+ */
+const FEMALE_VOICES = /samantha|zira|aria|jenny|ava|allison|susan|joanna|female|google us english/i
+function femaleEnglishVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | null {
+  const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith("en"))
+  return (
+    voices.find((v) => v.lang === "en-US" && FEMALE_VOICES.test(v.name)) ??
+    voices.find((v) => FEMALE_VOICES.test(v.name)) ??
+    null
+  )
+}
+
+/**
  * Speaking: queued lines that never talk over each other; `interrupt` cuts off whatever is playing
  * (used for the real answer, so a progress line never delays it). `isActive` says whether voice
  * is still on (nothing is spoken after the call ends).
@@ -468,6 +482,8 @@ export function useSpeaker(isActive: () => boolean, opts?: { onAudio?: (a: HTMLA
         if (!synth) return resolve()
         const u = new SpeechSynthesisUtterance(text)
         u.rate = 1.03
+        const voice = femaleEnglishVoice(synth)
+        if (voice) u.voice = voice
         u.onend = () => resolve()
         u.onerror = () => resolve()
         synth.speak(u)
