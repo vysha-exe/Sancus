@@ -12,7 +12,7 @@ import type { Permission } from "./accounts"
 export type Approver = {
   userId: string
   can(p: Permission): boolean
-  manageableCompanyIds(): string[]
+  approvableCompanyIds(): string[]
 }
 
 export type ApprovalSubject = {
@@ -35,7 +35,7 @@ export function checkApprover(approver: Approver, subject: ApprovalSubject): App
       ? { ok: true }
       : { ok: false, code: "NOT_YOURS", error: "This payment belongs to someone else's personal account." }
   }
-  if (!approver.manageableCompanyIds().includes(subject.companyId)) {
+  if (!approver.approvableCompanyIds().includes(subject.companyId)) {
     return { ok: false, code: "NOT_YOURS", error: "You don't manage the company this payment comes from." }
   }
   if (subject.requesterId === approver.userId) {

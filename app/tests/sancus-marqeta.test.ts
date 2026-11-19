@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
-import { issueMarqetaCardWithConfig, type MarqetaConfig } from "@/lib/sancus/rails/marqeta"
+import {
+  issueMarqetaCardWithConfig,
+  simulateMarqetaAuthorizationWithConfig,
+  simulateMarqetaClearingWithConfig,
+  type MarqetaConfig,
+} from "@/lib/sancus/rails/marqeta"
 
 const config: MarqetaConfig = {
   baseUrl: "https://marqeta.example/v3",
@@ -70,5 +75,29 @@ describe("Marqeta card issuance", () => {
 
     expect(card.cardToken).toBe("card-2")
     expect(fetchImpl).toHaveBeenCalledTimes(4)
+  })
+})
+
+describe("Marqeta sandbox transactions", () => {
+  it("authorizes against the issued provider card token", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body))).toEqual({
+        card_token: "card-1",
+        amount: 25,
+        card_acceptor: { mid: "SANCUSDEV01", mcc: "5734", name: "Office Store" },
+      })
+      return response({ transaction: { token: "tx-auth-1", state: "PENDING", response: { code: "0000" } } }, 201)
+    }) as unknown as typeof fetch
+    const result = await simulateMarqetaAuthorizationWithConfig(config, { cardToken: "card-1", amount: 25, merchantName: "Office Store" }, fetchImpl)
+    expect(result).toMatchObject({ token: "tx-auth-1", responseCode: "0000", approved: true })
+  })
+
+  it("clears a preceding authorization", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body))).toEqual({ preceding_related_transaction_token: "tx-auth-1", amount: 25 })
+      return response({ transaction: { token: "tx-clear-1", state: "COMPLETION", response: { code: "0000" } } }, 201)
+    }) as unknown as typeof fetch
+    const result = await simulateMarqetaClearingWithConfig(config, { authorizationToken: "tx-auth-1", amount: 25 }, fetchImpl)
+    expect(result).toMatchObject({ token: "tx-clear-1", state: "COMPLETION", approved: true })
   })
 })

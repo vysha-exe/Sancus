@@ -7,6 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod/v4"
 import type { SancusAccount } from "@/lib/sancus/accounts"
+import { applyCompanyBalances, type CompanyBalanceSnapshot, type CompanyNode } from "@/lib/sancus/companies"
 import { recipientsFor } from "@/lib/sancus/demo-data"
 import { signProposal, type Proposal, type ProposalKind } from "./proposals"
 import { payX402 } from "./x402-wallet"
@@ -77,17 +78,25 @@ async function api<T = Record<string, unknown>>(ctx: AgentContext, path: string,
   return { status: res.status, body }
 }
 
-/** PayNow/FAST payees for this account: a personal account has its own, never business suppliers. */
-function sgFor(ctx: AgentContext) {
-  return recipientsFor(ctx.account.type === "INDIVIDUAL").filter((r) => r.payout)
+/** Payees paid locally (Thailand PromptPay, Indonesia BI-FAST, Brazil Pix) for this account.
+ *  A personal account has its own, never business suppliers. */
+function localFor(ctx: AgentContext) {
+  return recipientsFor(ctx.account.type === "INDIVIDUAL").filter((r) => r.xendit || r.pixKey)
 }
+
+const LOCAL = {
+  THB: { rail: "PromptPay", payRail: "PromptPay", symbol: "฿" },
+  IDR: { rail: "BI-FAST", payRail: "BI-FAST", symbol: "Rp " },
+  BRL: { rail: "Pix", payRail: "Pix", symbol: "R$" },
+} as const
+const localCurrency = (r: { xendit?: { currency: "THB" | "IDR" }; pixKey?: string }) => (r.pixKey ? "BRL" : r.xendit!.currency)
 
 type AchRecipient = { id: string; name: string; bankName: string; accountMasked: string; accountType: string }
 
 async function findRecipient(ctx: AgentContext, id: string) {
-  if (id.startsWith("sg:")) {
-    const r = sgFor(ctx).find((x) => x.id === id.slice(3))
-    return r ? ({ kind: "paynow", r } as const) : null
+  if (id.startsWith("local:")) {
+    const r = localFor(ctx).find((x) => x.id === id.slice(6))
+    return r ? ({ kind: "local", r } as const) : null
   }
   if (id.startsWith("ach:")) {
     const { body } = await api<{ recipients?: AchRecipient[] }>(ctx, "/api/sancus/recipients")
@@ -202,16 +211,18 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
       inputSchema: z.object({}),
       run: step(ctx, "get_balances", () => "Checked balances", async () => {
         const scope = ctx.companyId ? `?companyId=${ctx.companyId}` : ""
-        const [{ body: t }, { body: c }] = await Promise.all([
+        const [{ body: t }, { body: c }, { body: balances }] = await Promise.all([
           api<Record<string, string>>(ctx, `/api/sancus/treasury${scope}`),
-          api<{ tree?: { name: string; ownMinor: string; totalMinor: string; children: unknown[] }[] }>(ctx, "/api/sancus/companies/me"),
+          api<{ tree?: CompanyNode[] }>(ctx, "/api/sancus/companies/me"),
+          api<CompanyBalanceSnapshot>(ctx, "/api/sancus/companies/balances"),
         ])
+        const tree = applyCompanyBalances(c.tree ?? [], balances)
         const nodes: string[] = []
-        const walk = (n: { name: string; ownMinor: string; totalMinor: string; children: unknown[] }, depth: number) => {
+        const walk = (n: CompanyNode, depth: number) => {
           nodes.push(`${"  ".repeat(depth)}${n.name}: own ${usd6(n.ownMinor)}, with branches ${usd6(n.totalMinor)}`)
-          for (const k of n.children as (typeof n)[]) walk(k, depth + 1)
+          for (const k of n.children) walk(k, depth + 1)
         }
-        for (const root of c.tree ?? []) walk(root, 0)
+        for (const root of tree) walk(root, 0)
         return [
           `Available: ${usd6(t.availableMinor ?? "0")} (onchain ${usd6(t.totalMinor ?? "0")}, held for payments in progress ${usd6(t.reservedMinor ?? "0")})`,
           nodes.length ? `Branches:\n${nodes.join("\n")}` : "No company branches.",
@@ -222,13 +233,13 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
     defineTool({
       name: "list_recipients",
       description:
-        "People and businesses this account can pay, with the id to use in other tools. sg:* ids are Singapore PayNow/FAST payees (amounts in SGD); ach:* ids are US bank accounts (amounts in USD).",
+        "People and businesses this account can pay, with the id to use in other tools. local:* ids are paid locally: Thailand by PromptPay (THB), Indonesia by BI-FAST (IDR), Brazil by Pix (BRL); ach:* ids are US bank accounts (USD).",
       inputSchema: z.object({}),
       run: step(ctx, "list_recipients", () => "Looked up recipients", async () => {
         const { body } = await api<{ recipients?: AchRecipient[] }>(ctx, "/api/sancus/recipients")
-        const sg = sgFor(ctx).map((r) => `sg:${r.id} | ${r.name} | ${r.detail}`)
+        const local = localFor(ctx).map((r) => `local:${r.id} | ${r.name} | ${r.detail} | amounts in ${localCurrency(r)}`)
         const ach = (body.recipients ?? []).map((r) => `ach:${r.id} | ${r.name} | US bank ${r.bankName} ${r.accountMasked} (${r.accountType.toLowerCase()})`)
-        return [...sg, ...ach].join("\n") || "No recipients yet."
+        return [...local, ...ach].join("\n") || "No recipients yet."
       }),
     }),
 
@@ -236,21 +247,22 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
       name: "quote_payment",
       description: "Live quote for paying a recipient: what they receive, the fee, the USDC it costs, the FX rate and arrival. Quoting moves no money.",
       inputSchema: z.object({
-        recipient_id: z.string().describe("An id from list_recipients, e.g. sg:lim-trading or ach:<uuid>"),
-        amount: z.string().describe("What the recipient receives, as a decimal string, in their currency (SGD for sg:*, USD for ach:*)"),
+        recipient_id: z.string().describe("An id from list_recipients, e.g. local:siam-packaging or ach:<uuid>"),
+        amount: z.string().describe("What the recipient receives, as a plain number, in their currency (THB, IDR or BRL for local:*, USD for ach:*)"),
         same_day: z.boolean().optional().describe("ACH only: same-day ACH ($1.00 fee) instead of standard ($0.50)"),
       }),
       run: step(ctx, "quote_payment", (i) => `Quoted ${i.amount} to ${i.recipient_id.split(":")[0].toUpperCase()} recipient`, async (i) => {
         const found = await findRecipient(ctx, i.recipient_id)
         if (!found) return "Unknown recipient id. Call list_recipients first."
-        if (found.kind === "paynow") {
-          const { status, body } = await api<{ quote?: Record<string, string>; rail?: string; etaLabel?: string; error?: string }>(ctx, "/api/sancus/payouts/quote", {
+        if (found.kind === "local") {
+          const cur = localCurrency(found.r)
+          const { status, body } = await api<{ quote?: Record<string, string>; error?: string }>(ctx, "/api/sancus/pay/quote", {
             method: "POST",
-            body: JSON.stringify({ recipient: { name: found.r.name, ...found.r.payout }, sgdAmount: i.amount }),
+            body: JSON.stringify({ rail: LOCAL[cur].payRail, currency: cur, side: "receive", amount: i.amount }),
           })
           if (status !== 200 || !body.quote) return `Quote failed: ${body.error ?? status}`
           const q = body.quote
-          return `${found.r.name} receives S$${i.amount} by ${body.rail}. Costs ${usd6(q.usdcAmountMinor)} USDC (fee S$${(Number(q.feeSgdMinor) / 100).toFixed(2)}, rate 1 USDC = ${q.clientRate} SGD, live mid ${q.midRate}). Arrives ${body.etaLabel}.`
+          return `${found.r.name} receives ${q.receiveLabel} by ${LOCAL[cur].rail}. Costs ${q.sendLabel} USDC in total (fee ${q.feeLabel}, ${q.rateLabel}). Arrives: ${q.eta}.`
         }
         const { status, body } = await api<{ quote?: Record<string, string>; policy?: { decision: string; reason: string | null }; error?: string }>(ctx, "/api/sancus/payments/quote", {
           method: "POST",
@@ -268,7 +280,7 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
         "Prepare a payment for the person to confirm. Does NOT send it: the person sees a confirm card. Always quote first. Payments at or over the approval rule go to Approvals after confirming.",
       inputSchema: z.object({
         recipient_id: z.string(),
-        amount: z.string().describe("What the recipient receives, in their currency (SGD for sg:*, USD for ach:*)"),
+        amount: z.string().describe("What the recipient receives, as a plain number, in their currency (THB, IDR or BRL for local:*, USD for ach:*)"),
         reference: z.string().max(60).optional(),
         same_day: z.boolean().optional(),
       }),
@@ -276,19 +288,49 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
         if (!ctx.account.can("money.send")) return "This account can't send money. Tell the person to ask their admin."
         const found = await findRecipient(ctx, i.recipient_id)
         if (!found) return "Unknown recipient id. Call list_recipients first."
-        if (found.kind === "paynow") {
+        if (found.kind === "local") {
+          const cur = localCurrency(found.r)
+          const amount = Number(i.amount.replace(/,/g, ""))
+          if (!Number.isFinite(amount) || amount <= 0) return "Amount must be a positive number."
+          const shown = `${LOCAL[cur].symbol}${amount.toLocaleString("en-US")}`
+          const lines = [
+            { label: "To", value: `${found.r.name} · ${found.r.detail}` },
+            { label: "They receive", value: shown },
+            { label: "Rail", value: LOCAL[cur].rail },
+            ...(i.reference ? [{ label: "Reference", value: i.reference }] : []),
+          ]
+          if (found.r.pixKey) {
+            return propose(
+              ctx,
+              "pix",
+              `Pay ${found.r.name} ${shown} by Pix`,
+              lines,
+              { method: "POST", path: "/api/sancus/pix/payments", idempotent: true, body: { purpose: "SUPPLIER_PAYMENT", recipientName: found.r.name, amountBrl: amount, pixKey: found.r.pixKey, description: i.reference ?? "Sancus payment" } },
+              "Converted from USDC at the live rate when you confirm."
+            )
+          }
+          const x = found.r.xendit!
           return propose(
             ctx,
-            "paynow",
-            `Pay ${found.r.name} S$${i.amount}`,
-            [
-              { label: "To", value: `${found.r.name} · ${found.r.detail}` },
-              { label: "They receive", value: `S$${i.amount}` },
-              { label: "Rail", value: found.r.payout?.proxyType === "BANK" ? "FAST" : "PayNow" },
-              ...(i.reference ? [{ label: "Reference", value: i.reference }] : []),
-            ],
-            { method: "POST", path: "/api/sancus/payouts", idempotent: true, body: { recipient: { name: found.r.name, ...found.r.payout }, sgdAmount: i.amount, reference: i.reference } },
-            "Rate is re-quoted live when you confirm."
+            "xendit",
+            `Pay ${found.r.name} ${shown} by ${LOCAL[cur].rail}`,
+            lines,
+            {
+              method: "POST",
+              path: "/api/sancus/xendit/payouts",
+              idempotent: true,
+              body: {
+                purpose: "SUPPLIER_PAYMENT",
+                rail: x.rail,
+                recipientName: found.r.name,
+                accountNumber: x.accountNumber,
+                routingType: x.routingType,
+                routingValue: x.routingValue,
+                amount: cur === "IDR" ? Math.round(amount) : amount,
+                description: (i.reference ?? "Sancus payment").slice(0, 100),
+              },
+            },
+            "Converted from USDC at the live rate when you confirm."
           )
         }
         return propose(
@@ -309,11 +351,11 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
     defineTool({
       name: "buy_route_quote",
       description:
-        "Buy a live best-route quote (rail, FX rate, fee, total USDC cost, arrival) for sending money into Singapore, Indonesia or Thailand. Costs about $0.01 per call, paid by the agent's own wallet with an x402 micropayment on Arc. Use when the person asks for the cheapest or best way to send money to SG/ID/TH, or to compare corridors.",
+        "Buy a live best-route quote (rail, FX rate, fee, total USDC cost, arrival) for sending money into Indonesia or Thailand. Costs about $0.01 per call, paid by the agent's own wallet with an x402 micropayment on Arc. Use when the person asks for the cheapest or best way to send money to ID/TH, or to compare corridors.",
       inputSchema: z.object({
-        country: z.enum(["SG", "ID", "TH"]),
-        amount: z.string().describe("Amount in the local currency (SGD, IDR or THB)"),
-        recipient_type: z.enum(["UEN", "MOBILE", "BANK"]).optional(),
+        country: z.enum(["ID", "TH"]),
+        amount: z.string().describe("Amount in the local currency (IDR or THB)"),
+        recipient_type: z.enum(["MOBILE", "BANK"]).optional(),
       }),
       run: async (i) => {
         ctx.emit?.({ type: "start", tool: "buy_route_quote", progress: PROGRESS.buy_route_quote })
@@ -331,17 +373,22 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
 
     defineTool({
       name: "recent_activity",
-      description: "The latest payments in and out (PayNow, ACH, Pix, local collections) with status.",
+      description: "The latest payments out (PromptPay, BI-FAST, Pix, ACH) with status.",
       inputSchema: z.object({ limit: z.number().int().min(1).max(20).optional() }),
       run: step(ctx, "recent_activity", () => "Read recent activity", async (i) => {
-        const [{ body: p }, { body: a }] = await Promise.all([
-          api<{ payouts?: { recipientName: string; rail: string; usdcAmountMinor: string; status: string; createdAt: string }[] }>(ctx, "/api/sancus/payouts"),
+        type Local = { recipientName: string; rail: string; currency: string; amountMinor: string; status: string; createdAt: string }
+        type Pix = { recipientName: string; amountBrlMinor: string; status: string; createdAt: string }
+        const [{ body: x }, { body: px }, { body: a }] = await Promise.all([
+          api<{ payouts?: Local[] }>(ctx, "/api/sancus/xendit/payouts"),
+          api<{ payments?: Pix[] }>(ctx, "/api/sancus/pix/payments"),
           api<{ payments?: { recipient: { name: string }; usdcAmountMinor: string; status: string; createdAt: string }[] }>(ctx, "/api/sancus/payments"),
         ])
+        const local = (r: Local) => `${r.currency === "IDR" ? "Rp " : "฿"}${(Number(r.amountMinor) / (r.currency === "IDR" ? 1 : 100)).toLocaleString("en-US")}`
         const rows = [
-          ...(p.payouts ?? []).map((x) => ({ at: x.createdAt, line: `${x.createdAt.slice(0, 16)} ${x.rail} to ${x.recipientName}: ${usd6(x.usdcAmountMinor)} · ${x.status}` })),
-          ...(a.payments ?? []).map((x) => ({ at: x.createdAt, line: `${x.createdAt.slice(0, 16)} ACH to ${x.recipient.name}: ${usd6(x.usdcAmountMinor)} · ${x.status}` })),
-        ].sort((x, y) => Date.parse(y.at) - Date.parse(x.at))
+          ...(x.payouts ?? []).map((r) => ({ at: r.createdAt, line: `${r.createdAt.slice(0, 16)} ${r.rail === "PROMPTPAY" ? "PromptPay" : "BI-FAST"} to ${r.recipientName}: ${local(r)} · ${r.status}` })),
+          ...(px.payments ?? []).map((r) => ({ at: r.createdAt, line: `${r.createdAt.slice(0, 16)} Pix to ${r.recipientName}: R$${(Number(r.amountBrlMinor) / 100).toFixed(2)} · ${r.status}` })),
+          ...(a.payments ?? []).map((r) => ({ at: r.createdAt, line: `${r.createdAt.slice(0, 16)} ACH to ${r.recipient.name}: ${usd6(r.usdcAmountMinor)} · ${r.status}` })),
+        ].sort((p, q) => Date.parse(q.at) - Date.parse(p.at))
         return rows.slice(0, i.limit ?? 8).map((r) => r.line).join("\n") || "No payments yet."
       }),
     }),

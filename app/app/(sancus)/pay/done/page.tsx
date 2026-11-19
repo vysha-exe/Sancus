@@ -6,40 +6,26 @@ import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { balance } from "@/lib/sancus/demo-data"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
-import { canOpenPath, useAccount } from "@/lib/sancus/use-account"
+
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
-import { fixedUsdRateLabel } from "@/lib/sancus/fixed-rates"
-import { isTerminal, type PayoutStatus } from "@/lib/sancus/payout-provider"
-import { displayMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
-import type { PayoutDto } from "@/lib/sancus/payouts"
 import type { PixPaymentDto } from "@/lib/sancus/local-rails"
+import type { XenditPayoutDto } from "@/lib/sancus/xendit-payouts"
 
-const ORDER: PayoutStatus[] = ["CREATED", "FUNDS_SENT", "CONVERTING", "PAYING_OUT", "COMPLETED"]
-const reached = (s: PayoutStatus, step: PayoutStatus) => ORDER.indexOf(s) >= ORDER.indexOf(step)
-
-/** Polls one payout until it finishes. */
-function usePayoutStatus(initial: PayoutDto | null) {
-  const [latest, setLatest] = useState<PayoutDto | null>(initial)
+/** Polls a PromptPay / BI-FAST payout until Xendit settles or fails it. */
+function useXenditStatus(initial: XenditPayoutDto | null) {
+  const [latest, setLatest] = useState(initial)
   const current = latest ?? initial
-  const done = !current || isTerminal(current.status)
   const id = initial?.id
-
   useEffect(() => {
-    if (!id || done) return
-    const t = window.setInterval(async () => {
-      try {
-        const res = await fetch("/api/sancus/payouts", { cache: "no-store" })
-        if (!res.ok) return
-        const body = (await res.json()) as { payouts?: PayoutDto[] }
-        const found = body.payouts?.find((p) => p.id === id)
-        if (found) setLatest(found)
-      } catch {
-        /* keep polling */
-      }
-    }, 2000)
-    return () => window.clearInterval(t)
-  }, [id, done])
-
+    if (!id || !current || !["PENDING", "COMPLIANCE_REVIEW"].includes(current.status)) return
+    const timer = window.setInterval(async () => {
+      const response = await fetch(`/api/sancus/xendit/payouts/${id}/refresh`, { method: "POST" })
+      if (!response.ok) return
+      const body = (await response.json()) as { payout?: XenditPayoutDto }
+      if (body.payout) setLatest(body.payout)
+    }, 2500)
+    return () => window.clearInterval(timer)
+  }, [id, current])
   return current
 }
 
@@ -61,13 +47,12 @@ function usePixPaymentStatus(initial: PixPaymentDto | null) {
 }
 
 export default function PayDonePage() {
-  const { recipient, quote, state, view, payout, pixPayment, sourceAccount } = usePayFlow()
+  const { recipient, quote, state, view, xenditPayout, pixPayment, sourceAccount } = usePayFlow()
   const fundingSource = sourceAccount?.parentId === null ? "parent treasury" : sourceAccount?.name ?? "selected account"
-  const live = usePayoutStatus(payout)
-  const { account } = useAccount()
+  const xendit = useXenditStatus(xenditPayout)
   const pix = usePixPaymentStatus(pixPayment)
-  // Re-read the balance whenever the payout moves (reserved → released / delivered).
-  const treasury = useLiveTreasury(live?.status)
+  // Re-read the balance whenever the payout moves.
+  const treasury = useLiveTreasury(xendit?.status ?? pix?.status)
 
   if (pix) {
     const settled = pix.status === "SETTLED"
@@ -87,147 +72,49 @@ export default function PayDonePage() {
     </div>
   }
 
-  // Live payment created in this session.
-  if (live) {
-    const status = live.status
-    const declined = status === "REJECTED"
-    const failed = status === "FAILED" || declined
-    const completed = status === "COMPLETED"
-    const awaiting = status === "PENDING_APPROVAL"
-    const local = `S$ ${displayMinor(BigInt(live.sgdAmountMinor), SGD_DECIMALS, "", 2)}`
-    const total = `$${displayMinor(BigInt(live.usdcAmountMinor), USDC_DECIMALS, "", 2)}`
-    const step = (s: PayoutStatus) =>
-      failed && s !== "CREATED" && s !== "FUNDS_SENT" ? "Failed" : reached(status, s) ? "Settled" : "Pending"
-    const title = declined
-      ? `Payment to ${live.recipientName} was declined`
-      : failed
-        ? `Payment to ${live.recipientName} failed`
-        : completed
-          ? `Done. ${live.recipientName} has ${local}.`
-          : awaiting
-            ? `Waiting for approval: ${total} to ${live.recipientName}`
-            : `On its way to ${live.recipientName}`
-    const headTitle = completed
-      ? "Payment sent"
-      : declined
-        ? "Payment declined"
-        : failed
-          ? "Payment failed"
-          : awaiting
-            ? "Sent for approval"
-            : "Sending payment"
-
+  // PromptPay (Thailand) / BI-FAST (Indonesia) payout through Xendit, created in this session.
+  if (xendit) {
+    const settled = xendit.status === "SETTLED"
+    const failed = ["FAILED", "REVERSED", "CANCELLED"].includes(xendit.status)
+    const decimals = xendit.currency === "IDR" ? 0 : 2
+    const amount = `${xendit.currency === "IDR" ? "Rp " : "฿ "}${(Number(xendit.amountMinor) / 10 ** decimals).toLocaleString(xendit.currency === "IDR" ? "id-ID" : "th-TH", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`
+    const railLabel = xendit.rail === "PROMPTPAY" ? "PromptPay" : "BI-FAST"
     return (
       <div className="page">
-        <PayFlowHead title={headTitle} step={4} />
-
-        {awaiting ? (
-          <div className="tile s12" role="status" style={{ marginBottom: 16 }}>
-            <span className="body-s">
-              <b>Needs an approver.</b> {live.approvalReason ? `${live.approvalReason}.` : "This payment is over your approval rule."} The money is
-              reserved and nothing leaves your balance until it&apos;s approved.{" "}
-              {canOpenPath(account, "/activity/approvals") ? (
-                <Link href="/activity/approvals">Open Approvals →</Link>
-              ) : (
-                <Link href="/me">Your requests →</Link>
-              )}
-            </span>
-          </div>
-        ) : null}
-
+        <PayFlowHead title={settled ? "Payment sent" : failed ? "Payment failed" : "Sending payment"} step={4} />
         <div className="grid">
-          <section className="tile s7" aria-label="Confirmation">
-            <div style={{ display: "grid", gap: 12, justifyItems: "start" }}>
-              <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-                <circle cx="32" cy="32" r="28" fill="none" stroke={failed ? "var(--danger, #c0392b)" : "var(--accent)"} strokeWidth="3" />
-                {failed ? (
-                  <path d="M22 22l20 20M42 22L22 42" fill="none" stroke="var(--danger, #c0392b)" strokeWidth="3" strokeLinecap="round" />
-                ) : (
-                  <path
-                    d="M20 33l8 8 16-18"
-                    fill="none"
-                    stroke="var(--accent)"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity={completed ? 1 : 0.35}
-                  />
-                )}
-              </svg>
-              <h2 className="sx-h heading-2" style={{ margin: 0 }}>
-                {title}
-              </h2>
-              <p className="body muted" style={{ margin: 0, maxWidth: "62ch" }}>
-                {total} from {fundingSource} · {live.rail === "PAYNOW" ? "PayNow" : "FAST"} · ref {live.providerRef ?? live.id.slice(0, 8)}
-              </p>
-              {failed && live.failureReason ? (
-                <p className="body-s" style={{ margin: 0, color: "var(--danger, #c0392b)" }}>
-                  {live.failureReason}
-                </p>
-              ) : null}
-            </div>
-
-            <div style={{ display: "grid", gap: 0, marginTop: 8 }}>
-              <div className="hop">
-                <i className={reached(status, "FUNDS_SENT") ? "" : "todo"} />
-                <span className="body-strong">Funded from {fundingSource}</span>
-                <StatusPill status={step("FUNDS_SENT")} />
-                <span className="data">
-                  {total}
-                  {live.txHash ? (
-                    <>
-                      {" · "}
-                      <a href={`https://explorer.testnet.arc.io/tx/${live.txHash}`} target="_blank" rel="noreferrer">
-                        Arc tx {live.txHash.slice(0, 10)}…
-                      </a>
-                    </>
-                  ) : null}
-                </span>
-              </div>
-              <div className="hop">
-                <i className={reached(status, "PAYING_OUT") ? "" : "todo"} />
-                <span className="body-strong">Converted</span>
-                <StatusPill status={step("PAYING_OUT")} />
-                <span className="data">{fixedUsdRateLabel("SGD")}</span>
-              </div>
-              <div className="hop">
-                <i className={completed ? "" : "todo"} />
-                <span className="body-strong">Paid out via {live.rail === "PAYNOW" ? "PayNow" : "FAST"}</span>
-                <StatusPill status={failed ? "Failed" : completed ? "Settled" : "Pending"} />
-                <span className="data">
-                  {local}
-                </span>
-              </div>
-            </div>
-          </section>
-
-          <aside className="tile s5" aria-labelledby="next">
-            <h2 className="tile-title" id="next">
-              What next
+          <section className="tile s7">
+            <h2 className="sx-h heading-2">
+              {settled ? `Done. ${xendit.recipientName} has ${amount}.` : failed ? `Payment to ${xendit.recipientName} failed.` : `On its way to ${xendit.recipientName}`}
             </h2>
-            <div className="kv">
-              <span>Payment ID</span>
-              <span>{live.id.slice(0, 8)}…</span>
+            <div className="hop">
+              <i />
+              <span className="body-strong">Funded from {fundingSource}</span>
+              <StatusPill status="Settled" />
+              <span className="data">{view.totalLabel !== "–" ? view.totalLabel : ""}</span>
             </div>
-            <div className="kv">
-              <span>Status</span>
-              <span>{status.replace("_", " ").toLowerCase()}</span>
+            <div className="hop">
+              <i />
+              <span className="body-strong">Converted</span>
+              <StatusPill status="Settled" />
+              <span className="data">{view.rateLabel}</span>
             </div>
-            <div className="kv">
-              <span>Available now</span>
-              <span>{treasury.availableLabel}</span>
+            <div className="hop">
+              <i className={settled ? "" : "todo"} />
+              <span className="body-strong">Paid out via {railLabel}</span>
+              <StatusPill status={failed ? "Failed" : settled ? "Settled" : "Pending"} />
+              <span className="data">{amount} · {xendit.accountNumberMasked}</span>
             </div>
-            <div className="tile-foot" style={{ flexDirection: "column", alignItems: "stretch" }}>
-              <a href="/api/sancus/ledger?format=csv" className="sx-btn sx-btn--secondary">
-                Download ledger (CSV)
-              </a>
-              <Link href="/pay" className="sx-btn sx-btn--primary">
-                Make another payment
-              </Link>
-              <Link href="/activity" className="sx-btn sx-btn--quiet">
-                See it in Activity
-              </Link>
-            </div>
+            <p className="body-s muted">
+              {xendit.simulated ? `Xendit ${railLabel} payout (sandbox, simulated).` : `Submitted to Xendit ${railLabel}.`}
+            </p>
+            {xendit.failureReason ? <p className="body-s" style={{ color: "var(--danger, #c0392b)" }}>{xendit.failureReason}</p> : null}
+          </section>
+          <aside className="tile s5">
+            <div className="kv"><span>Paying from</span><span>{fundingSource}</span></div>
+            <div className="kv"><span>Provider reference</span><span>{xendit.providerTransactionId.slice(0, 14)}…</span></div>
+            <div className="kv"><span>Status</span><span>{xendit.status.replace(/_/g, " ").toLowerCase()}</span></div>
+            <div className="tile-foot"><Link href="/activity" className="sx-btn sx-btn--primary">See it in Activity</Link></div>
           </aside>
         </div>
       </div>

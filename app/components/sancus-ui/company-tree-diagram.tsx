@@ -18,7 +18,7 @@ function level(n: CompanyNode) {
   return n.depth <= 1 ? "Branch" : "Sub-branch"
 }
 
-export function CompanyTreeDiagram({ tree }: { tree: CompanyNode[] }) {
+export function CompanyTreeDiagram({ tree, balancesReady }: { tree: CompanyNode[]; balancesReady: boolean }) {
   const router = useRouter()
   const layout = useMemo(() => layoutTree(tree), [tree])
   if (tree.length === 0) return null
@@ -57,13 +57,14 @@ export function CompanyTreeDiagram({ tree }: { tree: CompanyNode[] }) {
           const root = node.parentId === null
           const left = x - W / 2
           const walletLabel = `${node.wallets.length} wallet${node.wallets.length === 1 ? "" : "s"}`
+          const balanceLabel = balancesReady ? usd(node.totalMinor) : "***"
           return (
             <g
               key={node.id}
               transform={`translate(${left}, ${y})`}
               role="button"
               tabIndex={0}
-              aria-label={`${node.name}, ${level(node)}, ${usd(node.totalMinor)}, ${walletLabel}`}
+              aria-label={`${node.name}, ${level(node)}, ${balanceLabel}, ${walletLabel}`}
               onClick={() => openAccount(node.id)}
               onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), openAccount(node.id))}
               style={{ cursor: "pointer", outline: "none" }}
@@ -88,7 +89,7 @@ export function CompanyTreeDiagram({ tree }: { tree: CompanyNode[] }) {
                 {root ? "Global treasury · USDC" : `${level(node)} · ${node.currency}`}
               </text>
               <text x={10} y={66} fontSize={13} fontWeight={600} fill="var(--ink)" style={{ fontFamily: "var(--font-sans)", fontVariantNumeric: "tabular-nums" }}>
-                {usd(node.totalMinor)}
+                {balanceLabel}
               </text>
               <text x={W - 10} y={66} textAnchor="end" fontSize={11} fill="var(--ink-muted)" style={{ fontFamily: "var(--font-sans)" }}>
                 {walletLabel}

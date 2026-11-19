@@ -862,6 +862,15 @@ export async function getUsdcBalance(
   address: Address,
   chain: SupportedChain
 ): Promise<bigint> {
+  // Face USDC (rail-bot mintable) replaces Circle Arc USDC for Sancus test balances.
+  if (chain === "arcTestnet") {
+    try {
+      const { faceUsdcEnabled, getFaceUsdcBalance } = await import("@/lib/sancus/face-usdc");
+      if (faceUsdcEnabled()) return getFaceUsdcBalance(address);
+    } catch {
+      /* fall through to real USDC */
+    }
+  }
   return getTokenBalance(address, chain, "USDC");
 }
 

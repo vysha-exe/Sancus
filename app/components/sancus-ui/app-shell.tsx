@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useEffect, type ReactNode } from "react"
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react"
 import { ACCOUNT_TYPE_LABEL, navWithDevQa, type NavKey } from "@/lib/sancus/accounts"
 import { accountDisplayName, can, canOpenPath, useAccount } from "@/lib/sancus/use-account"
 import { useSancusPrefs } from "@/lib/sancus/prefs"
@@ -49,8 +49,14 @@ const nav = [
   { key: "team", href: "/team", label: "Team", icon: IconTeam, match: (p: string) => p.startsWith("/team") },
   { key: "invoices", href: "/invoices", label: "Invoices", icon: IconInvoices, match: (p: string) => p.startsWith("/invoices") },
   { key: "agents", href: "/agents", label: "Agents", icon: IconAgents, match: (p: string) => p.startsWith("/agents") },
-  // REMOVE BEFORE SUBMISSION
-  { key: "devqa", href: "/dev-qa", label: "Dev QA", icon: IconDevQa, match: (p: string) => p.startsWith("/dev-qa") },
+  // REMOVE BEFORE SUBMISSION — Process settlement log (was Dev QA)
+  {
+    key: "devqa",
+    href: "/process",
+    label: "Process",
+    icon: IconDevQa,
+    match: (p: string) => p.startsWith("/process") || p.startsWith("/dev-qa") || p.startsWith("/dev"),
+  },
 ] as const
 
 /** The admin's classic set, used for the guest demo before an account loads. */
@@ -64,6 +70,8 @@ export function AppShell({
   headerExtra?: ReactNode
 }) {
   const pathname = usePathname()
+  const [pendingTransition, setPendingTransition] = useState<{ from: string; to: string } | null>(null)
+  const pendingRoute = pendingTransition?.from === pathname ? pendingTransition.to : null
   const { collapsed, toggleCollapsed, theme } = useSancusPrefs()
   // Live count of payments waiting for approval (demo count when signed out).
   const approvalCount = useLiveApprovals().waiting.length
@@ -84,30 +92,58 @@ export function AppShell({
   const actorName = account ? ACCOUNT_TYPE_LABEL[account.type] : ACCOUNT_TYPE_LABEL.ADMIN
   const actorRole = accountDisplayName(account, workspace.name)
 
-  // A business admin always works in the company (there's no personal account on the admin dashboard).
+  // Business admin (and guest admin demo): always work in the company — never "Personal".
+  const isBusinessAdmin = !account || account.type === "ADMIN"
   useEffect(() => {
-    if (account?.type !== "ADMIN" || !ws.ready || !ws.isPersonal || !ws.hasBusiness) return
-    const root = account.scopes.find((s) => s.isRoot)
-    if (root) ws.selectCompany(root.companyId)
-  }, [account, ws])
+    if (!isBusinessAdmin || !ws.ready || !ws.isPersonal || !ws.hasBusiness) return
+    const rootId = account?.scopes.find((s) => s.isRoot)?.companyId ?? ws.tree[0]?.id
+    if (rootId) ws.selectCompany(rootId)
+  }, [account, isBusinessAdmin, ws])
 
   // Pages outside this account's reach send it home (the APIs refuse them regardless).
   useEffect(() => {
     if (account && !canOpenPath(account, pathname)) router.replace(account.homePath)
   }, [account, pathname, router])
 
+  useEffect(() => {
+    if (!pendingRoute) return
+    const timeout = window.setTimeout(() => setPendingTransition(null), 10_000)
+    return () => window.clearTimeout(timeout)
+  }, [pendingRoute])
+
+  function beginLinkTransition(event: MouseEvent<HTMLDivElement>) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) return
+
+    const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>("a[href]")
+    if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return
+
+    const destination = new URL(anchor.href, window.location.href)
+    if (destination.origin !== window.location.origin) return
+    if (destination.pathname === window.location.pathname) return
+
+    setPendingTransition({ from: pathname, to: destination.pathname })
+  }
+
   return (
     <div className="frame">
       <div
         className={`sx shell${collapsed ? " shell--collapsed" : ""}`}
         data-theme={theme}
+        onClickCapture={beginLinkTransition}
         // Prefs hydrate from localStorage after mount; avoid a full tree redo.
         suppressHydrationWarning
       >
         <header className="hdr">
           <SancusLockup />
           <div className="bar">
-            {!account || account.type === "ADMIN" ? <WorkspaceSwitcher allowPersonal={account?.type !== "ADMIN"} /> : null}
+            {isBusinessAdmin ? <WorkspaceSwitcher allowPersonal={false} /> : null}
             <label className="search-pill">
               <IconSearch />
               <span className="vh">Search</span>
@@ -126,13 +162,15 @@ export function AppShell({
           <div className="nav">
             {navItems.map((item) => {
               const on = item.match(pathname)
+              const pending = pendingRoute ? item.match(pendingRoute) : false
               const Icon = item.icon
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`nav-item${on ? " nav-item--on" : ""}`}
+                  className={`nav-item${on ? " nav-item--on" : ""}${pending ? " nav-item--pending" : ""}`}
                   aria-current={on ? "page" : undefined}
+                  aria-busy={pending || undefined}
                   title={item.label}
                 >
                   <Icon />
@@ -149,8 +187,9 @@ export function AppShell({
           <div className="side-foot">
             <Link
               href="/settings"
-              className={`nav-item${pathname.startsWith("/settings") ? " nav-item--on" : ""}`}
+              className={`nav-item${pathname.startsWith("/settings") ? " nav-item--on" : ""}${pendingRoute?.startsWith("/settings") ? " nav-item--pending" : ""}`}
               aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+              aria-busy={pendingRoute?.startsWith("/settings") || undefined}
               title="Settings"
             >
               <IconSettings />
@@ -169,7 +208,29 @@ export function AppShell({
           </div>
         </nav>
 
-        <main className="main">{children}</main>
+        <main className="main" aria-busy={Boolean(pendingRoute)}>
+          {children}
+          {pendingRoute ? <RouteTransition /> : null}
+        </main>
+      </div>
+    </div>
+  )
+}
+
+export function RouteTransition() {
+  return (
+    <div className="route-transition" role="status" aria-live="polite" aria-label="Loading page">
+      <div className="route-transition__bar" aria-hidden="true" />
+      <div className="route-transition__card">
+        <span className="route-transition__mark" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="route-transition__copy">
+          <b>Opening page</b>
+          <small>Getting the latest information…</small>
+        </span>
       </div>
     </div>
   )

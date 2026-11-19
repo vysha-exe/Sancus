@@ -116,26 +116,31 @@ export function useWorkspace() {
     setSelection({ mode: "business", companyId: id })
   }, [])
 
+  // Prefer a company name over the word "Personal" when a tree exists (admin demos / sticky localStorage).
+  const fallbackCompany = companies.tree[0]?.name ?? "Business"
   const label =
     mode === "personal"
-      ? "Personal"
+      ? companies.hasBusiness
+        ? fallbackCompany
+        : "Personal"
       : activeNode
-        ? activeNode.parentId
-          ? `${activeNode.name}`
-          : activeNode.name
-        : "Business"
+        ? activeNode.name
+        : fallbackCompany
 
   const chipLabel =
     mode === "personal"
-      ? "Personal"
+      ? companies.hasBusiness
+        ? fallbackCompany
+        : "Personal"
       : activeNode
         ? activeNode.parentId
           ? `${findNode(companies.tree, activeNode.rootId)?.name ?? "Company"} · ${activeNode.name}`
           : activeNode.name
-        : "Business"
+        : fallbackCompany
 
   return {
     ready: companies.ready && hydrated,
+    balancesReady: companies.balancesReady,
     mode,
     isPersonal: mode === "personal",
     hasBusiness: companies.hasBusiness,

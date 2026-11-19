@@ -2,16 +2,15 @@
 pragma solidity ^0.8.24;
 
 /// @title SancusMockStablecoin
-/// @notice TEST TOKEN WITH NO VALUE. Simulates a local-currency rail (BRL / IDR / THB) for
-///         Sancus on Arc testnet. Sancus's rail bot mints tokens when a sandbox payment
-///         (QRIS, PromptPay, Pix) completes and burns them when money leaves via a local
-///         payout. Standard ERC-20 otherwise, so any wallet or explorer can display it.
+/// @notice TEST TOKEN WITH NO VALUE. Simulates a local-currency rail (BRL / IDR / THB) or
+///         Face USDC for Sancus on Arc testnet. Anyone may mint (hackathon / testing convenience).
+///         The rail bot can still burn from any holder for settlement legs. Standard ERC-20 otherwise.
 contract SancusMockStablecoin {
     string public name;
     string public symbol;
     uint8 public immutable decimals;
     string public constant notice =
-        "TEST TOKEN - no value. Simulates a local-currency payment rail for Sancus on Arc testnet.";
+        "TEST TOKEN - no value. Public mint for Sancus Arc testnet demos.";
 
     uint256 public totalSupply;
     address public owner;
@@ -76,10 +75,10 @@ contract SancusMockStablecoin {
         return true;
     }
 
-    // ---------- rail bot ----------
+    // ---------- mint / rail bot ----------
 
-    /// @notice Local currency arrived through a (sandbox) rail: credit `to`.
-    function mint(address to, uint256 value, string calldata ref) external onlyMinter {
+    /// @notice Credit `to`. Open to anyone on this test token so demos aren't gated on the minter key.
+    function mint(address to, uint256 value, string calldata ref) external {
         if (to == address(0)) revert ZeroAddress();
         totalSupply += value;
         balanceOf[to] += value;

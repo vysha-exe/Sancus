@@ -2,12 +2,13 @@ import Link from "next/link"
 import { DEMO_LOGIN_PATH } from "@/lib/sancus/demo-login"
 import { AuthShell } from "./auth-shell"
 
-type DemoAs = "admin" | "branch" | "employee" | "individual"
+type DemoAs = "admin" | "finance" | "branch" | "employee" | "individual"
 
-const OPTIONS: DemoAs[] = ["admin", "branch", "employee", "individual"]
+const OPTIONS: DemoAs[] = ["admin", "finance", "branch", "employee", "individual"]
 
 const COPY: Record<DemoAs, { title: string; detail: string }> = {
   admin: { title: "Business admin", detail: "Owner or admin of the global account. Everything, every branch." },
+  finance: { title: "Finance", detail: "Approve payments and transfers for every branch. Can't approve your own." },
   branch: { title: "Branch admin", detail: "Run one branch and its people." },
   employee: { title: "Employee", detail: "Your card, your limits, your agent." },
   individual: { title: "Individual", detail: "A personal dollar account. No business needed." },

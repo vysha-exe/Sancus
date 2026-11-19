@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { useState } from "react"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
+import { PublicReceiveQr } from "@/components/sancus-ui/public-receive-qr"
+import { StaticReceiveLinks } from "@/components/sancus/static-receive-links"
 import { ledger } from "@/lib/sancus/demo-data"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 
@@ -69,17 +71,30 @@ export default function ReceivePage() {
           <Link href="/home" className="sx-btn sx-btn--quiet" style={{ justifySelf: "start" }}>
             ← Home
           </Link>
-          <h1 className="sx-h heading-2">Add money</h1>
+          <h1 className="sx-h heading-2">Receive</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            Everything lands as US dollars in one balance.
+            Give customers a permanent way to pay a branch, create a one-time collection, or fund your treasury.
           </p>
         </div>
       </header>
 
+      <section style={{ display: "grid", gap: 12 }} aria-labelledby="customer-payments">
+        <div><h2 id="customer-payments" className="sx-h heading-3">Customer payments</h2><p className="body-s muted" style={{ margin: 0 }}>Share a permanent QR or local bank instructions. The payer chooses the amount.</p></div>
+        <StaticReceiveLinks />
+      </section>
+
+      <section style={{ display: "grid", gap: 12 }} aria-labelledby="one-time-collection">
+        <div><h2 id="one-time-collection" className="sx-h heading-3">One-time collection</h2><p className="body-s muted" style={{ margin: 0 }}>Create an exact-amount provider QR for an invoice, order, or in-person payment.</p></div>
+        <PublicReceiveQr />
+      </section>
+
+      <section style={{ display: "grid", gap: 12 }} aria-labelledby="fund-treasury">
+        <div><h2 id="fund-treasury" className="sx-h heading-3">Fund your treasury</h2><p className="body-s muted" style={{ margin: 0 }}>Move your own money in by bank transfer or USDC.</p></div>
+
       <div className="grid">
         <section className="tile s7" aria-labelledby="in">
           <h2 className="tile-title" id="in">
-            Move money in
+            Add treasury funds
           </h2>
           <div role="radiogroup" aria-label="From" style={{ display: "grid", gap: 8 }}>
             {deposits.map((s) => {
@@ -211,6 +226,7 @@ export default function ReceivePage() {
           </div>
         </section>
       </div>
+      </section>
     </div>
   )
 }

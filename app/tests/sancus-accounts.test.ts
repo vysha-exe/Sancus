@@ -81,11 +81,12 @@ describe("canOpenPath (browser) matches canAccessPath (server)", () => {
     as("maya", [m("maya", "root", "OWNER")]),
     as("ploy", [m("ploy", "th", "ADMIN")]),
     as("niran", [m("niran", "bkk", "EMPLOYEE")]),
+    as("wei", [m("wei", "root", "FINANCE")]),
     as("alex", []),
   ]
   const paths = ["/home", "/branch", "/me", "/pay", "/pay/review", "/receive", "/activity", "/activity/approvals", "/spending",
     "/branches", "/team", "/invoices", "/agents", "/settings", "/notifications"]
-  it.each(accounts.map((a) => [a.type, a] as const))("%s", (_type, account) => {
+  it.each(accounts.map((a) => [a.label, a] as const))("%s", (_label, account) => {
     const dto = account.toJSON()
     for (const p of paths) expect([p, canOpenPath(dto, p)]).toEqual([p, account.canAccessPath(p)])
   })

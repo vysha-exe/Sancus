@@ -2,8 +2,7 @@
 import { NextResponse } from "next/server"
 import { withAuth } from "@/lib/api/with-auth"
 import { buildCompanyTree, countNodes, effectiveRole, type CompanyRow, type MembershipRow } from "@/lib/sancus/companies"
-import { listCompanyWallets, withBalances } from "@/lib/sancus/company-wallets"
-import { loadNodeDeductions } from "@/lib/sancus/node-spend"
+import { listCompanyWallets, withoutBalances } from "@/lib/sancus/company-wallets"
 import { circleConfigured } from "@/lib/sancus/provision"
 
 export const GET = withAuth(async (_req, { user, supabase }) => {
@@ -25,12 +24,10 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
   const membershipRows = (memberships ?? []) as MembershipRow[]
   const rows = allRows.filter((company) => effectiveRole(allRows, membershipRows, user.id, company.id).role !== null)
   const ids = rows.map((company) => company.id)
-  const [wallets, deductions] = await Promise.all([
-    listCompanyWallets(supabase, ids).then(withBalances),
-    // Payments each node made on simulated legs (same rule as the dashboard balance).
-    loadNodeDeductions(supabase, ids),
-  ])
-  const tree = buildCompanyTree(rows, membershipRows, wallets, user.id, deductions)
+  // Only read wallet metadata here. Live RPC balances are intentionally loaded
+  // by /companies/balances after the authorized structure has rendered.
+  const wallets = withoutBalances(await listCompanyWallets(supabase, ids))
+  const tree = buildCompanyTree(rows, membershipRows, wallets, user.id)
 
   return NextResponse.json({
     circleConfigured: circleConfigured(),

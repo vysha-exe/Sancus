@@ -10,7 +10,7 @@ import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
-import { createError, getCompany, resolveNodeInput } from "@/lib/sancus/company-api"
+import { createCompanyForUser, createError, getCompany, resolveNodeInput } from "@/lib/sancus/company-api"
 import { createCompanyWallet } from "@/lib/sancus/company-wallets"
 
 const createSchema = z.object({
@@ -127,17 +127,12 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     if (!parentId) return NextResponse.json({ error: "Create your global account first" }, { status: 409 })
     const node = resolveNodeInput(input.newBranch)
     if (!node.ok) return NextResponse.json({ error: node.error }, { status: 400 })
-    const { data: id, error } = await supabase.rpc("sancus_create_company", {
-      p_parent: parentId,
-      p_name: node.name,
-      p_country: node.country,
-      p_currency: node.currency,
-    })
-    if (error || !id) {
-      const e = createError(error?.message ?? "")
+    const created = await createCompanyForUser(supabase, user.id, { parentId, ...node })
+    if (created.error || !created.id) {
+      const e = createError(created.error ?? "")
       return NextResponse.json({ error: e.error }, { status: e.status })
     }
-    const company = await getCompany(supabase, id as string)
+    const company = await getCompany(supabase, created.id)
     if (!company) return NextResponse.json({ error: "Branch created but couldn't be read back" }, { status: 500 })
     const wallet = await createCompanyWallet(supabase, user.id, company, `${company.name} wallet`)
     branchCreated = { id: company.id, name: company.name, walletAddress: wallet.ok ? wallet.wallet.address : null }

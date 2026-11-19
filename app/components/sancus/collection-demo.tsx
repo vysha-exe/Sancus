@@ -34,11 +34,21 @@ export function CollectionDemo() {
   const [reference, setReference] = useState("")
   const [collections, setCollections] = useState<CollectionDto[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const eligibleBranches = useMemo(() => flatten(workspace.tree).filter((node) => node.parentId !== null && node.currency === railInfo[rail].currency), [rail, workspace.tree])
   const receivingBranch = eligibleBranches.find((node) => node.id === branchId) ?? eligibleBranches[0] ?? null
-  const selected = useMemo(() => collections.find((c) => c.id === selectedId) ?? collections[0] ?? null, [collections, selectedId])
+  const matchingCollections = useMemo(
+    () => receivingBranch
+      ? collections.filter((collection) => collection.rail === rail && collection.companyId === receivingBranch.id)
+      : [],
+    [collections, rail, receivingBranch]
+  )
+  const selected = useMemo(
+    () => matchingCollections.find((collection) => collection.id === selectedId) ?? matchingCollections[0] ?? null,
+    [matchingCollections, selectedId]
+  )
 
   const load = useCallback(async () => {
     const response = await fetch("/api/sancus/collections", { cache: "no-store" })
@@ -56,7 +66,15 @@ export function CollectionDemo() {
     setRail(next)
     setAmount("")
     setBranchId("")
+    setSelectedId(null)
     setError(null)
+  }
+
+  async function copyPayload() {
+    if (!selected?.qrPayload) return
+    await navigator.clipboard.writeText(selected.qrPayload)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
   }
 
   async function create() {
@@ -107,8 +125,8 @@ export function CollectionDemo() {
   return (
     <section className="tile s12" aria-labelledby="local-collections">
       <div className="tile-head">
-        <div><h2 className="tile-title" id="local-collections">Create a local QR collection</h2><p className="body-s muted" style={{ margin: "4px 0 0" }}>The customer scans an exact-amount QR and pays the selected branch in its local currency.</p></div>
-        <span className={`sx-pill${selected?.simulated ? " sx-pill--simulated" : ""}`}>{selected?.simulated ? "Simulated" : "Provider sandbox"}</span>
+        <div><h2 className="tile-title" id="local-collections">Provider collection QR</h2><p className="body-s muted" style={{ margin: "4px 0 0" }}>The provider creates an exact-amount QR for the selected branch. Sancus saves the QR and its provider transaction so it can be paid and reconciled later.</p></div>
+        <span className={`sx-pill${selected?.simulated ? " sx-pill--simulated" : ""}`}>{selected?.simulated ? "Simulated fallback" : selected ? "Saved to Sancus" : "Provider sandbox"}</span>
       </div>
       <div className="grid" style={{ alignItems: "start" }}>
         <div className="s7" style={{ display: "grid", gap: 12 }}>
@@ -122,7 +140,7 @@ export function CollectionDemo() {
           </div>
           <div className="tile-foot"><span className="body-s muted">{railInfo[rail].note}</span><button type="button" className="sx-btn sx-btn--primary" disabled={busy || Number(amount) <= 0 || !receivingBranch} onClick={create}>{busy ? "Working…" : `Create ${railInfo[rail].label} QR`}</button></div>
           {error ? <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>{error}</span> : null}
-          {collections.length ? <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Rail</th><th>Receiving branch</th><th className="num">Amount</th><th>Status</th></tr></thead><tbody>{collections.slice(0, 6).map((c) => <tr key={c.id} style={{ cursor: "pointer" }} onClick={() => setSelectedId(c.id)}><td><span className="sx-rail">{c.rail}</span></td><td>{c.companyName || "Unassigned"}</td><td className="num">{money(c.currency, c.amountLocalMinor)}</td><td><StatusPill status={status(c.status)} /></td></tr>)}</tbody></table></div> : null}
+          {matchingCollections.length ? <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Saved QR</th><th>Receiving branch</th><th className="num">Amount</th><th>Status</th></tr></thead><tbody>{matchingCollections.slice(0, 6).map((c) => <tr key={c.id} aria-selected={selected?.id === c.id} style={{ cursor: "pointer" }} onClick={() => setSelectedId(c.id)}><td><span className="sx-rail">{c.rail}</span> <span className="body-s muted">{new Date(c.createdAt).toLocaleDateString()}</span></td><td>{c.companyName || "Unassigned"}</td><td className="num">{money(c.currency, c.amountLocalMinor)}</td><td><StatusPill status={status(c.status)} /></td></tr>)}</tbody></table></div> : <div className="empty">No saved {railInfo[rail].label} QR exists for this branch yet.</div>}
         </div>
         <aside className="tile s5" style={{ minHeight: 270 }} aria-live="polite">
           {selected ? <>
@@ -134,8 +152,9 @@ export function CollectionDemo() {
             </> : <div className="empty">QR payload is ready to copy.</div>}
             <strong>{money(selected.currency, selected.amountLocalMinor)}</strong>
             <span className="body-s muted">Paid to {selected.companyName || "an unassigned legacy collection"}</span>
+            <span className="body-s muted">Provider transaction · {selected.providerTransactionId}</span>
             {selected.reference ? <span className="body-s muted">Invoice or order number · {selected.reference}</span> : null}
-            <div className="tile-foot" style={{ justifyContent: "flex-start" }}>{selected.simulatorUrl ? <a className="sx-btn sx-btn--primary sx-btn--sm" href={selected.simulatorUrl} target="_blank" rel="noreferrer">Open provider simulator</a> : null}<button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={() => refresh(selected.id)} disabled={busy}>Refresh status</button></div>
+            <div className="tile-foot" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>{selected.simulatorUrl ? <a className="sx-btn sx-btn--primary sx-btn--sm" href={selected.simulatorUrl} target="_blank" rel="noreferrer">Pay in provider simulator</a> : null}{selected.qrPayload ? <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={copyPayload}>{copied ? "Copied" : "Copy QR payload"}</button> : null}<button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={() => refresh(selected.id)} disabled={busy}>Refresh status</button></div>
           </> : <div className="empty">Create a collection to show its provider-generated QR.</div>}
         </aside>
       </div>
