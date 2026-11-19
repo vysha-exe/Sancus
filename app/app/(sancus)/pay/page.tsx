@@ -8,7 +8,7 @@ import { recipientIsLive, type Recipient } from "@/lib/sancus/demo-data"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
 import { useAccount } from "@/lib/sancus/use-account"
 
-const businessFilters = ["All", "Suppliers", "Contractors", "Team"] as const
+const businessFilters = ["All", "Branches", "Suppliers", "Contractors", "Team"] as const
 const personalFilters = ["All", "Friends & family", "Shops & businesses"] as const
 type Filter = (typeof businessFilters)[number] | (typeof personalFilters)[number]
 
@@ -36,6 +36,7 @@ function RecipientKindRail({ r }: { r: Recipient }) {
 
 function matchesFilter(r: Recipient, filter: Filter) {
   if (filter === "All") return true
+  if (filter === "Branches") return r.kind === "Branch" || r.kind === "HQ"
   if (filter === "Suppliers") return r.kind === "Supplier"
   if (filter === "Contractors") return r.kind === "Contractor"
   if (filter === "Friends & family") return r.kind === "Friend" || r.kind === "Family"
@@ -96,7 +97,7 @@ export default function PayWhoPage() {
       <p className="body-s muted" style={{ margin: "-8px 0 20px" }}>
         {personal
           ? "Scan a QR, enter bank details, or pick someone you've paid before."
-          : "Pick someone from your list, or add a new payee. Then continue to enter the amount."}
+          : "Pay another company in your org, a supplier, or add a new payee — then enter the amount."}
       </p>
 
       {personal ? <QuickPay /> : null}

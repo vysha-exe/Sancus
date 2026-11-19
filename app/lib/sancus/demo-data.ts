@@ -283,6 +283,8 @@ export type Recipient = {
   }
   /** Brazil payees paid live by Pix. */
   pixKey?: string
+  /** Another company in the org — paid via internal Arc transfer. */
+  companyId?: string
 }
 
 export const recipients: Recipient[] = [
@@ -515,7 +517,7 @@ export function getRecipient(id: string): Recipient | undefined {
   return recipients.find((r) => r.id === id) ?? personalRecipients.find((r) => r.id === id)
 }
 
-/** Payees the backend can actually pay: PromptPay / BI-FAST (Xendit) and Pix. */
+/** Payees the backend can actually pay: PromptPay / BI-FAST (Xendit), Pix, and org companies. */
 export function recipientIsLive(r: Recipient): boolean {
-  return Boolean(r.xendit || r.pixKey)
+  return Boolean(r.xendit || r.pixKey || r.companyId)
 }

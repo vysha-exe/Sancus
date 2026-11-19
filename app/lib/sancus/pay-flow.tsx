@@ -28,9 +28,12 @@ import { buildCustomPayee, loadCustomPayees, saveCustomPayees, type NewPayeeInpu
 import { useAccount } from "@/lib/sancus/use-account"
 import type { XenditPayoutDto } from "@/lib/sancus/xendit-payouts"
 import type { PixPaymentDto } from "@/lib/sancus/local-rails"
+import type { InternalTransferDto } from "@/lib/sancus/internal-transfers"
 import { defaultCurrency, isPayRail, type PayCurrency, type QuoteSide, type SerializedPayQuote } from "@/lib/sancus/pay-quote"
 import type { CompanyNode } from "@/lib/sancus/companies"
+import { orgCompaniesAsRecipients } from "@/lib/sancus/org-payees"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
+import { signalSancusDataChanged } from "@/lib/sancus/live-refresh"
 import { INVOICE_PAY_STORAGE_KEY, type InvoicePayContext } from "@/lib/sancus/invoices"
 
 /** An invoice handed over from /invoices/confirm; `matched` is whether a saved payee was preselected. */
@@ -87,6 +90,7 @@ type PayContextValue = {
   submitting: boolean
   xenditPayout: XenditPayoutDto | null
   pixPayment: PixPaymentDto | null
+  internalTransfer: InternalTransferDto | null
   providerBacked: boolean
   sourceAccounts: CompanyNode[]
   sourceAccount: CompanyNode | null
@@ -150,6 +154,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   const [submitting, setSubmitting] = useState(false)
   const [xenditPayout, setXenditPayout] = useState<XenditPayoutDto | null>(null)
   const [pixPayment, setPixPayment] = useState<PixPaymentDto | null>(null)
+  const [internalTransfer, setInternalTransfer] = useState<InternalTransferDto | null>(null)
   // One idempotency key per payment attempt: retries can't double-pay.
   const idempotencyKey = useRef<string | null>(null)
 
@@ -196,13 +201,9 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer)
   }, [])
 
-  // Personal accounts (Jayden) get their own payees; business accounts get suppliers and team.
+  // Personal: friends/shops. Business: suppliers + other companies in the org as internal payees.
   const { account } = useAccount()
   const personal = account?.type === "INDIVIDUAL"
-  const recipients = useMemo(() => [...customPayees, ...recipientsFor(personal)], [customPayees, personal])
-  const recipient = recipients.find((r) => r.id === state.recipientId) ?? recipients[0]!
-  const isPix = Boolean(recipient.pixKey)
-  const isLive = Boolean(recipient.xendit) || isPix
   const sourceAccounts = useMemo(
     () => flattenCompanies(workspace.tree).filter((company) => company.role !== null && company.can.pay),
     [workspace.tree]
@@ -211,6 +212,18 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     ?? sourceAccounts.find((company) => company.parentId === null)
     ?? sourceAccounts[0]
     ?? null
+  const orgPayees = useMemo(
+    () => (personal ? [] : orgCompaniesAsRecipients(workspace.tree, { excludeCompanyId: sourceAccount?.id ?? workspace.companyId })),
+    [personal, workspace.tree, workspace.companyId, sourceAccount?.id]
+  )
+  const recipients = useMemo(
+    () => [...orgPayees, ...customPayees, ...recipientsFor(personal)],
+    [orgPayees, customPayees, personal]
+  )
+  const recipient = recipients.find((r) => r.id === state.recipientId) ?? recipients[0]!
+  const isPix = Boolean(recipient.pixKey)
+  const isOrg = Boolean(recipient.companyId)
+  const isLive = Boolean(recipient.xendit) || isPix || isOrg
 
   const setSourceCompanyId = useCallback((id: string) => {
     if (!sourceAccounts.some((company) => company.id === id)) return
@@ -220,7 +233,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
 
   const setRecipientId = useCallback(
     (id: string) => {
-      const r = findRecipient(id, customPayees) ?? recipients[0]!
+      const r = recipients.find((item) => item.id === id) ?? findRecipient(id, customPayees) ?? recipients[0]!
       idempotencyKey.current = null
       setState((s) => ({
         ...s,
@@ -313,11 +326,38 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
 
   const submit = useCallback(async (): Promise<SubmitResult> => {
     if (!isLive) return { ok: false, error: "This payee can't be paid from here yet" }
-    const amount = localAmountNumber(state.localAmount)
-    if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Enter an amount" }
     idempotencyKey.current ??= newKey()
     setSubmitting(true)
     try {
+      if (isOrg && recipient.companyId) {
+        if (!sourceAccount) return { ok: false, error: "Pick which company you're paying from" }
+        const amountUsdc = Number.parseFloat(state.usdAmount.replace(/,/g, ""))
+        if (!Number.isFinite(amountUsdc) || amountUsdc <= 0) return { ok: false, error: "Enter an amount in USDC" }
+        const res = await fetch("/api/sancus/internal-transfers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey.current },
+          body: JSON.stringify({
+            sourceCompanyId: sourceAccount.id,
+            destinationCompanyId: recipient.companyId,
+            amountUsdc,
+            memo: state.memo || undefined,
+          }),
+        })
+        const body = (await res.json()) as { transfer?: InternalTransferDto; error?: string }
+        // Mirror branch Move money: a 502 can still include the transfer row (FAILED with reason).
+        if (!res.ok && !body.transfer) return { ok: false, error: body.error ?? "Internal transfer failed" }
+        if (body.transfer) {
+          setInternalTransfer(body.transfer)
+          signalSancusDataChanged()
+          idempotencyKey.current = null
+          return { ok: true }
+        }
+        return { ok: false, error: body.error ?? "Internal transfer failed" }
+      }
+
+      const amount = localAmountNumber(state.localAmount)
+      if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Enter an amount" }
+
       if (isPix) {
         const res = await fetch("/api/sancus/pix/payments", {
           method: "POST",
@@ -362,7 +402,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     } finally {
       setSubmitting(false)
     }
-  }, [recipient, state.localAmount, state.memo, isPix, isLive])
+  }, [recipient, state.localAmount, state.usdAmount, state.memo, isPix, isLive, isOrg, sourceAccount])
 
   const view = useMemo<PayView>(() => {
     const rq = railQuote && railQuote.rail === state.rail && railQuote.currency === currency ? railQuote : null
@@ -400,6 +440,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       submitting,
       xenditPayout,
       pixPayment,
+      internalTransfer,
       providerBacked: isLive,
       sourceAccounts,
       sourceAccount,
@@ -426,6 +467,7 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       submitting,
       xenditPayout,
       pixPayment,
+      internalTransfer,
       sourceAccounts,
       sourceAccount,
       workspace.balancesReady,

@@ -228,9 +228,10 @@ export class BranchAccount extends SancusAccount {
   readonly type = "BRANCH" as const
   readonly label = "Branch admin"
   readonly homePath = "/branch"
-  readonly nav: NavKey[] = ["branch", "team", "spending", "branches", "receive", "agents", "settings"]
+  readonly nav: NavKey[] = ["branch", "pay", "activity", "team", "spending", "branches", "receive", "agents", "settings"]
   protected readonly paths: NavKey[] = [...this.nav]
   protected readonly permissions = new Set<Permission>([
+    "money.send",
     "money.receive",
     "branches.view",
     "members.manage",
