@@ -6,7 +6,8 @@ import { parseToMinor, SGD_DECIMALS } from "./money"
 import { chooseRail, FAST_LIMIT_SGD_MINOR, normaliseRecipient, validateRecipient, type SgRecipient } from "./paynow"
 import { quoteSgdPayout, type FxConfig, type PayoutQuote } from "./fx"
 import { getPayoutProvider, isTerminal, type PayoutStatus } from "./payout-provider"
-import { payoutJournal, postJournal, type PayoutForLedger } from "./ledger"
+import { payoutJournal, postJournal, postJournalFor, type Journal, type PayoutForLedger } from "./ledger"
+import { serviceClient } from "./service-client"
 import { formatMinor, USDC_DECIMALS } from "./money"
 import { getAppKitSendError, sendUsdcOnSameChainWithAppKit } from "@/lib/circle/app-kit-send"
 import { FIXED_USD_RATES } from "./fixed-rates"
@@ -149,10 +150,14 @@ function ledgerView(row: PayoutRow): PayoutForLedger {
  */
 export async function syncPayoutLedger(supabase: SupabaseClient, row: PayoutRow): Promise<void> {
   const view = ledgerView(row)
-  await postJournal(supabase, payoutJournal("created", view))
-  if (row.status === "COMPLETED") await postJournal(supabase, payoutJournal("completed", view))
-  if (row.status === "FAILED") await postJournal(supabase, payoutJournal("failed", view))
-  if (row.status === "REJECTED") await postJournal(supabase, payoutJournal("rejected", view))
+  // Journals always go in the requester's books, even when an admin approves or declines.
+  // The service client posts for row.user_id; without it, fall back to the caller's session.
+  const svc = serviceClient()
+  const post = (journal: Journal) => (svc ? postJournalFor(svc, row.user_id, journal) : postJournal(supabase, journal))
+  await post(payoutJournal("created", view))
+  if (row.status === "COMPLETED") await post(payoutJournal("completed", view))
+  if (row.status === "FAILED") await post(payoutJournal("failed", view))
+  if (row.status === "REJECTED") await post(payoutJournal("rejected", view))
 }
 
 /** Updates a payout row and returns the fresh copy (falls back to a local merge on error). */

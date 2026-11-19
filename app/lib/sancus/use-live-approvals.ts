@@ -32,6 +32,29 @@ export type ApprovalItem = {
   when: string
   decision?: "approved" | "declined"
   live: boolean
+  /** Whether the signed-in person may approve/decline it (never their own company payment). */
+  canDecide: boolean
+  /** Why not, in plain words, when canDecide is false. */
+  cantDecideReason: string | null
+  /** True when the signed-in person asked for it. */
+  mine: boolean
+}
+
+/** Extra fields GET /api/sancus/approvals adds to each payout / ACH payment. */
+type Decorated = {
+  requester?: { name: string; isYou: boolean }
+  canDecide?: boolean
+  cantDecideReason?: string | null
+}
+
+function askedBy(d: Decorated) {
+  const asker = d.requester?.name ?? "You"
+  return {
+    asker,
+    mine: d.requester?.isYou ?? true,
+    canDecide: d.canDecide ?? true,
+    cantDecideReason: d.cantDecideReason ?? null,
+  }
 }
 
 const initials = (name: string) =>
@@ -42,12 +65,13 @@ const initials = (name: string) =>
     .map((w) => w[0]!.toUpperCase())
     .join("")
 
-export function fromPayout(p: PayoutDto): ApprovalItem {
+export function fromPayout(p: PayoutDto & Decorated): ApprovalItem {
   const usdc = BigInt(p.usdcAmountMinor)
+  const by = askedBy(p)
   return {
+    ...by,
     id: p.id,
-    who: `You → ${p.recipientName}`,
-    asker: "You",
+    who: `${by.asker} → ${p.recipientName}`,
     initials: initials(p.recipientName),
     to: p.recipientName,
     rail: p.rail === "PAYNOW" ? "PayNow" : "FAST",
@@ -64,13 +88,14 @@ export function fromPayout(p: PayoutDto): ApprovalItem {
   }
 }
 
-export function fromAch(p: AchPaymentDto): ApprovalItem {
+export function fromAch(p: AchPaymentDto & Decorated): ApprovalItem {
   const usdc = BigInt(p.usdcAmountMinor)
   const name = p.recipient.name
+  const by = askedBy(p)
   return {
+    ...by,
     id: p.id,
-    who: `You → ${name}`,
-    asker: "You",
+    who: `${by.asker} → ${name}`,
     initials: initials(name),
     to: name,
     rail: p.speed === "SAME_DAY" ? "Same-day ACH" : "ACH",
@@ -106,6 +131,9 @@ export function fromInternalTransfer(p: InternalTransferDto): ApprovalItem {
     when: new Date(p.createdAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }),
     decision: p.status === "PENDING_APPROVAL" ? undefined : p.status === "DECLINED" ? "declined" : "approved",
     live: true,
+    canDecide: true,
+    cantDecideReason: null,
+    mine: false,
   }
 }
 
@@ -125,6 +153,9 @@ const demoItems: ApprovalItem[] = demoApprovals.map((a) => ({
   arrival: "",
   when: a.detail,
   live: false,
+  canDecide: true,
+  cantDecideReason: null,
+  mine: false,
 }))
 
 type Result =
