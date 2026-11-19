@@ -2,10 +2,10 @@
 
 // Pay flow state shared by /pay → /pay/amount → /pay/review → /pay/done.
 //
-// Recipients with `payout` details (Singapore PayNow / FAST) are LIVE: amounts
-// are quoted by POST /api/sancus/payouts/quote and confirming creates a real
-// payout with POST /api/sancus/payouts. Every other recipient keeps the demo
-// quote from demo-data so the wireframe flow still works.
+// Every payee is quoted from USDC at the live rate (POST /api/sancus/pay/quote). Payees with
+// payout details are LIVE: Thailand (PromptPay) and Indonesia (BI-FAST) are paid through Xendit
+// (POST /api/sancus/xendit/payouts), Brazil by Pix (POST /api/sancus/pix/payments). Others
+// (US bank, USDC address) stay demo-only here; US banks are paid from Pay > US bank.
 
 import {
   createContext,
@@ -25,13 +25,8 @@ import {
   type Recipient,
 } from "@/lib/sancus/demo-data"
 import { buildCustomPayee, loadCustomPayees, saveCustomPayees, type NewPayeeInput } from "@/lib/sancus/custom-payees"
-import { validateRecipient } from "@/lib/sancus/paynow"
 import { useAccount } from "@/lib/sancus/use-account"
-import { displayMinor, parseToMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
-import { FIXED_USD_RATES } from "@/lib/sancus/fixed-rates"
-import type { SerializedQuote } from "@/lib/sancus/fx"
-import type { PayoutDto } from "@/lib/sancus/payouts"
-import { notifyApprovalsChanged } from "@/lib/sancus/use-live-approvals"
+import type { XenditPayoutDto } from "@/lib/sancus/xendit-payouts"
 import type { PixPaymentDto } from "@/lib/sancus/local-rails"
 import { defaultCurrency, isPayRail, type PayCurrency, type QuoteSide, type SerializedPayQuote } from "@/lib/sancus/pay-quote"
 import type { CompanyNode } from "@/lib/sancus/companies"
@@ -53,15 +48,9 @@ type PayState = {
   side: QuoteSide
 }
 
-export type LiveQuote = {
-  quote: SerializedQuote
-  rail: "PAYNOW" | "FAST"
-  railReason: string
-  etaLabel: string
-}
-
-/** Display-ready numbers for the current recipient, live or demo. */
+/** Display-ready numbers for the current recipient. */
 export type PayView = {
+  /** The payee can be paid for real (Xendit or Pix); otherwise the flow is a demo. */
   live: boolean
   currency: string
   usdLabel: string
@@ -71,8 +60,6 @@ export type PayView = {
   rateLabel: string
   arrival: string
   railReason: string | null
-  /** ISO time the quoted rate expires (live only). */
-  expiresAt: string | null
   /** Whether the payout leg is simulated (always true until a partner is live). */
   simulated: boolean
 }
@@ -93,13 +80,12 @@ type PayContextValue = {
   /** Demo quote (kept for screens that still read it directly). */
   quote: typeof julianaQuote
   view: PayView
-  liveQuote: LiveQuote | null
   quoteLoading: boolean
   quoteError: string | null
   refreshQuote: () => void
   submit: () => Promise<SubmitResult>
   submitting: boolean
-  payout: PayoutDto | null
+  xenditPayout: XenditPayoutDto | null
   pixPayment: PixPaymentDto | null
   providerBacked: boolean
   sourceAccounts: CompanyNode[]
@@ -132,8 +118,15 @@ function payoutCurrency(primaryRail: string, rail: string): PayCurrency | null {
   return defaultCurrency(rail)
 }
 
-const usd = (minor: bigint) => `$${displayMinor(minor, USDC_DECIMALS, "", 2)}`
-const sgd = (minor: bigint) => `S$ ${displayMinor(minor, SGD_DECIMALS, "", 2)}`
+/** A typed local amount as a number: "1,234.56", "1.234,56" (pt-BR / id-ID) or "750.000" (IDR). */
+function localAmountNumber(v: string): number {
+  const t = v.trim().replace(/\s/g, "")
+  const lastComma = t.lastIndexOf(",")
+  const lastDot = t.lastIndexOf(".")
+  if (lastComma > lastDot) return Number.parseFloat(t.replace(/\./g, "").replace(",", "."))
+  if (/^\d{1,3}(\.\d{3})+$/.test(t)) return Number.parseFloat(t.replace(/\./g, ""))
+  return Number.parseFloat(t.replace(/,/g, ""))
+}
 
 function newKey() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -149,25 +142,13 @@ function flattenCompanies(nodes: CompanyNode[], out: CompanyNode[] = []) {
   return out
 }
 
-/** USDC share of the total that pays the partner fee (proportional to the SGD fee). */
-function feeUsdcMinor(q: SerializedQuote): bigint {
-  const total = BigInt(q.usdcAmountMinor)
-  const fee = BigInt(q.feeSgdMinor)
-  const amount = BigInt(q.sgdAmountMinor)
-  if (fee <= 0n) return 0n
-  return (total * fee + (amount + fee) - 1n) / (amount + fee)
-}
-
 export function PayFlowProvider({ children }: { children: ReactNode }) {
   const workspace = useWorkspace()
   const [state, setState] = useState<PayState>(defaultState)
   const [customPayees, setCustomPayees] = useState<Recipient[]>([])
-  const [liveQuote, setLiveQuote] = useState<LiveQuote | null>(null)
-  const [quoteLoading, setQuoteLoading] = useState(false)
-  const [quoteError, setQuoteError] = useState<string | null>(null)
   const [quoteNonce, setQuoteNonce] = useState(0)
   const [submitting, setSubmitting] = useState(false)
-  const [payout, setPayout] = useState<PayoutDto | null>(null)
+  const [xenditPayout, setXenditPayout] = useState<XenditPayoutDto | null>(null)
   const [pixPayment, setPixPayment] = useState<PixPaymentDto | null>(null)
   // One idempotency key per payment attempt: retries can't double-pay.
   const idempotencyKey = useRef<string | null>(null)
@@ -198,18 +179,18 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       setInvoice({ ...invoiceContext, matched: Boolean(match) })
       if (!match) return
       const amountText = String(invoiceContext.amount)
-      const railName = match.payout ? (match.payout.proxyType === "BANK" ? "FAST" : "PayNow") : match.rail
-      const matchCurrency = match.payout ? null : payoutCurrency(match.rail, railName)
+      const railName = match.rail
+      const matchCurrency = payoutCurrency(match.rail, railName)
       setState((s) => ({
         ...s,
         recipientId: match.id,
         rail: railName,
         memo: invoiceContext.invoiceNumber ? `Invoice ${invoiceContext.invoiceNumber}` : s.memo,
-        ...(invoiceContext.currency === "USD" && !match.payout
+        ...(invoiceContext.currency === "USD"
           ? { usdAmount: amountText, localAmount: "", side: "send" as const }
           : matchCurrency === invoiceContext.currency
             ? { localAmount: amountText, usdAmount: "", side: "receive" as const }
-            : { usdAmount: "", localAmount: "", side: match.payout ? ("receive" as const) : ("send" as const) }),
+            : { usdAmount: "", localAmount: "", side: "send" as const }),
       }))
     }, 0)
     return () => window.clearTimeout(timer)
@@ -220,8 +201,8 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   const personal = account?.type === "INDIVIDUAL"
   const recipients = useMemo(() => [...customPayees, ...recipientsFor(personal)], [customPayees, personal])
   const recipient = recipients.find((r) => r.id === state.recipientId) ?? recipients[0]!
-  const isLive = Boolean(recipient.payout)
-  const isPix = recipient.id === "juliana"
+  const isPix = Boolean(recipient.pixKey)
+  const isLive = Boolean(recipient.xendit) || isPix
   const sourceAccounts = useMemo(
     () => flattenCompanies(workspace.tree).filter((company) => company.role !== null && company.can.pay),
     [workspace.tree]
@@ -244,10 +225,10 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       setState((s) => ({
         ...s,
         recipientId: r.id,
-        rail: r.payout ? (r.payout.proxyType === "BANK" ? "FAST" : "PayNow") : r.rail,
+        rail: r.rail,
         localAmount: "",
         usdAmount: "",
-        side: r.payout ? "receive" : "send",
+        side: "send",
       }))
     },
     [customPayees, recipients]
@@ -261,131 +242,41 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   }, [recipient.id, state.recipientId, setRecipientId])
 
   const addPayee = useCallback((input: NewPayeeInput) => {
-    const issues = validateRecipient({
-      name: input.name,
-      proxyType: input.proxyType,
-      proxyValue: input.proxyValue,
-      bankCode: input.bankCode,
-    })
-    if (issues.length) return { ok: false as const, error: issues[0]!.message }
-    const payee = buildCustomPayee(input)
+    const built = buildCustomPayee(input)
+    if (!built.ok) return { ok: false as const, error: built.error }
+    const payee = built.recipient
     setCustomPayees((prev) => {
       const next = [payee, ...prev]
       saveCustomPayees(next)
       return next
     })
     idempotencyKey.current = null
-    setState((s) => ({
-      ...s,
-      recipientId: payee.id,
-      rail: payee.payout?.proxyType === "BANK" ? "FAST" : "PayNow",
-      localAmount: "",
-      usdAmount: "",
-      side: "receive",
-    }))
+    setState((s) => ({ ...s, recipientId: payee.id, rail: payee.rail, localAmount: "", usdAmount: "", side: "send" }))
     return { ok: true as const, recipient: payee }
   }, [])
 
-  const setUsdAmount = useCallback(
-    (v: string) => {
-      setState((s) => {
-        const r = findRecipient(s.recipientId, customPayees)
-        const n = Number.parseFloat(v.replace(/,/g, ""))
-        if (r?.payout) {
-          if (!Number.isFinite(n)) return { ...s, usdAmount: v }
-          // No live rate yet: estimate "They get" at the fixed demo rate so the first live quote can
-          // be requested (the quote API is priced in SGD). The quote callback below corrects it once it lands.
-          if (!liveQuote) return { ...s, usdAmount: v, localAmount: Math.max(0, n * FIXED_USD_RATES.SGD).toFixed(2) }
-          // Live: convert at the last quoted rate, net of the fee.
-          const rate = Number.parseFloat(liveQuote.quote.clientRate)
-          const fee = Number(liveQuote.quote.feeSgdMinor) / 100
-          const local = Math.max(0, n * rate - fee)
-          return { ...s, usdAmount: v, localAmount: local.toFixed(2) }
-        }
-        // Other rails: the quote API fills in "They get".
-        return { ...s, usdAmount: v, side: "send" }
-      })
-    },
-    [liveQuote, customPayees]
-  )
+  const setUsdAmount = useCallback((v: string) => {
+    idempotencyKey.current = null
+    setState((s) => ({ ...s, usdAmount: v, side: "send" }))
+  }, [])
 
-  const setLocalAmount = useCallback(
-    (v: string) => {
-      idempotencyKey.current = null
-      setState((s) => {
-        const r = findRecipient(s.recipientId, customPayees)
-        if (r?.payout) return { ...s, localAmount: v, usdAmount: "" }
-        return { ...s, localAmount: v, side: "receive" }
-      })
-    },
-    [customPayees]
-  )
+  const setLocalAmount = useCallback((v: string) => {
+    idempotencyKey.current = null
+    setState((s) => ({ ...s, localAmount: v, side: "receive" }))
+  }, [])
 
   const setRail = useCallback((v: string) => setState((s) => ({ ...s, rail: v })), [])
   const setMemo = useCallback((v: string) => setState((s) => ({ ...s, memo: v })), [])
   const refreshQuote = useCallback(() => setQuoteNonce((n) => n + 1), [])
 
-  // Live quote: re-fetch when the recipient or amount changes (debounced) or on refresh.
-  const quotable = isLive && parseToMinor(state.localAmount, SGD_DECIMALS) !== null
-  useEffect(() => {
-    if (!quotable || !recipient.payout) return
-    const { proxyType, proxyValue, bankCode } = recipient.payout
-    const controller = new AbortController()
-    const timer = setTimeout(async () => {
-      setQuoteLoading(true)
-      try {
-        const res = await fetch("/api/sancus/payouts/quote", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            recipient: { name: recipient.name, proxyType, proxyValue, bankCode },
-            sgdAmount: state.localAmount,
-          }),
-          signal: controller.signal,
-        })
-        const body = await res.json()
-        if (res.ok) {
-          const fresh = body as LiveQuote
-          setLiveQuote(fresh)
-          setQuoteError(null)
-          // USDC typed first: re-derive "They get" from the USDC amount at the live rate, net of the
-          // fee. That re-quotes once at the corrected SGD amount, then settles (same rate, same SGD).
-          setState((s) => {
-            const n = Number.parseFloat(s.usdAmount.replace(/,/g, ""))
-            if (!s.usdAmount.trim() || !Number.isFinite(n)) return s
-            const rate = Number.parseFloat(fresh.quote.clientRate)
-            const fee = Number(fresh.quote.feeSgdMinor) / 100
-            const local = Math.max(0, n * rate - fee).toFixed(2)
-            return local === s.localAmount ? s : { ...s, localAmount: local }
-          })
-        } else {
-          setLiveQuote(null)
-          setQuoteError(
-            res.status === 401
-              ? "Sign in to get a live quote (turn on demo login in .env.local)."
-              : body.issues?.[0]?.message ?? body.error ?? "Could not get a quote"
-          )
-        }
-      } catch (e) {
-        if ((e as Error).name !== "AbortError") setQuoteError("Could not reach the quote service")
-      } finally {
-        setQuoteLoading(false)
-      }
-    }, 350)
-    return () => {
-      controller.abort()
-      clearTimeout(timer)
-    }
-  }, [quotable, recipient, state.localAmount, quoteNonce])
-
-  // Every other rail: USDC-based quote from POST /api/sancus/pay/quote, in either direction.
+  // USDC-based quote from POST /api/sancus/pay/quote, in either direction, at the live rate.
   const [railQuote, setRailQuote] = useState<SerializedPayQuote | null>(null)
   const [railQuoteError, setRailQuoteError] = useState<string | null>(null)
   const [railQuoteLoading, setRailQuoteLoading] = useState(false)
-  const currency = isLive ? null : payoutCurrency(recipient.rail, state.rail)
+  const currency = payoutCurrency(recipient.rail, state.rail)
   const typed = state.side === "send" ? state.usdAmount : state.localAmount
   useEffect(() => {
-    if (isLive || !currency || !isPayRail(state.rail) || !typed.trim()) return
+    if (!currency || !isPayRail(state.rail) || !typed.trim()) return
     const controller = new AbortController()
     const side = state.side
     const timer = setTimeout(async () => {
@@ -418,28 +309,25 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [isLive, currency, state.rail, state.side, typed, quoteNonce])
+  }, [currency, state.rail, state.side, typed, quoteNonce])
 
   const submit = useCallback(async (): Promise<SubmitResult> => {
-    if (!recipient.payout && !isPix) return { ok: false, error: "This recipient is demo-only" }
+    if (!isLive) return { ok: false, error: "This payee can't be paid from here yet" }
+    const amount = localAmountNumber(state.localAmount)
+    if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Enter an amount" }
     idempotencyKey.current ??= newKey()
     setSubmitting(true)
     try {
       if (isPix) {
-        const amountBrl = Number.parseFloat(
-          state.localAmount.includes(",")
-            ? state.localAmount.replace(/\./g, "").replace(",", ".")
-            : state.localAmount.replace(/,/g, "")
-        )
         const res = await fetch("/api/sancus/pix/payments", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey.current },
           body: JSON.stringify({
             purpose: "SUPPLIER_PAYMENT",
             recipientName: recipient.name,
-            amountBrl,
-            pixKey: "juliana.sandbox@example.com",
-            description: state.memo || "Sancus supplier payment",
+            amountBrl: amount,
+            pixKey: recipient.pixKey,
+            description: state.memo || "Sancus payment",
           }),
         })
         const body = await res.json()
@@ -448,26 +336,24 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
         idempotencyKey.current = null
         return { ok: true }
       }
-      if (!recipient.payout) return { ok: false, error: "This recipient is not configured for payout" }
-      const res = await fetch("/api/sancus/payouts", {
+      const x = recipient.xendit!
+      const res = await fetch("/api/sancus/xendit/payouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey.current },
         body: JSON.stringify({
-          recipient: {
-            name: recipient.name,
-            proxyType: recipient.payout.proxyType,
-            proxyValue: recipient.payout.proxyValue,
-            bankCode: recipient.payout.bankCode,
-          },
-          sgdAmount: state.localAmount,
-          reference: state.memo || undefined,
+          purpose: "SUPPLIER_PAYMENT",
+          rail: x.rail,
+          recipientName: recipient.name,
+          accountNumber: x.accountNumber,
+          routingType: x.routingType,
+          routingValue: x.routingValue,
+          amount: x.currency === "IDR" ? Math.round(amount) : amount,
+          description: (state.memo || "Sancus payment").slice(0, 100),
         }),
       })
       const body = await res.json()
-      if (!res.ok) return { ok: false, error: body.issues?.[0]?.message ?? body.error ?? "Payment failed" }
-      const created = body.payout as PayoutDto
-      setPayout(created)
-      if (created.status === "PENDING_APPROVAL") notifyApprovalsChanged()
+      if (!res.ok) return { ok: false, error: body.error ?? "Payment failed" }
+      setXenditPayout(body.payout as XenditPayoutDto)
       idempotencyKey.current = null
       return { ok: true }
     } catch {
@@ -476,31 +362,12 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     } finally {
       setSubmitting(false)
     }
-  }, [recipient, state.localAmount, state.memo, isPix])
+  }, [recipient, state.localAmount, state.memo, isPix, isLive])
 
   const view = useMemo<PayView>(() => {
-    if (isLive) {
-      const q = liveQuote?.quote
-      const total = q ? BigInt(q.usdcAmountMinor) : null
-      const fee = q ? feeUsdcMinor(q) : null
-      const local = parseToMinor(state.localAmount, SGD_DECIMALS)
-      return {
-        live: true,
-        currency: "SGD",
-        usdLabel: total !== null && fee !== null ? usd(total - fee) : "–",
-        feeLabel: fee !== null ? usd(fee) : "–",
-        totalLabel: total !== null ? usd(total) : "–",
-        localLabel: local !== null ? sgd(local) : "–",
-        rateLabel: q ? `1 USDC = ${q.clientRate} SGD` : "Getting a live rate…",
-        arrival: liveQuote?.etaLabel ?? "Seconds",
-        railReason: liveQuote?.railReason ?? null,
-        expiresAt: q?.expiresAt ?? null,
-        simulated: true,
-      }
-    }
     const rq = railQuote && railQuote.rail === state.rail && railQuote.currency === currency ? railQuote : null
     return {
-      live: false,
+      live: isLive,
       currency: currency ?? "USD",
       usdLabel: rq?.amountLabel ?? "–",
       feeLabel: rq?.feeLabel ?? "–",
@@ -509,10 +376,9 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       rateLabel: rq?.rateLabel ?? (currency === "USDC" ? "USDC to USDC · no conversion" : "Getting a rate…"),
       arrival: rq?.eta ?? "–",
       railReason: null,
-      expiresAt: null,
       simulated: true,
     }
-  }, [isLive, liveQuote, state.localAmount, state.rail, railQuote, currency])
+  }, [isLive, state.rail, railQuote, currency])
 
   const value = useMemo(
     () => ({
@@ -527,15 +393,14 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       setMemo,
       quote: julianaQuote,
       view,
-      liveQuote: isLive ? liveQuote : null,
-      quoteLoading: isLive ? quoteLoading : railQuoteLoading,
-      quoteError: isLive ? quoteError : railQuoteError,
+      quoteLoading: railQuoteLoading,
+      quoteError: railQuoteError,
       refreshQuote,
       submit,
       submitting,
-      payout,
+      xenditPayout,
       pixPayment,
-      providerBacked: isLive || isPix,
+      providerBacked: isLive,
       sourceAccounts,
       sourceAccount,
       sourceBalancesReady: workspace.balancesReady,
@@ -554,17 +419,13 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       setMemo,
       view,
       isLive,
-      liveQuote,
-      quoteLoading,
-      quoteError,
       railQuoteLoading,
       railQuoteError,
       refreshQuote,
       submit,
       submitting,
-      payout,
+      xenditPayout,
       pixPayment,
-      isPix,
       sourceAccounts,
       sourceAccount,
       workspace.balancesReady,

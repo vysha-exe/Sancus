@@ -10,12 +10,12 @@ import { can, useAccount } from "@/lib/sancus/use-account"
 
 export default function PayReviewPage() {
   const router = useRouter()
-  const { recipient, state, view, liveQuote, quoteLoading, quoteError, submit, submitting, providerBacked, sourceAccount } = usePayFlow()
+  const { recipient, state, view, quoteLoading, quoteError, submit, submitting, providerBacked, sourceAccount } = usePayFlow()
   const [error, setError] = useState<string | null>(null)
   const { account } = useAccount()
   // Employees can only ask: every payment they start waits for an admin.
   const requestOnly = !can(account, "money.send") && can(account, "money.request")
-  const quoteReady = !view.live || Boolean(liveQuote)
+  const quoteReady = view.localLabel !== "–"
 
   async function pay() {
     setError(null)
@@ -51,9 +51,9 @@ export default function PayReviewPage() {
             </div>
             <div className="hop">
               <i className="todo" />
-              <span className="body-strong">Convert at fixed rate</span>
+              <span className="body-strong">Convert at the live rate</span>
               <span className="body-s muted">{view.rateLabel}</span>
-              <span className="data">Fixed for this demo</span>
+              <span className="data">Re-quoted when you pay</span>
             </div>
             <div className="hop">
               <i className="todo" />
@@ -73,7 +73,7 @@ export default function PayReviewPage() {
 
           <div className="tile-foot">
             <span className="body-s muted">
-              The hackathon demo uses the same USD–SGD rate for every payment.
+              Converted from USDC at the live rate: {view.rateLabel}.
             </span>
           </div>
         </section>
@@ -102,7 +102,7 @@ export default function PayReviewPage() {
               <span className="sx-label">They receive</span>
               <b>{view.localLabel}</b>
             </div>
-            <span className="sx-quote__lock">Fixed demo rate</span>
+            <span className="sx-quote__lock">Live rate</span>
           </div>
 
           {error || quoteError ? (

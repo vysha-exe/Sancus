@@ -20,7 +20,6 @@ type Country =
   | "Italy"
   | "Sweden"
   | "Switzerland"
-  | "Singapore"
   | "Hong Kong"
   | "Japan"
   | "Australia"
@@ -58,7 +57,6 @@ const countryInfo: Record<Country, CountryInfo> = {
   Italy: euro("Cards are accepted anywhere Visa or Mastercard is."),
   Sweden: { network: "Card", code: "SEK", rate: FIXED_USD_RATES.SEK, defaultQr: 5200, defaultCard: 5200, help: "Cards are accepted anywhere Visa or Mastercard is." },
   Switzerland: { network: "Card", code: "CHF", rate: FIXED_USD_RATES.CHF, defaultQr: 450, defaultCard: 450, help: "Cards are accepted anywhere Visa or Mastercard is." },
-  Singapore: { network: "Card", code: "SGD", rate: FIXED_USD_RATES.SGD, defaultQr: 670, defaultCard: 670, help: "Cards are accepted anywhere Visa or Mastercard is." },
   "Hong Kong": { network: "Card", code: "HKD", rate: FIXED_USD_RATES.HKD, defaultQr: 3900, defaultCard: 3900, help: "Cards are accepted anywhere Visa or Mastercard is." },
   Japan: { network: "Card", code: "JPY", rate: FIXED_USD_RATES.JPY, defaultQr: 75000, defaultCard: 75000, help: "Cards are accepted anywhere Visa or Mastercard is." },
   Australia: { network: "Card", code: "AUD", rate: FIXED_USD_RATES.AUD, defaultQr: 760, defaultCard: 760, help: "Cards are accepted anywhere Visa or Mastercard is." },
@@ -69,7 +67,7 @@ const countryInfo: Record<Country, CountryInfo> = {
 const cardRegions: { label: string; countries: Country[] }[] = [
   { label: "Americas", countries: ["United States", "Canada", "Brazil"] },
   { label: "Europe", countries: ["United Kingdom", "Ireland", "Germany", "France", "Netherlands", "Spain", "Italy", "Sweden", "Switzerland"] },
-  { label: "Asia Pacific", countries: ["Singapore", "Hong Kong", "Japan", "Australia", "Indonesia", "Thailand"] },
+  { label: "Asia Pacific", countries: ["Hong Kong", "Japan", "Australia", "Indonesia", "Thailand"] },
 ]
 
 function formatLocal(code: string, n: number): string {

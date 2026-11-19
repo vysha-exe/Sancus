@@ -100,20 +100,32 @@ export async function refreshAchPayments(db: SupabaseClient, rows: AchPaymentRow
 
 /**
  * Hands a payment that cleared policy (straight away or after approval) to the off-ramp.
- * TESTNET_SETTLEMENT: real USDC from the Treasury to the settlement wallet first; if that transfer
- * fails nothing left the Treasury, so the payment FAILS and the reserve is released.
+ * Face USDC / TESTNET_SETTLEMENT: move USDC (or fUSDC) from Treasury to the settlement wallet
+ * first; if that transfer fails nothing left the Treasury, so the payment FAILS and the reserve
+ * is released. MOCK_ONLY without face USDC skips the on-chain leg.
  */
 export async function executeAch(db: SupabaseClient, userId: string, row: AchPaymentRow): Promise<AchPaymentRow> {
-  if (row.settlement_mode !== "TESTNET_SETTLEMENT") return row
+  const { faceUsdcEnabled } = await import("@/lib/sancus/face-usdc")
+  const wantsOnchain = row.settlement_mode === "TESTNET_SETTLEMENT" || faceUsdcEnabled()
+  if (!wantsOnchain) return row
   if (!row.source_address || !row.settlement_address) {
+    // Face USDC mode: still settle to a burn-only sink if no payout wallet exists yet.
+    if (faceUsdcEnabled() && row.source_address) {
+      const sink = process.env.ACH_SETTLEMENT_ADDRESS?.trim() || row.source_address
+      return fundAchOnchain(db, userId, { ...row, settlement_address: sink })
+    }
     return failBeforeFunding(db, row, "No Treasury or settlement wallet for testnet settlement")
   }
+  return fundAchOnchain(db, userId, row)
+}
+
+async function fundAchOnchain(db: SupabaseClient, userId: string, row: AchPaymentRow): Promise<AchPaymentRow> {
   const amount = formatMinor(BigInt(row.usdc_amount_minor), USDC_DECIMALS)
   try {
     const sent = await sendUsdcOnSameChainWithAppKit({
       sourceBlockchain: "ARC-TESTNET",
-      sourceWalletAddress: row.source_address,
-      recipientAddress: row.settlement_address,
+      sourceWalletAddress: row.source_address!,
+      recipientAddress: row.settlement_address!,
       amount,
       token: "USDC",
     })

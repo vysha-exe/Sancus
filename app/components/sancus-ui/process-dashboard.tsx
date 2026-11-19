@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { CARD_ROUTE_USD, type DestinationKind } from "@/lib/sancus/process-pipeline"
 import { useProcessLog, type ProcessLogEntry } from "@/lib/sancus/use-process-log"
+import { signalSancusDataChanged } from "@/lib/sancus/live-refresh"
 
 const DEST_LABEL: Record<DestinationKind, string> = {
   bank: "Bank via local rail",
@@ -21,10 +22,54 @@ function StepDot({ status }: { status: string }) {
   return <span className={`proc-step__dot proc-step__dot--${status}`} aria-hidden />
 }
 
+type FaceStatus = {
+  enabled: boolean
+  token: string | null
+  explorer: string | null
+  balances?: { address: string; name: string; balanceLabel: string | null }[]
+}
+
 export function ProcessDashboard() {
   const { entries, loading, source } = useProcessLog()
   const [openId, setOpenId] = useState<string | null>(null)
   const [filter, setFilter] = useState<"all" | DestinationKind>("all")
+  const [face, setFace] = useState<FaceStatus | null>(null)
+  const [faucetBusy, setFaucetBusy] = useState(false)
+  const [faucetMsg, setFaucetMsg] = useState<string | null>(null)
+
+  const refreshFace = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sancus/face-usdc", { cache: "no-store" })
+      if (res.ok) setFace((await res.json()) as FaceStatus)
+    } catch {
+      /* optional */
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshFace()
+  }, [refreshFace])
+
+  async function mintFaceUsdc() {
+    setFaucetBusy(true)
+    setFaucetMsg(null)
+    try {
+      const res = await fetch("/api/sancus/face-usdc", { method: "POST" })
+      const body = (await res.json()) as { error?: string; minted?: { amountLabel: string; explorer: string }[] }
+      if (!res.ok) {
+        setFaucetMsg(body.error || "Mint failed")
+        return
+      }
+      const n = body.minted?.length ?? 0
+      setFaucetMsg(`Minted ${body.minted?.[0]?.amountLabel ?? "$1,000,000"} fUSDC to ${n} wallet${n === 1 ? "" : "s"}.`)
+      signalSancusDataChanged()
+      await refreshFace()
+    } catch (e) {
+      setFaucetMsg(e instanceof Error ? e.message : "Mint failed")
+    } finally {
+      setFaucetBusy(false)
+    }
+  }
 
   const visible = useMemo(() => {
     if (filter === "all") return entries
@@ -40,15 +85,49 @@ export function ProcessDashboard() {
         <div>
           <h1 className="sx-h heading-2">Process</h1>
           <p className="body-s muted" style={{ margin: 0 }}>
-            Activity log for every settlement: USD → USDC → local currency → bank rail (large) or virtual card (under $
-            {CARD_ROUTE_USD}). Open a row for on-ramp, off-ramp, and local rail steps, plus Arc testnet links when a hash
-            exists.
+            Activity log for every settlement: USD → Face USDC (fUSDC) → local currency → bank rail (large) or virtual
+            card (under ${CARD_ROUTE_USD}). Open a row for on-ramp, off-ramp, and local rail steps, plus Arc testnet
+            links when a hash exists.
           </p>
         </div>
         <span className="sx-pill">{source === "live" ? "Live activity" : "Demo corridors"}</span>
       </header>
 
       <div className="grid">
+        <section className="tile s12" aria-label="Face USDC faucet">
+          <div className="tile-head">
+            <h2 className="tile-title">Face USDC (test)</h2>
+            {face?.explorer ? (
+              <a className="sx-btn sx-btn--quiet" href={face.explorer} target="_blank" rel="noreferrer">
+                Token on Arc
+              </a>
+            ) : null}
+          </div>
+          <p className="body-s muted" style={{ margin: 0 }}>
+            Settlements use mintable <b>fUSDC</b> from the rail bot instead of scarce Circle testnet USDC — mint a large
+            balance, then run many Pay / ACH / PayNow flows with real Arc explorer links.
+          </p>
+          {face?.enabled ? (
+            <div className="kv" style={{ flexWrap: "wrap", gap: 8 }}>
+              {(face.balances ?? []).slice(0, 4).map((b) => (
+                <span key={b.address} className="body-s">
+                  {b.name}: <b>{b.balanceLabel ?? "—"}</b>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="body-s" style={{ color: "var(--held)" }}>
+              fUSDC not ready — deploy with <code>node scripts/deploy-mock-stablecoins.mjs</code>.
+            </span>
+          )}
+          <div className="tile-foot">
+            <button type="button" className="sx-btn sx-btn--primary" disabled={!face?.enabled || faucetBusy} onClick={() => void mintFaceUsdc()}>
+              {faucetBusy ? "Minting…" : "Mint $1,000,000 fUSDC"}
+            </button>
+            {faucetMsg ? <span className="body-s muted">{faucetMsg}</span> : null}
+          </div>
+        </section>
+
         <section className="tile s12 proc-legend" aria-label="Settlement path">
           <div className="proc-flow" role="list">
             <span className="proc-flow__leg" role="listitem">
@@ -58,7 +137,7 @@ export function ProcessDashboard() {
               →
             </span>
             <span className="proc-flow__leg" role="listitem">
-              USDC on Arc
+              fUSDC on Arc
             </span>
             <span className="proc-flow__arrow" aria-hidden>
               →
@@ -71,7 +150,7 @@ export function ProcessDashboard() {
             </span>
             <span className="proc-flow__leg proc-flow__leg--split" role="listitem">
               <b>Bank rail</b>
-              <small>ACH · Pix · PayNow · FAST · QRIS · PromptPay…</small>
+              <small>ACH · Pix · PromptPay · BI-FAST · QRIS…</small>
             </span>
             <span className="proc-flow__or">or</span>
             <span className="proc-flow__leg proc-flow__leg--split" role="listitem">

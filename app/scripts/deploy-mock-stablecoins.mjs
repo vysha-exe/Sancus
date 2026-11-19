@@ -27,6 +27,13 @@ export const MOCK_TOKENS = [
   { currency: "THB", name: "Sancus Mock Thai Baht", symbol: "mTHB", decimals: 2, country: "TH", rail: "PROMPTPAY" },
 ]
 
+/** Mintable stand-in for Circle Arc USDC (6 decimals) — unlimited test settlement. */
+const FACE_USDC = {
+  name: "Sancus Face USDC",
+  symbol: "fUSDC",
+  decimals: 6,
+}
+
 const root = process.cwd()
 const envPath = resolve(root, ".env.local")
 const artifactPath = resolve(root, "contracts/mock-stablecoin/SancusMockStablecoin.json")
@@ -81,4 +88,34 @@ for (const t of MOCK_TOKENS) {
   writeFileSync(deploymentsPath, JSON.stringify(deployments, null, 2) + "\n")
   console.log(`✅ ${t.symbol} at ${receipt.contractAddress}`)
 }
+
+const existingFace = deployments.faceUsdc
+if (existingFace?.address) {
+  const code = await publicClient.getCode({ address: existingFace.address })
+  if (code && code !== "0x") {
+    console.log(`${FACE_USDC.symbol} already deployed at ${existingFace.address}`)
+  } else {
+    existingFace.address = undefined
+  }
+}
+if (!deployments.faceUsdc?.address) {
+  console.log(`Deploying ${FACE_USDC.symbol}…`)
+  const hash = await wallet.deployContract({
+    abi,
+    bytecode,
+    args: [FACE_USDC.name, FACE_USDC.symbol, FACE_USDC.decimals],
+  })
+  const receipt = await publicClient.waitForTransactionReceipt({ hash })
+  if (receipt.status !== "success" || !receipt.contractAddress) throw new Error(`${FACE_USDC.symbol} deploy failed (${hash})`)
+  deployments.faceUsdc = {
+    ...FACE_USDC,
+    address: receipt.contractAddress,
+    deployTx: hash,
+    explorer: `https://explorer.testnet.arc.io/address/${receipt.contractAddress}`,
+  }
+  deployments.minter = account.address
+  writeFileSync(deploymentsPath, JSON.stringify(deployments, null, 2) + "\n")
+  console.log(`✅ ${FACE_USDC.symbol} at ${receipt.contractAddress}`)
+}
+
 console.log(`Saved ${deploymentsPath}`)

@@ -48,45 +48,45 @@ export function corridorFor(rail: string, opts?: { inbound?: boolean; destinatio
   }
 
   if (kind === "card" || r === "CARD" || r.includes("CARD")) {
-    return { label: "USD → USDC → virtual card", localCurrency: "USD", localRail: "Virtual card", destinationKind: "card" }
+    return { label: "USD → fUSDC → virtual card", localCurrency: "USD", localRail: "Virtual card", destinationKind: "card" }
   }
   if (kind === "internal" || r === "INTERNAL" || r.includes("INTERNAL")) {
-    return { label: "Branch token → USDC → branch token", localCurrency: "USDC", localRail: "Arc internal", destinationKind: "internal" }
+    return { label: "Branch token → fUSDC → branch token", localCurrency: "USDC", localRail: "Arc internal", destinationKind: "internal" }
   }
   if (r.includes("ACH")) {
     return {
-      label: "USD → USDC → US ACH (bank)",
+      label: "USD → fUSDC → US ACH (bank)",
       localCurrency: "USD",
       localRail: r.includes("SAME") ? "Same-day ACH" : "ACH",
       destinationKind: "bank",
     }
   }
   if (r.includes("PAYNOW")) {
-    return { label: "USD → USDC → SGD → PayNow", localCurrency: "SGD", localRail: "PayNow", destinationKind: "bank" }
+    return { label: "USD → fUSDC → SGD → PayNow", localCurrency: "SGD", localRail: "PayNow", destinationKind: "bank" }
   }
   if (r === "FAST") {
-    return { label: "USD → USDC → SGD → FAST (bank)", localCurrency: "SGD", localRail: "FAST", destinationKind: "bank" }
+    return { label: "USD → fUSDC → SGD → FAST (bank)", localCurrency: "SGD", localRail: "FAST", destinationKind: "bank" }
   }
   if (r.includes("PIX")) {
-    return { label: "USD → USDC → BRL → Pix", localCurrency: "BRL", localRail: "Pix", destinationKind: "bank" }
+    return { label: "USD → fUSDC → BRL → Pix", localCurrency: "BRL", localRail: "Pix", destinationKind: "bank" }
   }
   if (r.includes("PROMPTPAY")) {
-    return { label: "USD → USDC → THB → PromptPay", localCurrency: "THB", localRail: "PromptPay", destinationKind: "bank" }
+    return { label: "USD → fUSDC → THB → PromptPay", localCurrency: "THB", localRail: "PromptPay", destinationKind: "bank" }
   }
   if (r.includes("QRIS") || r.includes("BI-FAST") || r.includes("BI_FAST")) {
-    return { label: "USD → USDC → IDR → QRIS / BI-FAST", localCurrency: "IDR", localRail: "QRIS", destinationKind: "bank" }
+    return { label: "USD → fUSDC → IDR → QRIS / BI-FAST", localCurrency: "IDR", localRail: "QRIS", destinationKind: "bank" }
   }
   if (r.includes("SEPA")) {
-    return { label: "USD → USDC → EUR → SEPA", localCurrency: "EUR", localRail: "SEPA", destinationKind: "bank" }
+    return { label: "USD → fUSDC → EUR → SEPA", localCurrency: "EUR", localRail: "SEPA", destinationKind: "bank" }
   }
   if (r.includes("SPEI")) {
-    return { label: "USD → USDC → MXN → SPEI", localCurrency: "MXN", localRail: "SPEI", destinationKind: "bank" }
+    return { label: "USD → fUSDC → MXN → SPEI", localCurrency: "MXN", localRail: "SPEI", destinationKind: "bank" }
   }
   if (r.includes("WIRE")) {
-    return { label: "USD → USDC → USD wire", localCurrency: "USD", localRail: "Wire", destinationKind: "bank" }
+    return { label: "USD → fUSDC → USD wire", localCurrency: "USD", localRail: "Wire", destinationKind: "bank" }
   }
   return {
-    label: `USD → USDC → ${rail}`,
+    label: `USD → fUSDC → ${rail}`,
     localCurrency: "LOCAL",
     localRail: rail,
     destinationKind: kind ?? "bank",
@@ -173,14 +173,14 @@ export function buildPipeline(input: BuildPipelineInput): { corridor: ProcessCor
     steps = [
       {
         id: "onramp",
-        title: "USD → USDC",
-        detail: "On-ramp / treasury: dollars become USDC held on Arc.",
+        title: "USD → fUSDC",
+        detail: "On-ramp / treasury: dollars become Face USDC (mintable test USDC) held on Arc.",
         status: "pending",
       },
       {
         id: "fund-card",
         title: "Fund virtual card",
-        detail: `Small payment (< $${CARD_ROUTE_USD}): USDC loads a virtual credit card instead of a bank rail.`,
+        detail: `Small payment (< $${CARD_ROUTE_USD}): fUSDC loads a virtual credit card instead of a bank rail.`,
         status: "pending",
         explorerUrl: explorer,
       },
@@ -197,17 +197,17 @@ export function buildPipeline(input: BuildPipelineInput): { corridor: ProcessCor
     steps = [
       {
         id: "onramp",
-        title: "USD → USDC",
-        detail: "On-ramp into treasury USDC on Arc (Circle / Arc testnet).",
+        title: "USD → fUSDC",
+        detail: "On-ramp into treasury Face USDC on Arc (rail-bot mintable test token).",
         status: "pending",
         explorerUrl: needsFx ? null : explorer,
       },
       {
         id: "offramp",
-        title: needsFx ? `USDC → ${corridor.localCurrency}` : "USDC ready for domestic rail",
+        title: needsFx ? `fUSDC → ${corridor.localCurrency}` : "fUSDC ready for domestic rail",
         detail: needsFx
-          ? `Off-ramp: convert USDC to ${corridor.localCurrency} for local settlement.`
-          : "US payment: USDC stays 1:1 with USD before the ACH leg.",
+          ? `Off-ramp: convert Face USDC to ${corridor.localCurrency} for local settlement.`
+          : "US payment: fUSDC stays 1:1 with USD before the ACH leg.",
         status: "pending",
         explorerUrl: explorer,
       },
@@ -274,7 +274,7 @@ export function demoProcessSeeds(): Array<{
     {
       id: "demo-pix",
       at: iso(11),
-      who: "Torrefação Lisboa",
+      who: "Café do Sertão Ltda",
       amount: "−$420.00",
       amountUsd: 420,
       rail: "Pix",
@@ -285,7 +285,7 @@ export function demoProcessSeeds(): Array<{
     {
       id: "demo-card",
       at: iso(13),
-      who: "Kopi & Co.",
+      who: "Warung Bu Sri",
       amount: "−$18.40",
       amountUsd: 18.4,
       rail: "Card",
@@ -295,14 +295,14 @@ export function demoProcessSeeds(): Array<{
       destinationKind: "card",
     },
     {
-      id: "demo-paynow",
+      id: "demo-promptpay",
       at: iso(15),
-      who: "Tan Logistics",
+      who: "Siam Packaging Co.",
       amount: "−$86.00",
       amountUsd: 86,
-      rail: "PayNow",
+      rail: "PromptPay",
       status: "Pending",
-      localAmountLabel: "S$ 115.24",
+      localAmountLabel: "฿ 3,010.00",
       usdcLabel: "86.00 USDC",
     },
     {
