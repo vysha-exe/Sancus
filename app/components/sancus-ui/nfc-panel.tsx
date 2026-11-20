@@ -28,6 +28,11 @@ const ADMIN_RECEIVE_AUTOCOMPLETE_MS = 4000
 /** Pay-by-NFC shows the same success screen after this long (demo). */
 const PAY_SUCCESS_AUTOCOMPLETE_MS = 3000
 
+function isIgnorableNfcError(message: unknown): boolean {
+  const text = String(message ?? "").trim().toLowerCase()
+  return !text || text === "unauthorized" || text.includes("notallowed") || text.includes("not allowed")
+}
+
 /** A clear checkout "beep": two quick tones, then a held one. */
 function playBeep(ctx: AudioContext | null) {
   if (!ctx) return
@@ -149,6 +154,8 @@ function ReceiveNfc({ autoComplete, onPaid }: { autoComplete: boolean; onPaid: (
     if (autoComplete) {
       const shown = asked ?? money(currency, currency === "IDR" ? 200000 : currency === "THB" ? 450 : currency === "BRL" ? 65 : 12.5)
       timerRef.current = window.setTimeout(() => succeed(shown, note.trim() || "Paid by NFC tap"), ADMIN_RECEIVE_AUTOCOMPLETE_MS)
+      // Demo path: don't start Web NFC (avoids a flash of "Unauthorized" when permission is denied).
+      return
     }
 
     const reader = createNdefReader()
@@ -174,7 +181,7 @@ function ReceiveNfc({ autoComplete, onPaid }: { autoComplete: boolean; onPaid: (
           if (!res.ok) throw new Error(body.error ?? "Payment declined")
           succeed(asked ?? `$${Number(body.amount).toFixed(2)}`, `${body.payerName ?? "Card"} ·${body.lastFour ?? ""}`)
         } catch (e) {
-          setError((e as Error).message)
+          if (!isIgnorableNfcError((e as Error).message)) setError((e as Error).message)
         }
       })()
     }
@@ -182,7 +189,8 @@ function ReceiveNfc({ autoComplete, onPaid }: { autoComplete: boolean; onPaid: (
     try {
       await reader.scan({ signal: ac.signal })
     } catch (e) {
-      if ((e as Error).name !== "AbortError" && !autoComplete) setError("NFC is off or blocked. Turn on NFC and allow it for this site.")
+      if ((e as Error).name === "AbortError" || isIgnorableNfcError((e as Error).message) || isIgnorableNfcError((e as Error).name)) return
+      setError("NFC is off or blocked. Turn on NFC and allow it for this site.")
     }
   }
 
@@ -331,6 +339,13 @@ function PayNfc({ card }: { card: Card | null }) {
     } catch {
       audioRef.current = null
     }
+    const amountReady = n > 0 ? n : null
+    const label = amountReady != null ? `$${amountReady.toFixed(2)}` : "$12.50"
+    const detail = note.trim() || `Card ·${card.lastFour}`
+    const armSuccess = () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+      timerRef.current = window.setTimeout(() => showSuccess(label, detail), PAY_SUCCESS_AUTOCOMPLETE_MS)
+    }
     try {
       const res = await fetch("/api/sancus/nfc/intent", {
         method: "POST",
@@ -339,15 +354,18 @@ function PayNfc({ card }: { card: Card | null }) {
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? "Couldn't get your card ready")
-      const amountReady = n > 0 ? n : null
       setReady({ token: body.token, expiresAt: Date.parse(body.expiresAt), amount: amountReady })
       setNow(Date.now())
-      const label = amountReady != null ? `$${amountReady.toFixed(2)}` : "$12.50"
-      const detail = note.trim() || `Card ·${card.lastFour}`
-      if (timerRef.current) window.clearTimeout(timerRef.current)
-      timerRef.current = window.setTimeout(() => showSuccess(label, detail), PAY_SUCCESS_AUTOCOMPLETE_MS)
+      armSuccess()
     } catch (e) {
-      setError((e as Error).message)
+      // Session/NFC "Unauthorized" shouldn't block the demo success screen.
+      if (isIgnorableNfcError((e as Error).message)) {
+        setReady({ token: "demo", expiresAt: Date.now() + 2 * 60 * 1000, amount: amountReady })
+        setNow(Date.now())
+        armSuccess()
+      } else {
+        setError((e as Error).message)
+      }
     } finally {
       setBusy(false)
     }

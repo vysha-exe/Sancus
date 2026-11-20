@@ -41,7 +41,13 @@ export default function CardPage() {
   const load = useCallback(async () => {
     const res = await fetch("/api/sancus/my-card", { cache: "no-store" }).catch(() => null)
     const body = await res?.json().catch(() => null)
-    if (!res?.ok) return setError(body?.error ?? "Couldn't load your cards")
+    if (!res?.ok) {
+      const msg = String(body?.error ?? "Couldn't load your cards")
+      // Don't flash a raw session error over the NFC panel.
+      if (msg.toLowerCase() !== "unauthorized") setError(msg)
+      return
+    }
+    setError(null)
     setCards(body.cards)
     setPurchases(body.purchases)
     setSelected((cur) => cur ?? body.cards[0]?.id ?? null)
