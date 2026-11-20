@@ -810,3 +810,8 @@ body:has(.frame) {
 .proc-leg__text small { color: var(--ink-muted); font-size: 12px; line-height: 16px; }
 .proc-leg__hash { font: 500 12px/1.4 var(--font-mono); color: var(--accent); text-decoration: none; white-space: nowrap; }
 .proc-leg__hash:hover { text-decoration: underline; }
+
+/* NFC tap: pulsing waves while waiting for a phone, pop-in on success. */
+.nfc-pulse { width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-subtle); animation: nfc-ring 1.6s ease-out infinite; }
+@keyframes nfc-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent); } 100% { box-shadow: 0 0 0 28px transparent; } }
+@keyframes nfc-pop { 0% { transform: scale(.92); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
