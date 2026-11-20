@@ -1,10 +1,8 @@
-// Sancus: "Pay by virtual card" for every account type.
+// Sancus: "Pay by virtual card" for employees and individuals.
 //   GET  → the signed-in person's own cards (self-issued, or issued to them by their company)
 //          and their recent card purchases.
-//   POST → issue yourself a virtual card (Idempotency-Key header).
-//          Personal accounts: funded from the personal balance (no company).
-//          Business / branch admins: funded from the company or branch they're working in.
-//          Employees get cards from their admin (Team › person), not here.
+//   POST → individuals can issue themselves a virtual card (Idempotency-Key header).
+//          Business cards must be issued to a database employee from Team.
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
@@ -13,7 +11,6 @@ import { loadAccount } from "@/lib/sancus/accounts-server"
 import { toSancusCardDto, type SancusCardRow } from "@/lib/sancus/cards"
 import { demoFallbacksEnabled } from "@/lib/sancus/demo-fallback"
 import { isMarqetaConfigured, issueMarqetaCard, simulatedMarqetaCard } from "@/lib/sancus/rails/marqeta"
-import { workspaceCompany } from "@/lib/sancus/workspace-server"
 
 const schema = z.object({
   label: z.string().trim().min(1).max(60).default("Virtual card"),
@@ -69,8 +66,11 @@ export const GET = withAuth(async (_req, { user }) => {
 
 export const POST = withAuth(async (req, { user, supabase }) => {
   const account = await loadAccount(supabase, user)
-  if (account.type === "EMPLOYEE") {
-    return NextResponse.json({ error: "Your card comes from your admin. Ask them to issue one from Team." }, { status: 403 })
+  if (account.type !== "INDIVIDUAL") {
+    return NextResponse.json(
+      { error: account.type === "EMPLOYEE" ? "Your card comes from your admin. Ask them to issue one from Team." : "Choose an active employee from Team before issuing a business card." },
+      { status: 403 }
+    )
   }
   const idempotencyKey = req.headers.get("idempotency-key")?.trim()
   if (!idempotencyKey || idempotencyKey.length > 100) return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 })
@@ -81,8 +81,6 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const { data: replay } = await admin.from("sancus_cards").select("*").eq("user_id", user.id).eq("idempotency_key", idempotencyKey).maybeSingle()
   if (replay) return NextResponse.json({ card: toSancusCardDto(replay as SancusCardRow), replayed: true })
 
-  // Personal cards spend the personal balance; business cards spend the company / branch being worked in.
-  const companyId = account.type === "INDIVIDUAL" ? null : ((await workspaceCompany(req, supabase, user.id)) ?? account.scopes.find((s) => s.isRoot)?.companyId ?? account.scopes[0]?.companyId ?? null)
   const name = String(user.user_metadata?.first_name ?? user.email?.split("@")[0] ?? "Sancus")
   const lastName = String(user.user_metadata?.last_name ?? "Cardholder")
   try {
@@ -94,7 +92,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       .from("sancus_cards")
       .insert({
         user_id: user.id,
-        company_id: companyId,
+        company_id: null,
         idempotency_key: idempotencyKey,
         employee_id: user.id,
         employee_name: name,

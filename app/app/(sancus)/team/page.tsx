@@ -8,7 +8,7 @@ import type { MemberDto } from "@/lib/sancus/members"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { TeamInviteSheet } from "@/components/sancus-ui/team-invite-sheet"
 import { AccountsManager } from "@/components/sancus-ui/accounts-manager"
-import { useAccount } from "@/lib/sancus/use-account"
+import { can, useAccount } from "@/lib/sancus/use-account"
 
 type MembersResponse = {
   companyId: string
@@ -52,6 +52,7 @@ export default function TeamPage() {
   const [roleFilter, setRoleFilter] = useState("Role")
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteMsg, setInviteMsg] = useState<string | null>(null)
+  const [issueMemberId, setIssueMemberId] = useState("")
 
   const loadMembers = useCallback(async (id: string) => {
     const res = await fetch(`/api/sancus/companies/${id}/members`, { cache: "no-store" })
@@ -122,6 +123,17 @@ export default function TeamPage() {
       return true
     })
   }, [query, roleFilter])
+
+  const eligibleCardholders = useMemo(
+    () => (data?.members ?? []).filter(
+      (member) => member.status === "ACTIVE" && Boolean(member.userId) && (member.role === "EMPLOYEE" || member.role === "FINANCE")
+    ),
+    [data]
+  )
+
+  useEffect(() => {
+    setIssueMemberId((current) => eligibleCardholders.some((member) => member.id === current) ? current : eligibleCardholders[0]?.id ?? "")
+  }, [eligibleCardholders])
 
   const roleOptions = ["Role", "Owner", "Admin", "Finance", "Employee", "Viewer"]
   const companyName = companies.find((c) => c.id === companyId)?.name ?? "this branch"
@@ -200,6 +212,38 @@ export default function TeamPage() {
       ) : null}
 
       <div className="grid">
+        {can(accountState.account, "spending.manage") ? (
+          <section className="tile s12" aria-labelledby="issue-card-title">
+            <div className="tile-head">
+              <div>
+                <h2 className="tile-title" id="issue-card-title">Issue a card</h2>
+                <span className="body-s muted">Choose an active employee in {companyName}, then set their card and limit.</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+              <label className="sx-field" style={{ flex: "1 1 320px", margin: 0 }}>
+                <span className="sx-label">Employee</span>
+                <select className="sx-field__input" value={issueMemberId} onChange={(event) => setIssueMemberId(event.target.value)} disabled={!eligibleCardholders.length}>
+                  {!eligibleCardholders.length ? <option value="">No eligible employees</option> : null}
+                  {eligibleCardholders.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.email ?? member.userId} · {ROLE_LABEL[member.role]}{member.roleInherited ? " · inherited" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {issueMemberId && companyId ? (
+                <Link href={`/team/${issueMemberId}/methods/new?kind=card&companyId=${companyId}`} className="sx-btn sx-btn--primary">Continue</Link>
+              ) : (
+                <button type="button" className="sx-btn sx-btn--primary" disabled>Continue</button>
+              )}
+            </div>
+            {!eligibleCardholders.length ? (
+              <p className="body-s muted" style={{ margin: "12px 0 0" }}>Invite an employee and have them accept before issuing a card.</p>
+            ) : null}
+          </section>
+        ) : null}
+
         {/* Login accounts for branch admins and employees (hidden for accounts that can't manage people). */}
         <AccountsManager scopeCompanyId={companyId} />
 
