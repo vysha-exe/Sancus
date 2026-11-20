@@ -3,7 +3,8 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
-import { withAuth } from "@/lib/api/with-auth"
+import { createAdminContext, withAuth } from "@/lib/api/with-auth"
+import { receiverName } from "@/lib/sancus/qr-server"
 import { getLiveRates } from "@/lib/sancus/live-fx"
 import { verifySancusQr } from "@/lib/sancus/sancus-qr"
 
@@ -15,10 +16,11 @@ export const POST = withAuth(async (req, { user }) => {
   const v = verifySancusQr(parsed.data.code)
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
   const p = v.payload
-  const live = await getLiveRates()
+  const { supabase: admin } = await createAdminContext()
+  const [live, name] = await Promise.all([getLiveRates(), receiverName(admin, p.u, p.c)])
   const rate = p.cur === "USD" ? 1 : live.rates[p.cur] ?? null
   return NextResponse.json({
-    receiver: { name: p.n, kind: p.c ? "business" : "personal" },
+    receiver: { name, kind: p.c ? "business" : "personal" },
     currency: p.cur,
     amount: p.amt ?? null,
     note: p.note ?? null,

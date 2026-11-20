@@ -10,7 +10,7 @@ import { sendUsdcOnSameChainWithAppKit } from "@/lib/circle/app-kit-send"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { faceUsdcEnabled } from "@/lib/sancus/face-usdc"
 import { getLiveRates } from "@/lib/sancus/live-fx"
-import { personName, QR_DECIMALS, qrCompanyFor, toQrPaymentDto, treasuryAddress } from "@/lib/sancus/qr-server"
+import { personName, QR_DECIMALS, qrCompanyFor, receiverName, toQrPaymentDto, treasuryAddress } from "@/lib/sancus/qr-server"
 import { verifySancusQr } from "@/lib/sancus/sancus-qr"
 import { workspaceCompany } from "@/lib/sancus/workspace-server"
 
@@ -37,13 +37,14 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const payerCompanyId = qrCompanyFor(account, await workspaceCompany(req, supabase, user.id))
   if (p.u === user.id && (p.c ?? null) === payerCompanyId) return NextResponse.json({ error: "That's your own code" }, { status: 400 })
 
-  const [source, destination, live] = await Promise.all([
+  const [source, destination, live, receiver] = await Promise.all([
     treasuryAddress(admin, user.id, payerCompanyId),
     treasuryAddress(admin, p.u, p.c),
     getLiveRates(),
+    receiverName(admin, p.u, p.c),
   ])
   if (!source) return NextResponse.json({ error: "Your balance doesn't have a wallet yet" }, { status: 409 })
-  if (!destination) return NextResponse.json({ error: `${p.n} can't receive yet (no wallet)` }, { status: 409 })
+  if (!destination) return NextResponse.json({ error: `${receiver} can't receive yet (no wallet)` }, { status: 409 })
 
   const rate = p.cur === "USD" ? 1 : live.rates[p.cur]
   if (!rate) return NextResponse.json({ error: `No live rate for ${p.cur}` }, { status: 503 })
@@ -62,7 +63,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       payer_name: payerName,
       receiver_user_id: p.u,
       receiver_company_id: p.c,
-      receiver_name: p.n,
+      receiver_name: receiver,
       idempotency_key: key,
       currency: p.cur,
       amount_minor: amountMinor,

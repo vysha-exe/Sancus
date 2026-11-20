@@ -22,6 +22,21 @@ async function nativeDetector(): Promise<Detector | null> {
   }
 }
 
+/** jsQR on the centre square of the frame at (up to) full resolution, where the code usually is. */
+function decodeCentre(video: HTMLVideoElement, canvas: HTMLCanvasElement): string | null {
+  const side = Math.floor(Math.min(video.videoWidth, video.videoHeight) * 0.85)
+  const out = Math.min(side, 900)
+  const sx = Math.floor((video.videoWidth - side) / 2)
+  const sy = Math.floor((video.videoHeight - side) / 2)
+  canvas.width = out
+  canvas.height = out
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })
+  if (!ctx) return null
+  ctx.drawImage(video, sx, sy, side, side, 0, 0, out, out)
+  const img = ctx.getImageData(0, 0, out, out)
+  return jsQR(img.data, out, out, { inversionAttempts: "dontInvert" })?.data ?? null
+}
+
 function decodeWithJsQR(src: CanvasImageSource, w: number, h: number, canvas: HTMLCanvasElement): string | null {
   canvas.width = w
   canvas.height = h
@@ -64,14 +79,18 @@ export function QrScanner({
     onResultRef.current = onResult
   }, [onResult])
 
-  const stop = useCallback(() => {
-    if (loopRef.current) cancelAnimationFrame(loopRef.current)
+  const releaseCamera = useCallback(() => {
+    if (loopRef.current) window.clearTimeout(loopRef.current)
     loopRef.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
-    setState("off")
   }, [])
+
+  const stop = useCallback(() => {
+    releaseCamera()
+    setState("off")
+  }, [releaseCamera])
 
   const start = useCallback(
     async (deviceIndex: number | null = null) => {
@@ -80,7 +99,7 @@ export function QrScanner({
         setError(window.isSecureContext ? "This browser can't use the camera. Upload a photo of the code instead." : CAMERA_ERRORS.SecurityError!)
         return
       }
-      stop()
+      releaseCamera()
       setState("starting")
       try {
         const device = deviceIndex !== null ? cameras[deviceIndex] : undefined
@@ -92,9 +111,17 @@ export function QrScanner({
         })
         streamRef.current = stream
         const video = videoRef.current!
-        video.srcObject = stream
+        video.muted = true
+        video.setAttribute("muted", "")
         video.setAttribute("playsinline", "true")
+        video.srcObject = stream
         await video.play()
+        // Keep refocusing on phones that support it (sharper codes); ignored elsewhere.
+        try {
+          await stream.getVideoTracks()[0]?.applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] })
+        } catch {
+          /* not supported */
+        }
         setState("on")
         // Device labels are only readable once permission is granted.
         const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput")
@@ -105,31 +132,35 @@ export function QrScanner({
           setCameraIndex(i >= 0 ? i : 0)
         }
 
+        // Decode about 8 times a second (not every frame) so phones stay smooth; alternate a
+        // full-resolution centre crop with the whole frame so both close and far codes read.
         const detector = await nativeDetector()
-        let busy = false
+        let frame = 0
         const tick = async () => {
           if (!streamRef.current) return
-          if (!busy && video.readyState >= 2 && video.videoWidth) {
-            busy = true
-            let text: string | null = null
+          let text: string | null = null
+          if (video.readyState >= 2 && video.videoWidth) {
             try {
               if (detector) text = (await detector.detect(video))[0]?.rawValue ?? null
               else if (canvasRef.current) {
-                const scale = Math.min(1, 720 / video.videoWidth)
-                text = decodeWithJsQR(video, Math.round(video.videoWidth * scale), Math.round(video.videoHeight * scale), canvasRef.current)
+                frame++
+                if (frame % 2) text = decodeCentre(video, canvasRef.current)
+                else {
+                  const scale = Math.min(1, 960 / video.videoWidth)
+                  text = decodeWithJsQR(video, Math.round(video.videoWidth * scale), Math.round(video.videoHeight * scale), canvasRef.current)
+                }
               }
             } catch {
               /* try the next frame */
             }
-            busy = false
-            if (text) {
-              navigator.vibrate?.(60)
-              stop()
-              onResultRef.current(text)
-              return
-            }
           }
-          loopRef.current = requestAnimationFrame(() => void tick())
+          if (text) {
+            navigator.vibrate?.(60)
+            stop()
+            onResultRef.current(text)
+            return
+          }
+          if (streamRef.current) loopRef.current = window.setTimeout(() => void tick(), 120)
         }
         void tick()
       } catch (e) {
@@ -138,7 +169,7 @@ export function QrScanner({
         setError(CAMERA_ERRORS[name] ?? "Couldn't start the camera. Upload a photo of the code instead.")
       }
     },
-    [cameras, stop]
+    [cameras, stop, releaseCamera]
   )
 
   useEffect(() => stop, [stop])
