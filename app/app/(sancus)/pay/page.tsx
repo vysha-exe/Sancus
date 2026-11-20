@@ -45,12 +45,12 @@ function matchesFilter(r: Recipient, filter: Filter | null) {
 }
 
 /** Personal accounts: pay anyone by scanning their QR or typing their bank details. */
-function QuickPay() {
+function QuickPay({ personal }: { personal: boolean }) {
   return (
     <div className="grid" style={{ marginBottom: 16 }}>
-      <Link href="/pay/scan" className="tile s6" style={{ display: "grid", gap: 6, textDecoration: "none", color: "inherit" }}>
+      <Link href={personal ? "/pay/scan-personal" : "/pay/scan"} className="tile s6" style={{ display: "grid", gap: 6, textDecoration: "none", color: "inherit" }}>
         <span className="body-strong">Scan a QR code</span>
-        <span className="body-s muted">PromptPay or Pix: point your camera or upload a picture of the code.</span>
+        <span className="body-s muted">Pix, PromptPay, QRIS or a card terminal, paid from whichever account you pick.</span>
       </Link>
       <Link href="/pay/us-bank" className="tile s6" style={{ display: "grid", gap: 6, textDecoration: "none", color: "inherit" }}>
         <span className="body-strong">Enter bank details</span>
@@ -102,7 +102,7 @@ export default function PayWhoPage() {
           : "Pay another company in your org, a supplier, or add a new payee — then enter the amount."}
       </p>
 
-      {personal ? <QuickPay /> : null}
+      {personal ? <QuickPay personal={personal} /> : null}
 
       <div className="grid">
         <section className="tile s8" aria-label="Choose a recipient" style={{ minHeight: 0 }}>
