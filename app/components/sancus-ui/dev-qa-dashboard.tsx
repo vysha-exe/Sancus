@@ -23,6 +23,7 @@ type ReceiveWorkflow = {
 }
 type WorkflowResult = { workflow?: Record<string, { ok: boolean; detail: string }>; error?: string; runId?: string; payment?: { id?: string; status?: string } }
 type SpendKind = "PIX" | "CARD"
+type SpendMode = "PIX" | "CARD" | "CARD_NUMBER"
 type ProviderReadiness = { id: string; label: string; ready: boolean; detail: string }
 type DevRun = { id: string; run_type: string; provider: string; status: string; error: string | null; created_at: string }
 type StoredPixQr = {
@@ -80,10 +81,13 @@ export function DevQaDashboard() {
   const [receiveAmount, setReceiveAmount] = useState("5.00")
   const [receiveResult, setReceiveResult] = useState<ReceiveWorkflow | null>(null)
   const [spendMethods, setSpendMethods] = useState<DevSpendMethod[]>([])
-  const [spendKind, setSpendKind] = useState<SpendKind>("PIX")
+  const [spendMode, setSpendMode] = useState<SpendMode>("PIX")
   const [spendMethodId, setSpendMethodId] = useState("")
   const [spendMerchant, setSpendMerchant] = useState("Dev Test Merchant")
   const [spendAmount, setSpendAmount] = useState("10.00")
+  const [cardNumber, setCardNumber] = useState("")
+  const [cardExpiration, setCardExpiration] = useState("")
+  const [cardCvv, setCardCvv] = useState("")
   const [storedPixQrs, setStoredPixQrs] = useState<StoredPixQr[]>([])
   const [spendPixQrId, setSpendPixQrId] = useState("")
   const [newPixQrLabel, setNewPixQrLabel] = useState("Sandbox merchant")
@@ -118,6 +122,7 @@ export function DevQaDashboard() {
   const companiesById = useMemo(() => new Map(flatten(workspace.tree).map((company) => [company.id, company])), [workspace.tree])
   const receiveBranch = receiveBranches.find((node) => node.id === receiveBranchId) ?? receiveBranches[0] ?? null
   const receiveCode = receiveBranch ? encodeReceiveCode({ rail: receiveRail, companyId: receiveBranch.id }) : ""
+  const spendKind: SpendKind = spendMode === "PIX" ? "PIX" : "CARD"
   const availableSpendMethods = useMemo(() => spendMethods.filter((method) => method.kind === spendKind), [spendKind, spendMethods])
   const spendMethod = availableSpendMethods.find((method) => method.id === spendMethodId) ?? availableSpendMethods[0] ?? null
   const spendPixQr = storedPixQrs.find((qr) => qr.id === spendPixQrId) ?? storedPixQrs[0] ?? null
@@ -129,12 +134,13 @@ export function DevQaDashboard() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [cardsResult, methodsResult, readinessResult, runsResult, pixQrsResult] = await Promise.all([
+      const [cardsResult, methodsResult, readinessResult, runsResult, pixQrsResult, employeeResult] = await Promise.all([
         call("/api/sancus/cards"),
         call("/api/sancus/spending-methods"),
         call("/api/sancus/dev/readiness"),
         call("/api/sancus/dev/runs"),
         call("/api/sancus/dev/pix-qrs"),
+        account?.type === "EMPLOYEE" ? call("/api/sancus/accounts/me/employee") : Promise.resolve(null),
       ])
       if (cancelled) return
       const cards = ((cardsResult.body as { cards?: SancusCardDto[] })?.cards ?? [])
@@ -161,16 +167,33 @@ export function DevQaDashboard() {
           currency: method.currency,
           detail: method.type === "PIX" ? "Pix QR access" : "Card access",
         }))
-      setSpendMethods([...cards, ...methods])
+      const employeeBody = employeeResult?.body as {
+        firstName?: string
+        company?: { id?: string }
+        methods?: Array<{ id: string; companyId?: string | null; type: string; source: "CARD" | "SPENDING_METHOD"; label: string; currency: string; status: string; simulated?: boolean; lastFour?: string | null }>
+      } | undefined
+      const employeeMethods = (employeeBody?.methods ?? [])
+        .filter((method) => method.status === "ACTIVE" && (method.type === "PIX" || (method.type === "CARD" && !method.simulated)) && (method.companyId || employeeBody?.company?.id))
+        .map<DevSpendMethod>((method) => ({
+          id: method.id,
+          companyId: method.companyId ?? employeeBody!.company!.id!,
+          kind: method.type as SpendKind,
+          source: method.source,
+          employeeName: employeeBody?.firstName ?? "Employee",
+          label: method.label,
+          currency: method.currency,
+          detail: method.type === "CARD" ? `Card •••• ${method.lastFour ?? ""}` : "Pix QR access",
+        }))
+      setSpendMethods(account?.type === "EMPLOYEE" ? employeeMethods : [...cards, ...methods])
       setProviders((readinessResult.body as { providers?: ProviderReadiness[] })?.providers ?? [])
       setRecentRuns((runsResult.body as { runs?: DevRun[] })?.runs ?? [])
       setStoredPixQrs((pixQrsResult.body as { qrs?: StoredPixQr[] })?.qrs ?? [])
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [account?.type])
 
   async function runSpendTest() {
-    if (!spendMethod || !Number.isFinite(Number(effectiveSpendAmount)) || Number(effectiveSpendAmount) <= 0 || !spendMerchant.trim()) return
+    if ((spendMode !== "CARD_NUMBER" && !spendMethod) || !Number.isFinite(Number(effectiveSpendAmount)) || Number(effectiveSpendAmount) <= 0 || !spendMerchant.trim()) return
     const id = `spend-${spendKind.toLowerCase()}`
     setBusy(id)
     setSpendResult(null)
@@ -180,10 +203,17 @@ export function DevQaDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind: spendKind,
-          source: spendMethod.source,
-          methodId: spendMethod.id,
+          source: spendMode === "CARD_NUMBER" ? "CARD" : spendMethod?.source,
+          ...(spendMethod && spendMode !== "CARD_NUMBER" ? { methodId: spendMethod.id } : {}),
           merchantName: spendMerchant.trim(),
           amount: Number(effectiveSpendAmount),
+          ...(spendMode === "CARD_NUMBER" ? {
+            cardCredentials: {
+              pan: cardNumber,
+              expiration: cardExpiration,
+              cvv: cardCvv,
+            },
+          } : {}),
           ...(spendKind === "PIX" ? { qrPayload: spendPixQr?.payload ?? "" } : {}),
         }),
       })
@@ -512,48 +542,52 @@ export function DevQaDashboard() {
             <span className="sx-rail">issued access → limit → payment</span>
           </div>
 
-          <div className="filters" role="group" aria-label="Spending method">
-            {(["PIX", "CARD"] as SpendKind[]).map((kind) => (
-              <button
-                type="button"
-                className="chip"
-                aria-pressed={spendKind === kind}
-                key={kind}
-                onClick={() => {
-                  setSpendKind(kind)
+          <div className="grid" style={{ gap: 12 }}>
+            <label className="sx-field s4">
+              <span className="sx-label">Payment method</span>
+              <select
+                className="sx-field__input"
+                value={spendMode}
+                onChange={(event) => {
+                  const next = event.target.value as SpendMode
+                  setSpendMode(next)
                   setSpendMethodId("")
-                  setSpendAmount(kind === "PIX" ? "10.00" : "25.00")
+                  setSpendAmount(next === "PIX" ? "10.00" : "25.00")
+                  setCardNumber("")
+                  setCardExpiration("")
+                  setCardCvv("")
                   setSpendResult(null)
                 }}
               >
-                {kind === "PIX" ? "Pix spending" : "Credit card spending"}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid" style={{ gap: 12 }}>
-            <label className="sx-field s5">
-              <span className="sx-label">Issued to employee</span>
-              <select
-                className="sx-field__input"
-                value={spendMethod?.id ?? ""}
-                onChange={(event) => { setSpendMethodId(event.target.value); setSpendResult(null) }}
-                disabled={!availableSpendMethods.length}
-              >
-                {!availableSpendMethods.length ? <option value="">No active {spendKind === "PIX" ? "Pix access" : "cards"}</option> : null}
-                {availableSpendMethods.map((method) => (
-                  <option value={method.id} key={`${method.source}-${method.id}`}>
-                    {companiesById.get(method.companyId)?.name ?? "Company"} · {method.employeeName} · {method.detail} · {method.label}
-                  </option>
-                ))}
+                <option value="PIX">Pix</option>
+                <option value="CARD">Credit card</option>
+                <option value="CARD_NUMBER">Credit card number</option>
               </select>
             </label>
-            <label className="sx-field s4">
+            {spendMode !== "CARD_NUMBER" ? (
+              <label className="sx-field s8">
+                <span className="sx-label">{spendMode === "PIX" ? "Pix access" : "Issued credit card"}</span>
+                <select
+                  className="sx-field__input"
+                  value={spendMethod?.id ?? ""}
+                  onChange={(event) => { setSpendMethodId(event.target.value); setSpendResult(null) }}
+                  disabled={!availableSpendMethods.length}
+                >
+                  {!availableSpendMethods.length ? <option value="">No active {spendMode === "PIX" ? "Pix access" : "credit cards"}</option> : null}
+                  {availableSpendMethods.map((method) => (
+                    <option value={method.id} key={`${method.source}-${method.id}`}>
+                      {companiesById.get(method.companyId)?.name ?? "Company"} · {method.employeeName} · {method.detail} · {method.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className={`sx-field ${spendMode === "CARD_NUMBER" ? "s4" : "s8"}`}>
               <span className="sx-label">Merchant</span>
               <input className="sx-field__input" value={spendMerchant} onChange={(event) => setSpendMerchant(event.target.value)} />
             </label>
-            <label className="sx-field s3">
-              <span className="sx-label">Amount · {spendMethod?.currency ?? (spendKind === "PIX" ? "BRL" : "local")}</span>
+            <label className="sx-field s4">
+              <span className="sx-label">Amount · {spendMethod?.currency ?? (spendKind === "PIX" ? "BRL" : "card currency")}</span>
               <input
                 className="sx-field__input"
                 inputMode="decimal"
@@ -563,6 +597,49 @@ export function DevQaDashboard() {
               />
               {spendKind === "PIX" && fixedPixAmount ? <span className="sx-field__help">Fixed by the selected QR.</span> : null}
             </label>
+            {spendMode === "CARD_NUMBER" ? (
+              <>
+                <label className="sx-field s6">
+                  <span className="sx-label">Sandbox card number</span>
+                  <input
+                    className="sx-field__input"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={cardNumber}
+                    onChange={(event) => setCardNumber(event.target.value.replace(/\D/g, "").slice(0, 19).replace(/(.{4})/g, "$1 ").trim())}
+                    placeholder="1234 5678 9012 3456"
+                  />
+                </label>
+                <label className="sx-field s3">
+                  <span className="sx-label">Expiry · MM/YY</span>
+                  <input
+                    className="sx-field__input"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={cardExpiration}
+                    onChange={(event) => {
+                      const digits = event.target.value.replace(/\D/g, "").slice(0, 4)
+                      setCardExpiration(digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits)
+                    }}
+                    placeholder="12/30"
+                  />
+                </label>
+                <label className="sx-field s3">
+                  <span className="sx-label">CVV</span>
+                  <input
+                    className="sx-field__input"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={cardCvv}
+                    onChange={(event) => setCardCvv(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="123"
+                  />
+                </label>
+                <p className="body-s muted s12" style={{ margin: 0 }}>
+                  Marqeta sandbox cards only. Credentials are verified for this request and are never stored or added to the Dev log.
+                </p>
+              </>
+            ) : null}
             {spendKind === "PIX" ? (
               <>
                 <label className="sx-field s12">
@@ -612,7 +689,7 @@ export function DevQaDashboard() {
             ) : null}
           </div>
 
-          {!availableSpendMethods.length ? (
+          {spendMode !== "CARD_NUMBER" && !availableSpendMethods.length ? (
             <p className="body-s muted" style={{ margin: 0 }}>
               Issue company-funded {spendKind === "PIX" ? "Pix access" : "a card"} on <Link href="/spending">Spending</Link> before running this test.
             </p>
@@ -623,10 +700,10 @@ export function DevQaDashboard() {
             <button
               type="button"
               className="sx-btn sx-btn--primary"
-              disabled={Boolean(busy) || !spendMethod || Number(effectiveSpendAmount) <= 0 || !spendMerchant.trim() || (spendKind === "PIX" && !spendPixQr)}
+              disabled={Boolean(busy) || (spendMode !== "CARD_NUMBER" && !spendMethod) || Number(effectiveSpendAmount) <= 0 || !spendMerchant.trim() || (spendKind === "PIX" && !spendPixQr) || (spendMode === "CARD_NUMBER" && (cardNumber.replace(/\D/g, "").length < 12 || cardExpiration.replace(/\D/g, "").length !== 4 || cardCvv.length < 3))}
               onClick={() => void runSpendTest()}
             >
-              {busy === `spend-${spendKind.toLowerCase()}` ? "Running spend…" : `Run ${spendKind === "PIX" ? "Pix" : "card"} spend`}
+              {busy === `spend-${spendKind.toLowerCase()}` ? "Running spend…" : `Run ${spendMode === "PIX" ? "Pix" : spendMode === "CARD" ? "saved card" : "card number"} spend`}
             </button>
           </div>
 

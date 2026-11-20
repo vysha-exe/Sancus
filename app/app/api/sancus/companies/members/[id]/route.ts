@@ -21,6 +21,10 @@ function memberId(req: NextRequest): string | null {
 export const GET = withAuth(async (req, { user, supabase }) => {
   const id = memberId(req)
   if (!id) return NextResponse.json({ error: "Invalid member id" }, { status: 400 })
+  const requestedCompanyId = req.nextUrl.searchParams.get("companyId")
+  if (requestedCompanyId && !/^[0-9a-f-]{36}$/i.test(requestedCompanyId)) {
+    return NextResponse.json({ error: "Invalid company id" }, { status: 400 })
+  }
 
   const { data: row } = await supabase
     .from("sancus_memberships")
@@ -48,33 +52,45 @@ export const GET = withAuth(async (req, { user, supabase }) => {
       ((companies ?? []) as CompanyRow[]).map((c) => c.id)
     )
 
+  const companyRows = (companies ?? []) as CompanyRow[]
+  const scopedCompany = requestedCompanyId
+    ? companyRows.find((candidate) => candidate.id === requestedCompanyId)
+    : company as CompanyRow
+  if (!scopedCompany) return NextResponse.json({ error: "Company not found" }, { status: 404 })
+
   const actor = effectiveRole(
-    (companies ?? []) as CompanyRow[],
+    companyRows,
     (memberships ?? []) as MembershipRow[],
     user.id,
-    row.company_id
+    scopedCompany.id
   )
   if (!actor.role) return NextResponse.json({ error: "No access" }, { status: 403 })
+  const memberRole = row.user_id
+    ? effectiveRole(companyRows, (memberships ?? []) as MembershipRow[], row.user_id, scopedCompany.id).role
+    : null
+  if (requestedCompanyId && (row.status !== "ACTIVE" || (memberRole !== "EMPLOYEE" && memberRole !== "FINANCE"))) {
+    return NextResponse.json({ error: "This person is not an active employee in the selected company" }, { status: 400 })
+  }
 
   return NextResponse.json({
     member: {
       id: row.id,
-      companyId: row.company_id,
+      companyId: scopedCompany.id,
       userId: row.user_id,
       email: row.invited_email,
-      role: row.role,
+      role: memberRole ?? row.role,
       status: row.status,
-      roleInherited: false,
+      roleInherited: scopedCompany.id !== row.company_id,
       perPaymentLimitMinor: row.per_payment_limit_minor != null ? String(row.per_payment_limit_minor) : null,
       dailyLimitMinor: row.daily_limit_minor != null ? String(row.daily_limit_minor) : null,
       invitedAt: row.created_at,
       acceptedAt: row.accepted_at,
     },
     company: {
-      id: company.id,
-      name: company.name,
-      country: company.country,
-      currency: company.base_currency,
+      id: scopedCompany.id,
+      name: scopedCompany.name,
+      country: scopedCompany.country,
+      currency: scopedCompany.base_currency,
     },
     can: capabilities(actor.role),
     actorRole: actor.role,

@@ -5,6 +5,8 @@ export type InvoicePaymentDetails = {
   bankName: string | null
   accountName: string | null
   accountNumber: string | null
+  routingNumber: string | null
+  accountType: "CHECKING" | "SAVINGS" | null
   swift: string | null
 }
 
@@ -55,6 +57,8 @@ export type InvoicePayContext = {
   amount: number
   currency: string
   invoiceNumber: string | null
+  rail?: string | null
+  paymentDetails?: InvoicePaymentDetails
 }
 
 export const INVOICE_PAY_STORAGE_KEY = "sancus-invoice-pay"
@@ -90,6 +94,8 @@ export function toInvoiceDto(row: InvoiceRow): InvoiceDto {
       bankName: typeof payment.bankName === "string" ? payment.bankName : null,
       accountName: typeof payment.accountName === "string" ? payment.accountName : null,
       accountNumber: typeof payment.accountNumber === "string" ? payment.accountNumber : null,
+      routingNumber: typeof payment.routingNumber === "string" ? payment.routingNumber : null,
+      accountType: payment.accountType === "CHECKING" || payment.accountType === "SAVINGS" ? payment.accountType : null,
       swift: typeof payment.swift === "string" ? payment.swift : null,
     },
     status: row.status,

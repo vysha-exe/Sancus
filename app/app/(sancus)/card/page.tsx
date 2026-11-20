@@ -1,9 +1,8 @@
 "use client"
 
-// Pay by virtual card: every account type has one.
-//   Personal and admin accounts issue their own (personal cards spend the personal balance;
-//   business cards spend the company or branch being worked in). Employees use the card their
-//   admin issued, within their limits.
+// Pay by virtual card.
+//   Individuals can issue their own card. Business cards are issued to a database employee from
+//   Team, and employees use the cards their admin assigned within their limits.
 //   "Tap to pay" runs a card purchase against the monthly limit and settles it onchain on Arc.
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -33,6 +32,7 @@ const usd = (minor: number | string) => `$${(Number(minor) / 100).toLocaleString
 export default function CardPage() {
   const { account } = useAccount()
   const isEmployee = account?.type === "EMPLOYEE"
+  const isIndividual = account?.type === "INDIVIDUAL"
   const [cards, setCards] = useState<Card[] | null>(null)
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [selected, setSelected] = useState<string | null>(null)
@@ -71,9 +71,9 @@ export default function CardPage() {
           <p className="body-s muted" style={{ margin: 0 }}>
             {isEmployee
               ? "The card your company gave you. Purchases stay within your limits."
-              : account?.type === "INDIVIDUAL"
+              : isIndividual
                 ? "A card that spends your Sancus balance anywhere cards are accepted, in any currency."
-                : "A company card for your own spending, funded from the account you're working in."}
+                : "Cards issued to your employees, funded from their assigned branch."}
           </p>
         </div>
       </header>
@@ -94,8 +94,14 @@ export default function CardPage() {
             <h2 className="sx-h heading-3" style={{ margin: 0 }}>No card yet</h2>
             <p className="body-s muted">Your admin issues cards from Team. Ask them for one.</p>
           </section>
-        ) : (
+        ) : isIndividual ? (
           <IssueCard onIssued={onIssued} />
+        ) : (
+          <section className="tile s12">
+            <h2 className="sx-h heading-3" style={{ margin: 0 }}>Choose an employee first</h2>
+            <p className="body-s muted">Business cards can only be issued to an active employee in your database.</p>
+            <Link href="/team" className="sx-btn sx-btn--primary">Choose employee in Team</Link>
+          </section>
         )
       ) : (
         <div className="grid">
@@ -124,7 +130,7 @@ export default function CardPage() {
             </div>
             <div className="kv"><span>Network</span><span>Marqeta {card.simulated ? "(sandbox, simulated)" : "sandbox"}</span></div>
             <CardCredentials key={card.id} card={card} />
-            {!isEmployee ? <IssueCard compact onIssued={onIssued} /> : null}
+            {isIndividual ? <IssueCard compact onIssued={onIssued} /> : null}
           </section>
 
           <section className="tile s7" style={{ display: "grid", gap: 14, alignContent: "start" }}>

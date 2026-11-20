@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { calculateCompanyTotal } from "@/lib/sancus/company-total"
+import { useSancusPrefs } from "@/lib/sancus/prefs"
 
 type BalancePoint = { at: number; minor: string }
 
@@ -111,6 +112,7 @@ function BalanceHistoryChart({
 
 export function HomeBalance({ positions = null }: { positions?: HomeTreasuryPositions | null }) {
   const ws = useWorkspace()
+  const { debugMode } = useSancusPrefs()
   // Business workspace: that company plus its branches. Personal: your own wallets + Gateway.
   const scope = !ws.ready ? undefined : ws.isPersonal || !ws.activeNode ? null : ws.activeNode.id
   const live = useLiveTreasury(undefined, scope)
@@ -130,13 +132,18 @@ export function HomeBalance({ positions = null }: { positions?: HomeTreasuryPosi
   const companyMeta = companyTotal
     ? `${companyTotal.bankAccounts} bank ${companyTotal.bankAccounts === 1 ? "account" : "accounts"} · ${companyTotal.wallets} ${companyTotal.wallets === 1 ? "wallet" : "wallets"} · ${companyTotal.companies} company ${companyTotal.companies === 1 ? "account" : "accounts"}`
     : ""
+  const personalMeta = live.summary
+    ? debugMode
+      ? `Bank · $${moneyFromMinor(live.summary.bankMinor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · USDC wallet · $${moneyFromMinor(live.summary.walletsMinor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${live.meta ? ` · ${live.meta}` : ""}`
+      : live.meta || "Bank account and USDC wallet"
+    : live.meta
 
   return (
     <section className="tile s8 home-balance" aria-labelledby="bal" aria-busy={live.loading || bankLoading}>
       <div className="tile-head">
         <div>
-          <span className="sx-label" id="bal">{bank ? "Total company balance" : "Available to move"}</span>
-          <span className="body-s muted">{bank ? "Bank accounts, wallets, and parent Treasury positions" : "Across your active treasury scope"}</span>
+          <span className="sx-label" id="bal">{bank ? "Total company balance" : "Total balance"}</span>
+          <span className="body-s muted">{bank ? "Bank accounts, wallets, and parent Treasury positions" : "Bank account and USDC wallet"}</span>
         </div>
         {live.source === "live" ? <span className="sx-pill sx-pill--settled">Live</span> : null}
       </div>
@@ -145,7 +152,7 @@ export function HomeBalance({ positions = null }: { positions?: HomeTreasuryPosi
           <span className="sx-balance__amount">
             {bankLoading ? "***" : companyTotalLabel ?? (live.loading ? "***" : live.availableLabel)} <small>{companyTotal?.currency ?? "USD"}</small>
           </span>
-          <span className="sx-balance__meta">{bankLoading ? "***" : bank ? companyMeta : live.loading ? "***" : live.meta}</span>
+          <span className="sx-balance__meta">{bankLoading ? "***" : bank ? companyMeta : live.loading ? "***" : personalMeta}</span>
         </div>
       </div>
       <BalanceHistoryChart
