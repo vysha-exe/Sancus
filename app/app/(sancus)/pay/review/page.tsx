@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { PAYMENT_LINK_PAYEE_PREFIX, usePayFlow } from "@/lib/sancus/pay-flow"
@@ -17,12 +17,18 @@ export default function PayReviewPage() {
   const requestOnly = !can(account, "money.send") && can(account, "money.request")
   const quoteReady = view.localLabel !== "–"
 
+  useEffect(() => {
+    if (!recipient) router.replace("/pay")
+  }, [recipient, router])
+
   async function pay() {
     setError(null)
     const result = await submit()
     if (result.ok) router.push("/pay/done")
     else setError(result.error)
   }
+
+  if (!recipient) return null
 
   return (
     <div className="page">

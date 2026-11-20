@@ -43,7 +43,7 @@ export function corridorFor(rail: string, opts?: { inbound?: boolean; destinatio
     return { label: `${currency} branch balance → card network`, localCurrency: currency, localRail: "Card network", destinationKind: "card" }
   }
   if (kind === "internal" || r === "INTERNAL" || r.includes("INTERNAL")) {
-    return { label: "Branch token → fUSDC → branch token", localCurrency: "USDC", localRail: "Arc internal", destinationKind: "internal" }
+    return { label: "Source currency → fixed FX → destination currency", localCurrency: "FX", localRail: "Arc fixed FX", destinationKind: "internal" }
   }
   if (r.includes("ACH")) {
     return {
@@ -158,7 +158,7 @@ export function buildPipeline(input: BuildPipelineInput): { corridor: ProcessCor
   } else if (corridor.destinationKind === "internal") {
     steps = [
       { id: "bank-debit", title: "Debit source operating account", detail: "Reserve and capture the source branch's local bank funds.", status: "pending" },
-      { id: "usdc", title: "Move USDC on Arc", detail: "Use wallet liquidity only for the cross-border transport leg.", status: "pending", explorerUrl: explorer },
+      { id: "fx", title: "Convert through fixed FX on Arc", detail: "Burn the source test currency and mint the destination test currency atomically. Wallet tokens exist only for this cross-border transport leg.", status: "pending", explorerUrl: explorer },
       { id: "bank-credit", title: "Credit destination operating account", detail: "Post the converted amount to the receiving branch bank account.", status: "pending" },
     ]
   } else if (corridor.destinationKind === "card") {

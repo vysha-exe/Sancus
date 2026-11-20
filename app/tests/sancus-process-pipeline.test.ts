@@ -31,9 +31,10 @@ describe("card process pipeline", () => {
       destinationKind: "internal",
       currency: "THB",
     })
-    expect(result.steps.map((step) => step.id)).toEqual(["bank-debit", "usdc", "bank-credit"])
+    expect(result.steps.map((step) => step.id)).toEqual(["bank-debit", "fx", "bank-credit"])
     expect(result.steps[0]?.detail).toContain("bank funds")
-    expect(result.steps[1]?.detail).toContain("only for the cross-border transport leg")
+    expect(result.steps[1]?.detail).toContain("only for this cross-border transport leg")
+    expect(result.steps[1]?.detail).toContain("Burn the source test currency")
     expect(result.steps[2]?.detail).toContain("branch bank account")
   })
 
