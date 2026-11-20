@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { createAdminContext, withAuth } from "@/lib/api/with-auth"
-import { requirePermission } from "@/lib/sancus/accounts-server"
+import { loadAccount } from "@/lib/sancus/accounts-server"
 import { createDevRun, finishDevRun, sanitizeProviderPayload, step, workflow, type DevRunStep } from "@/lib/sancus/dev-runs"
 import { toEmployeeCardPurchaseDto, type EmployeeCardPurchaseRow } from "@/lib/sancus/employee-spending"
 import { toPixPaymentDto, type PixPaymentDbRow } from "@/lib/sancus/local-rails"
@@ -13,7 +13,7 @@ import { isPayZuSandboxConfigured, mapPayZuStatus, payPix, resolvePixQr } from "
 import { loadFundingAccount, releaseSpendFunds, reserveSpendFunds, settleSpendFunds } from "@/lib/sancus/spend-funding"
 
 const schema = z.object({
-  kind: z.enum(["CARD", "PIX"]), source: z.enum(["CARD", "SPENDING_METHOD"]), methodId: z.string().uuid(),
+  kind: z.enum(["CARD", "PIX"]), source: z.enum(["CARD", "SPENDING_METHOD"]), methodId: z.string().uuid().optional(),
   merchantName: z.string().trim().min(1).max(120), amount: z.number().positive().max(250_000_000),
   qrPayload: z.string().trim().max(8_000).optional(),
   cardCredentials: z.object({
@@ -29,23 +29,78 @@ const secureMatch = (entered: string, expected: string) => {
   const right = Buffer.from(expected)
   return left.length === right.length && timingSafeEqual(left, right)
 }
+type DevSpendRow = {
+  id: string
+  status: string
+  method_type?: string
+  company_id: string | null
+  funding_account_id: string | null
+  employee_id: string
+  employee_name: string
+  currency: string
+  monthly_limit_minor: string | number
+  simulated?: boolean
+  provider_card_token?: string | null
+}
 
 export const POST = withAuth(async (req, { user, supabase }) => {
   if (!enabled()) return NextResponse.json({ error: "Dev payment tools are disabled" }, { status: 404 })
-  const denied = await requirePermission(supabase, user, "spending.manage")
-  if (denied) return denied
+  const account = await loadAccount(supabase, user)
+  const managesSpending = account.can("spending.manage")
+  const usesOwnSpending = account.type === "EMPLOYEE"
+  if (!managesSpending && !usesOwnSpending) {
+    return NextResponse.json({ error: "This account cannot run employee spending tests" }, { status: 403 })
+  }
   const parsed = await validateJsonBody(req, schema)
   if (!parsed.ok) return parsed.response
   const { kind, source, methodId, merchantName, amount, qrPayload, cardCredentials } = parsed.data
   if (kind === "CARD" && source !== "CARD") return NextResponse.json({ error: "A Marqeta sandbox card is required; generic card access cannot be authorized by the provider" }, { status: 400 })
-  if (kind === "CARD" && !cardCredentials) return NextResponse.json({ error: "Enter the sandbox card number, expiry, and CVV" }, { status: 400 })
+  if (kind === "CARD" && !methodId && !cardCredentials) return NextResponse.json({ error: "Select an issued card or enter the sandbox card number, expiry, and CVV" }, { status: 400 })
   if (kind === "PIX" && (source !== "SPENDING_METHOD" || !qrPayload)) return NextResponse.json({ error: "Pix tests require issued Pix access and a merchant Pix QR payload" }, { status: 400 })
+  if (kind === "PIX" && !methodId) return NextResponse.json({ error: "Select issued Pix access" }, { status: 400 })
 
   const { supabase: admin } = await createAdminContext()
   const table = source === "CARD" ? "sancus_cards" : "sancus_spending_methods"
-  const { data: method, error: methodError } = await admin.from(table).select("*").eq("id", methodId).eq("user_id", user.id).maybeSingle()
-  if (methodError) return NextResponse.json({ error: "Could not load the spending method" }, { status: 500 })
-  if (!method) return NextResponse.json({ error: "Spending method not found for this business" }, { status: 404 })
+  const ownerColumn = managesSpending ? "user_id" : "employee_id"
+  let method: DevSpendRow | null = null
+  let credentialsVerified = false
+  if (kind === "CARD" && !methodId && cardCredentials) {
+    const lastFour = cardCredentials.pan.slice(-4)
+    const { data: candidates, error: candidatesError } = await admin
+      .from("sancus_cards")
+      .select("*")
+      .eq(ownerColumn, user.id)
+      .eq("last_four", lastFour)
+      .eq("status", "ACTIVE")
+      .eq("simulated", false)
+    if (candidatesError) return NextResponse.json({ error: "Could not look up the sandbox card" }, { status: 500 })
+    try {
+      for (const candidate of candidates ?? []) {
+        if (!candidate.provider_card_token) continue
+        const details = await getMarqetaCardDetails(candidate.provider_card_token)
+        const panMatches = secureMatch(cardCredentials.pan, details.pan.replace(/\D/g, ""))
+        const expirationMatches = secureMatch(cardCredentials.expiration, details.expiration.replace(/\D/g, ""))
+        const cvvMatches = secureMatch(cardCredentials.cvv, details.cvv.replace(/\D/g, ""))
+        if (panMatches && expirationMatches && cvvMatches) {
+          method = candidate as DevSpendRow
+          credentialsVerified = true
+          break
+        }
+      }
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Could not verify the sandbox card" }, { status: 502 })
+    }
+  } else {
+    const { data, error } = await admin.from(table).select("*").eq("id", methodId!).eq(ownerColumn, user.id).maybeSingle()
+    if (error) return NextResponse.json({ error: "Could not load the spending method" }, { status: 500 })
+    method = data as DevSpendRow | null
+  }
+  if (!method) {
+    const error = kind === "CARD" && cardCredentials
+      ? "No issued sandbox card matched that card number, expiry, and CVV"
+      : "Spending method not found for this account"
+    return NextResponse.json({ error }, { status: 404 })
+  }
   if (method.status !== "ACTIVE") return NextResponse.json({ error: `Declined: method is ${String(method.status).toLowerCase()}` }, { status: 403 })
   if (source === "SPENDING_METHOD" && method.method_type !== kind) return NextResponse.json({ error: `Selected method is ${method.method_type}, not ${kind}` }, { status: 400 })
   if (!method.company_id || !method.funding_account_id) {
@@ -66,16 +121,19 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     if (kind === "CARD") {
       if (method.simulated || !method.provider_card_token) throw new Error("This is a demo card. Issue a real Marqeta sandbox card before running a provider test.")
       if (!isMarqetaSandboxConfigured()) throw new Error("Marqeta sandbox credentials or sandbox URL are not configured")
-      const details = await getMarqetaCardDetails(method.provider_card_token)
-      const panMatches = secureMatch(cardCredentials!.pan, details.pan.replace(/\D/g, ""))
-      const expirationMatches = secureMatch(cardCredentials!.expiration, details.expiration.replace(/\D/g, ""))
-      const cvvMatches = secureMatch(cardCredentials!.cvv, details.cvv.replace(/\D/g, ""))
-      if (!panMatches || !expirationMatches || !cvvMatches) {
-        steps.push(step("credentials", false, "Entered credentials did not match the selected sandbox card"))
-        throw new Error("Declined: the card number, expiry, or CVV does not match the selected sandbox card")
+      if (cardCredentials && !credentialsVerified) {
+        const details = await getMarqetaCardDetails(method.provider_card_token)
+        const panMatches = secureMatch(cardCredentials.pan, details.pan.replace(/\D/g, ""))
+        const expirationMatches = secureMatch(cardCredentials.expiration, details.expiration.replace(/\D/g, ""))
+        const cvvMatches = secureMatch(cardCredentials.cvv, details.cvv.replace(/\D/g, ""))
+        if (!panMatches || !expirationMatches || !cvvMatches) {
+          steps.push(step("credentials", false, "Entered credentials did not match the selected sandbox card"))
+          throw new Error("Declined: the card number, expiry, or CVV does not match the selected sandbox card")
+        }
+        credentialsVerified = true
       }
-      steps.push(step("credentials", true, "Sandbox card credentials matched the selected issued card"))
-      const { data: purchases, error: purchasesError } = await admin.from("sancus_card_purchases").select("amount_minor").eq("card_id", methodId).in("status", ["HELD", "SETTLED"]).gte("created_at", monthStart())
+      if (credentialsVerified) steps.push(step("credentials", true, "Sandbox card credentials matched an issued card"))
+      const { data: purchases, error: purchasesError } = await admin.from("sancus_card_purchases").select("amount_minor").eq("card_id", method.id).in("status", ["HELD", "SETTLED"]).gte("created_at", monthStart())
       if (purchasesError) throw new Error("Could not validate the card limit")
       const used = (purchases ?? []).reduce((sum, row) => sum + BigInt(row.amount_minor), 0n)
       if (used + amountMinor > BigInt(method.monthly_limit_minor)) throw new Error("Declined: test purchase exceeds the card's monthly limit")
@@ -143,7 +201,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       amountMinor = BigInt(Math.round(fixedAmount * 100))
     }
     steps.push(step("qrScan", true, `PayZu resolved the merchant QR${resolved.name ? ` to ${resolved.name}` : ""}${amountEditable ? "; payer enters the amount" : `; fixed at R$ ${effectiveAmount.toFixed(2)}`}`))
-    const { data: payments, error: paymentsError } = await admin.from("sancus_pix_payments").select("amount_brl_minor").eq("spending_method_id", methodId).in("status", ["PENDING", "SETTLED"]).gte("created_at", monthStart())
+    const { data: payments, error: paymentsError } = await admin.from("sancus_pix_payments").select("amount_brl_minor").eq("spending_method_id", method.id).in("status", ["PENDING", "SETTLED"]).gte("created_at", monthStart())
     if (paymentsError) throw new Error("Could not validate the Pix limit")
     const used = (payments ?? []).reduce((sum, row) => sum + BigInt(row.amount_brl_minor), 0n)
     if (used + amountMinor > BigInt(method.monthly_limit_minor)) throw new Error("Declined: test payment exceeds the Pix monthly limit")
