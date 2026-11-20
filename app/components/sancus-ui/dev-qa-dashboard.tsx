@@ -84,6 +84,9 @@ export function DevQaDashboard() {
   const [spendMethodId, setSpendMethodId] = useState("")
   const [spendMerchant, setSpendMerchant] = useState("Dev Test Merchant")
   const [spendAmount, setSpendAmount] = useState("10.00")
+  const [cardNumber, setCardNumber] = useState("")
+  const [cardExpiration, setCardExpiration] = useState("")
+  const [cardCvv, setCardCvv] = useState("")
   const [storedPixQrs, setStoredPixQrs] = useState<StoredPixQr[]>([])
   const [spendPixQrId, setSpendPixQrId] = useState("")
   const [newPixQrLabel, setNewPixQrLabel] = useState("Sandbox merchant")
@@ -184,6 +187,13 @@ export function DevQaDashboard() {
           methodId: spendMethod.id,
           merchantName: spendMerchant.trim(),
           amount: Number(effectiveSpendAmount),
+          ...(spendKind === "CARD" ? {
+            cardCredentials: {
+              pan: cardNumber,
+              expiration: cardExpiration,
+              cvv: cardCvv,
+            },
+          } : {}),
           ...(spendKind === "PIX" ? { qrPayload: spendPixQr?.payload ?? "" } : {}),
         }),
       })
@@ -523,6 +533,9 @@ export function DevQaDashboard() {
                   setSpendKind(kind)
                   setSpendMethodId("")
                   setSpendAmount(kind === "PIX" ? "10.00" : "25.00")
+                  setCardNumber("")
+                  setCardExpiration("")
+                  setCardCvv("")
                   setSpendResult(null)
                 }}
               >
@@ -563,6 +576,49 @@ export function DevQaDashboard() {
               />
               {spendKind === "PIX" && fixedPixAmount ? <span className="sx-field__help">Fixed by the selected QR.</span> : null}
             </label>
+            {spendKind === "CARD" ? (
+              <>
+                <label className="sx-field s6">
+                  <span className="sx-label">Sandbox card number</span>
+                  <input
+                    className="sx-field__input"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={cardNumber}
+                    onChange={(event) => setCardNumber(event.target.value.replace(/\D/g, "").slice(0, 19).replace(/(.{4})/g, "$1 ").trim())}
+                    placeholder="1234 5678 9012 3456"
+                  />
+                </label>
+                <label className="sx-field s3">
+                  <span className="sx-label">Expiry · MM/YY</span>
+                  <input
+                    className="sx-field__input"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={cardExpiration}
+                    onChange={(event) => {
+                      const digits = event.target.value.replace(/\D/g, "").slice(0, 4)
+                      setCardExpiration(digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits)
+                    }}
+                    placeholder="12/30"
+                  />
+                </label>
+                <label className="sx-field s3">
+                  <span className="sx-label">CVV</span>
+                  <input
+                    className="sx-field__input"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={cardCvv}
+                    onChange={(event) => setCardCvv(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="123"
+                  />
+                </label>
+                <p className="body-s muted s12" style={{ margin: 0 }}>
+                  Marqeta sandbox cards only. Credentials are verified for this request and are never stored or added to the Dev log.
+                </p>
+              </>
+            ) : null}
             {spendKind === "PIX" ? (
               <>
                 <label className="sx-field s12">
@@ -623,7 +679,7 @@ export function DevQaDashboard() {
             <button
               type="button"
               className="sx-btn sx-btn--primary"
-              disabled={Boolean(busy) || !spendMethod || Number(effectiveSpendAmount) <= 0 || !spendMerchant.trim() || (spendKind === "PIX" && !spendPixQr)}
+              disabled={Boolean(busy) || !spendMethod || Number(effectiveSpendAmount) <= 0 || !spendMerchant.trim() || (spendKind === "PIX" && !spendPixQr) || (spendKind === "CARD" && (cardNumber.replace(/\D/g, "").length < 12 || cardExpiration.replace(/\D/g, "").length !== 4 || cardCvv.length < 3))}
               onClick={() => void runSpendTest()}
             >
               {busy === `spend-${spendKind.toLowerCase()}` ? "Running spend…" : `Run ${spendKind === "PIX" ? "Pix" : "card"} spend`}

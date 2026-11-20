@@ -1,5 +1,5 @@
 // Provider-backed sandbox probe for issued employee cards and Pix access.
-import { randomUUID } from "node:crypto"
+import { randomUUID, timingSafeEqual } from "node:crypto"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
@@ -8,7 +8,7 @@ import { requirePermission } from "@/lib/sancus/accounts-server"
 import { createDevRun, finishDevRun, sanitizeProviderPayload, step, workflow, type DevRunStep } from "@/lib/sancus/dev-runs"
 import { toEmployeeCardPurchaseDto, type EmployeeCardPurchaseRow } from "@/lib/sancus/employee-spending"
 import { toPixPaymentDto, type PixPaymentDbRow } from "@/lib/sancus/local-rails"
-import { isMarqetaSandboxConfigured, simulateMarqetaAuthorization, simulateMarqetaClearing } from "@/lib/sancus/rails/marqeta"
+import { getMarqetaCardDetails, isMarqetaSandboxConfigured, simulateMarqetaAuthorization, simulateMarqetaClearing } from "@/lib/sancus/rails/marqeta"
 import { isPayZuSandboxConfigured, mapPayZuStatus, payPix, resolvePixQr } from "@/lib/sancus/rails/payzu"
 import { loadFundingAccount, releaseSpendFunds, reserveSpendFunds, settleSpendFunds } from "@/lib/sancus/spend-funding"
 
@@ -16,9 +16,19 @@ const schema = z.object({
   kind: z.enum(["CARD", "PIX"]), source: z.enum(["CARD", "SPENDING_METHOD"]), methodId: z.string().uuid(),
   merchantName: z.string().trim().min(1).max(120), amount: z.number().positive().max(250_000_000),
   qrPayload: z.string().trim().max(8_000).optional(),
+  cardCredentials: z.object({
+    pan: z.string().transform((value) => value.replace(/\D/g, "")).pipe(z.string().min(12).max(19)),
+    expiration: z.string().transform((value) => value.replace(/\D/g, "")).pipe(z.string().length(4)),
+    cvv: z.string().transform((value) => value.replace(/\D/g, "")).pipe(z.string().min(3).max(4)),
+  }).optional(),
 })
 const enabled = () => process.env.NODE_ENV !== "production" || process.env.SANCUS_ENABLE_DEV_ENDPOINTS === "true"
 const monthStart = () => { const value = new Date(); value.setUTCDate(1); value.setUTCHours(0, 0, 0, 0); return value.toISOString() }
+const secureMatch = (entered: string, expected: string) => {
+  const left = Buffer.from(entered)
+  const right = Buffer.from(expected)
+  return left.length === right.length && timingSafeEqual(left, right)
+}
 
 export const POST = withAuth(async (req, { user, supabase }) => {
   if (!enabled()) return NextResponse.json({ error: "Dev payment tools are disabled" }, { status: 404 })
@@ -26,8 +36,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (denied) return denied
   const parsed = await validateJsonBody(req, schema)
   if (!parsed.ok) return parsed.response
-  const { kind, source, methodId, merchantName, amount, qrPayload } = parsed.data
+  const { kind, source, methodId, merchantName, amount, qrPayload, cardCredentials } = parsed.data
   if (kind === "CARD" && source !== "CARD") return NextResponse.json({ error: "A Marqeta sandbox card is required; generic card access cannot be authorized by the provider" }, { status: 400 })
+  if (kind === "CARD" && !cardCredentials) return NextResponse.json({ error: "Enter the sandbox card number, expiry, and CVV" }, { status: 400 })
   if (kind === "PIX" && (source !== "SPENDING_METHOD" || !qrPayload)) return NextResponse.json({ error: "Pix tests require issued Pix access and a merchant Pix QR payload" }, { status: 400 })
 
   const { supabase: admin } = await createAdminContext()
@@ -55,6 +66,15 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     if (kind === "CARD") {
       if (method.simulated || !method.provider_card_token) throw new Error("This is a demo card. Issue a real Marqeta sandbox card before running a provider test.")
       if (!isMarqetaSandboxConfigured()) throw new Error("Marqeta sandbox credentials or sandbox URL are not configured")
+      const details = await getMarqetaCardDetails(method.provider_card_token)
+      const panMatches = secureMatch(cardCredentials!.pan, details.pan.replace(/\D/g, ""))
+      const expirationMatches = secureMatch(cardCredentials!.expiration, details.expiration.replace(/\D/g, ""))
+      const cvvMatches = secureMatch(cardCredentials!.cvv, details.cvv.replace(/\D/g, ""))
+      if (!panMatches || !expirationMatches || !cvvMatches) {
+        steps.push(step("credentials", false, "Entered credentials did not match the selected sandbox card"))
+        throw new Error("Declined: the card number, expiry, or CVV does not match the selected sandbox card")
+      }
+      steps.push(step("credentials", true, "Sandbox card credentials matched the selected issued card"))
       const { data: purchases, error: purchasesError } = await admin.from("sancus_card_purchases").select("amount_minor").eq("card_id", methodId).in("status", ["HELD", "SETTLED"]).gte("created_at", monthStart())
       if (purchasesError) throw new Error("Could not validate the card limit")
       const used = (purchases ?? []).reduce((sum, row) => sum + BigInt(row.amount_minor), 0n)
