@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
+import { localBankMinorToReportingMinor } from "@/lib/sancus/company-total"
 import { countryByCode } from "@/lib/sancus/countries"
 import type { InternalTransferDto } from "@/lib/sancus/internal-transfers"
 import { displayMinor, USDC_DECIMALS } from "@/lib/sancus/money"
@@ -60,6 +61,12 @@ function accountBalanceLabel(account: Account, minor = account.availableMinor) {
     currency: account.currency,
     maximumFractionDigits: account.currency === "IDR" ? 0 : 2,
   }).format(Number(minor || "0") / 100)
+}
+
+function accountAvailableUsdMinor(account: Account) {
+  return account.isRoot
+    ? BigInt(account.availableMinor || "0")
+    : localBankMinorToReportingMinor(account.availableMinor || "0", account.currency, "USD")
 }
 
 function statusLabel(status: string) {
@@ -238,6 +245,13 @@ function MoveMoney({ data, onClose, onChanged }: { data: BranchResponse; onClose
   const other = useMemo(() => data.sources.find((account) => account.id === otherId) ?? null, [data.sources, otherId])
   const source = direction === "in" ? other : data.branch
   const destination = direction === "in" ? data.branch : other
+  const sourceAvailableUsdMinor = source ? accountAvailableUsdMinor(source) : 0n
+  // Transfers are entered to the cent. Round the maximum down so the local-currency
+  // debit can never exceed the displayed available balance because of FX rounding.
+  const maxTransferUsdMinor = (sourceAvailableUsdMinor / 10_000n) * 10_000n
+  const maxTransferUsd = Number(maxTransferUsdMinor) / 1_000_000
+  const enteredAmount = Number(amount)
+  const amountExceedsBalance = Number.isFinite(enteredAmount) && enteredAmount > maxTransferUsd
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -267,10 +281,6 @@ function MoveMoney({ data, onClose, onChanged }: { data: BranchResponse; onClose
     }
   }
 
-  const path = source && destination
-    ? `${source.isRoot ? "USDC" : `m${source.currency} burn → USDC`} → Arc transfer → ${destination.isRoot ? "parent USDC" : `m${destination.currency} mint`}`
-    : "Choose another account"
-
   return (
     <div role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(8, 20, 18, .48)", display: "grid", placeItems: "center", padding: 24 }}>
       <section role="dialog" aria-modal="true" aria-labelledby="move-title" className="tile" style={{ width: "min(760px, 100%)", maxHeight: "90vh", overflow: "auto" }}>
@@ -280,9 +290,24 @@ function MoveMoney({ data, onClose, onChanged }: { data: BranchResponse; onClose
         </div>
 
         {result ? (
-          <div className={`banner${result.ok ? "" : " banner--err"}`}>
-            <div style={{ display: "grid", gap: 6 }}><b>{result.title}</b><span>{result.message}</span></div>
-            <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={onClose}>Done</button>
+          <div style={{ display: "grid", gap: 14 }}>
+            <div className={`banner${result.ok ? "" : " banner--err"}`}>
+              <div style={{ display: "grid", gap: 6 }}><b>{result.title}</b><span>{result.message}</span></div>
+              <button type="button" className="sx-btn sx-btn--secondary sx-btn--sm" onClick={onClose}>Done</button>
+            </div>
+            {source ? (
+              <div className="rail-tile">
+                <div className="kv"><span>Source account</span><b>{source.name}</b></div>
+                <div className="kv" style={{ alignItems: "start" }}>
+                  <span>Available to move</span>
+                  <span style={{ display: "grid", justifyItems: "end", gap: 2, textAlign: "right" }}>
+                    <b>{accountBalanceLabel(source)}</b>
+                    {!source.isRoot ? <span className="body-s muted">USD equivalent · {usd(sourceAvailableUsdMinor.toString())}</span> : null}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            {!result.ok ? <button type="button" className="sx-btn sx-btn--secondary" onClick={() => setResult(null)}>Change amount</button> : null}
           </div>
         ) : (
           <form onSubmit={submit} className="grid" style={{ gap: 14 }}>
@@ -307,13 +332,27 @@ function MoveMoney({ data, onClose, onChanged }: { data: BranchResponse; onClose
             <div className="rail-tile s12">
               <div className="kv"><span>From</span><b>{source?.name ?? "—"}</b></div>
               <div className="kv"><span>To</span><b>{destination?.name ?? "—"}</b></div>
-              <div className="kv"><span>Settlement</span><span className="data">{path}</span></div>
+              {source ? (
+                <div className="kv" style={{ alignItems: "start" }}>
+                  <span>Available to move</span>
+                  <span style={{ display: "grid", justifyItems: "end", gap: 2, textAlign: "right" }}>
+                    <b>{accountBalanceLabel(source)}</b>
+                    {!source.isRoot ? <span className="body-s muted">USD equivalent · {usd(sourceAvailableUsdMinor.toString())}</span> : null}
+                  </span>
+                </div>
+              ) : null}
               {source?.bank ? <div className="kv"><span>Paying from</span><span>{source.bank.name} · {source.bank.label} •••• {source.bank.last4}</span></div> : null}
             </div>
-            <label className="sx-field s6"><span className="sx-label">Amount · USDC</span><input className="sx-field__input" type="number" min="0.01" max="200000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></label>
+            <label className="sx-field s6">
+              <span className="sx-label">Amount · USDC</span>
+              <input className="sx-field__input" type="number" min="0.01" max={Math.min(200000, maxTransferUsd)} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required />
+              <span className={`body-s${amountExceedsBalance ? "" : " muted"}`} role={amountExceedsBalance ? "alert" : undefined} style={amountExceedsBalance ? { color: "var(--danger, #c0392b)" } : undefined}>
+                {amountExceedsBalance ? `Enter ${usd(maxTransferUsdMinor.toString())} or less.` : `Up to ${usd(maxTransferUsdMinor.toString())} available.`}
+              </span>
+            </label>
             <label className="sx-field s6"><span className="sx-label">Memo · optional</span><input className="sx-field__input" maxLength={140} value={memo} onChange={(event) => setMemo(event.target.value)} placeholder="Thailand operating funds" /></label>
             <div className="s12 body-s muted">Fixed demo rates are stored with the transfer. Transfers at or above the source account’s approval rule wait in Activity → Approvals before anything moves.</div>
-            <div className="s12 tile-foot"><button type="button" className="sx-btn sx-btn--quiet" onClick={onClose}>Cancel</button><button type="submit" className="sx-btn sx-btn--primary" disabled={busy || !source || !destination}>{busy ? "Moving…" : "Review and move"}</button></div>
+            <div className="s12 tile-foot"><button type="button" className="sx-btn sx-btn--quiet" onClick={onClose}>Cancel</button><button type="submit" className="sx-btn sx-btn--primary" disabled={busy || !source || !destination || amountExceedsBalance || maxTransferUsd <= 0}>{busy ? "Moving…" : "Review and move"}</button></div>
           </form>
         )}
       </section>

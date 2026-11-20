@@ -306,6 +306,7 @@ export class IndividualAccount extends SancusAccount {
     "money.receive",
     "approvals.decide",
     "activity.view",
+    "card.view",
     "agent.use",
     "settings",
   ])
