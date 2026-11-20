@@ -43,8 +43,11 @@ export default function CardPage() {
     const body = await res?.json().catch(() => null)
     if (!res?.ok) {
       const msg = String(body?.error ?? "Couldn't load your cards")
-      // Don't flash a raw session error over the NFC panel.
+      // Don't flash a raw session error over the NFC panel; still unblock the page.
       if (msg.toLowerCase() !== "unauthorized") setError(msg)
+      else setError(null)
+      setCards([])
+      setPurchases([])
       return
     }
     setError(null)
