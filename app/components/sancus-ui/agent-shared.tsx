@@ -134,7 +134,9 @@ export async function confirmProposal(p: Proposal): Promise<string> {
         ? "Local QR created for your customer. Open Pay with QR, then Make a local QR, to show it."
         : p.kind === "limits"
           ? "Limits updated."
-          : `Done. Status: ${String(body.status).replace(/_/g, " ").toLowerCase()}.`
+          : p.kind === "transfer" && body.status === "COMPLETED"
+            ? "Money moved. Both branches' activity is updated."
+            : `Done. Status: ${String(body.status).replace(/_/g, " ").toLowerCase()}.`
     setOutcome(p.id, { state: "done", text })
     noteInChat(`${p.title}: ${text}`)
     window.dispatchEvent(new Event(CHANGED))

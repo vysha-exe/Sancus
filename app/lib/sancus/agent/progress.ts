@@ -10,6 +10,8 @@ export const PROGRESS: Record<string, string> = {
   propose_collection: "Setting up the collection",
   list_people: "Looking up your team",
   propose_limits: "Preparing the new limits",
+  list_accounts: "Looking up your branches",
+  propose_internal_transfer: "Preparing the transfer",
   my_spending: "Checking your card and limits",
   open_page: "Opening that page",
   request_payment_qr: "Making your QR code",
