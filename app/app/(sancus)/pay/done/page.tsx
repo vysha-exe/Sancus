@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
@@ -48,12 +49,20 @@ function usePixPaymentStatus(initial: PixPaymentDto | null) {
 }
 
 export default function PayDonePage() {
+  const router = useRouter()
   const { recipient, quote, state, view, xenditPayout, pixPayment, internalTransfer, sourceAccount } = usePayFlow()
   const fundingSource = sourceAccount?.parentId === null ? "parent treasury" : sourceAccount?.name ?? "selected account"
   const xendit = useXenditStatus(xenditPayout)
   const pix = usePixPaymentStatus(pixPayment)
   // Re-read the balance whenever the payout moves.
   const treasury = useLiveTreasury(xendit?.status ?? pix?.status ?? internalTransfer?.status)
+  const hasReceipt = Boolean(pix || xendit || internalTransfer || recipient)
+
+  useEffect(() => {
+    if (!hasReceipt) router.replace("/pay")
+  }, [hasReceipt, router])
+
+  if (!hasReceipt) return null
 
   if (pix) {
     const settled = pix.status === "SETTLED"
@@ -190,6 +199,7 @@ export default function PayDonePage() {
   }
 
   // Demo recipients (wireframe flow). A payment-link payee shows its own numbers, not the sample quote.
+  if (!recipient) return null
   const fromLink = recipient.id.startsWith(PAYMENT_LINK_PAYEE_PREFIX)
   const shown = fromLink
     ? { total: view.totalLabel, rate: view.rateLabel, paidOut: view.localLabel }

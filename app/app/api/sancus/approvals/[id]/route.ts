@@ -10,8 +10,8 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
-import { loadAccount, requirePermission } from "@/lib/sancus/accounts-server"
-import { checkApprover, type Approver } from "@/lib/sancus/approval-rules"
+import { loadAccount } from "@/lib/sancus/accounts-server"
+import { checkDecision, type Approver } from "@/lib/sancus/approval-rules"
 import { notifyRequester } from "@/lib/sancus/approval-notify"
 import { serviceClient } from "@/lib/sancus/service-client"
 import { toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
@@ -30,8 +30,8 @@ function idFrom(req: NextRequest): string | null {
 }
 
 export const POST = withAuth(async (req, { user, supabase }) => {
-  const denied = await requirePermission(supabase, user, "approvals.decide")
-  if (denied) return denied
+  // No blanket "approvals.decide" gate here: withdrawing your own request needs no approval
+  // rights. deny() (checkDecision) enforces who may approve or decline each payment below.
   const id = idFrom(req)
   if (!id) return NextResponse.json({ error: "Invalid payout id" }, { status: 400 })
 
@@ -151,8 +151,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
 /** 403 unless `account` may decide this payment. Requesters may withdraw (decline) their own. */
 function deny(account: Approver, requesterId: string, companyId: string | null, action: "approve" | "decline"): NextResponse | null {
-  const check = checkApprover(account, { requesterId, companyId })
+  const check = checkDecision(account, { requesterId, companyId }, action)
   if (check.ok) return null
-  if (action === "decline" && check.code === "OWN_REQUEST") return null
   return NextResponse.json({ error: check.error, code: check.code }, { status: check.code === "NOT_YOURS" ? 404 : 403 })
 }

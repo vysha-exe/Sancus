@@ -42,6 +42,7 @@ export type PayInvoice = InvoicePayContext & { matched: boolean }
 const normalizeName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 
 type PayState = {
+  /** Empty until the user picks a payee (or a payment-link / invoice preselects one). */
   recipientId: string
   usdAmount: string
   localAmount: string
@@ -71,7 +72,8 @@ type SubmitResult = { ok: true } | { ok: false; error: string }
 
 type PayContextValue = {
   state: PayState
-  recipient: Recipient
+  /** Null until the user picks someone on /pay (or a link/invoice preselects). */
+  recipient: Recipient | null
   /** Demo recipients plus any payees added on this device. */
   recipients: Recipient[]
   setRecipientId: (id: string) => void
@@ -103,10 +105,10 @@ type PayContextValue = {
 const PayContext = createContext<PayContextValue | null>(null)
 
 const defaultState: PayState = {
-  recipientId: julianaQuote.recipientId,
+  recipientId: "",
   usdAmount: "",
   localAmount: "",
-  rail: julianaQuote.rail,
+  rail: "",
   memo: "",
   side: "send",
 }
@@ -267,10 +269,12 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     () => [...orgPayees, ...customPayees, ...recipientsFor(personal)],
     [orgPayees, customPayees, personal]
   )
-  const recipient = recipients.find((r) => r.id === state.recipientId) ?? recipients[0]!
-  const isPix = Boolean(recipient.pixKey)
-  const isOrg = Boolean(recipient.companyId)
-  const isLive = Boolean(recipient.xendit) || isPix || isOrg
+  const recipient = state.recipientId
+    ? recipients.find((r) => r.id === state.recipientId) ?? findRecipient(state.recipientId, customPayees) ?? null
+    : null
+  const isPix = Boolean(recipient?.pixKey)
+  const isOrg = Boolean(recipient?.companyId)
+  const isLive = Boolean(recipient?.xendit) || isPix || isOrg
 
   const setSourceCompanyId = useCallback((id: string) => {
     if (!sourceAccounts.some((company) => company.id === id)) return
@@ -280,7 +284,8 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
 
   const setRecipientId = useCallback(
     (id: string) => {
-      const r = recipients.find((item) => item.id === id) ?? findRecipient(id, customPayees) ?? recipients[0]!
+      const r = recipients.find((item) => item.id === id) ?? findRecipient(id, customPayees)
+      if (!r) return
       idempotencyKey.current = null
       setState((s) => ({
         ...s,
@@ -294,13 +299,15 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
     [customPayees, recipients]
   )
 
-  // The default payee isn't in this account's list (e.g. a personal account): select its first one.
-  // Waits for the preselection above, so it can't overwrite a payment-link or invoice payee.
+  // Drop a stale selection if that payee left the list (e.g. workspace change). Keep empty when none picked.
   useEffect(() => {
-    if (!initialized || recipient.id === state.recipientId) return
-    const timer = window.setTimeout(() => setRecipientId(recipient.id), 0)
+    if (!initialized || !state.recipientId || recipient) return
+    const timer = window.setTimeout(() => {
+      idempotencyKey.current = null
+      setState((s) => ({ ...s, recipientId: "", rail: "", localAmount: "", usdAmount: "", side: "send" }))
+    }, 0)
     return () => window.clearTimeout(timer)
-  }, [initialized, recipient.id, state.recipientId, setRecipientId])
+  }, [initialized, recipient, state.recipientId])
 
   const addPayee = useCallback((input: NewPayeeInput) => {
     const built = buildCustomPayee(input)
@@ -334,10 +341,10 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   const [railQuote, setRailQuote] = useState<SerializedPayQuote | null>(null)
   const [railQuoteError, setRailQuoteError] = useState<string | null>(null)
   const [railQuoteLoading, setRailQuoteLoading] = useState(false)
-  const currency = payoutCurrency(recipient.rail, state.rail)
+  const currency = recipient ? payoutCurrency(recipient.rail, state.rail) : null
   const typed = state.side === "send" ? state.usdAmount : state.localAmount
   useEffect(() => {
-    if (!currency || !isPayRail(state.rail) || !typed.trim()) return
+    if (!recipient || !currency || !isPayRail(state.rail) || !typed.trim()) return
     const controller = new AbortController()
     const side = state.side
     const timer = setTimeout(async () => {
@@ -370,9 +377,10 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [currency, state.rail, state.side, typed, quoteNonce])
+  }, [recipient, currency, state.rail, state.side, typed, quoteNonce])
 
   const submit = useCallback(async (): Promise<SubmitResult> => {
+    if (!recipient) return { ok: false, error: "Pick a payee first" }
     if (!isLive) return { ok: false, error: "This payee can't be paid from here yet" }
     idempotencyKey.current ??= newKey()
     setSubmitting(true)
