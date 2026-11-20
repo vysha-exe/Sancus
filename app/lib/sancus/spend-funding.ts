@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { effectiveRole, type CompanyRow, type MembershipRow } from "./companies"
 
 export type SpendFundingAccount = {
   companyId: string
@@ -16,22 +17,33 @@ export async function resolveEmployeeFundingAccount(
   if (!["USD", "SGD", "BRL", "IDR", "THB"].includes(currency)) {
     throw new Error(`${currency} branch funding is not available in this testnet demo`)
   }
-  const { data: membership } = await supabase
-    .from("sancus_memberships")
-    .select("id")
-    .eq("company_id", input.companyId)
-    .eq("user_id", input.employeeId)
-    .eq("status", "ACTIVE")
-    .in("role", ["EMPLOYEE", "FINANCE"])
-    .maybeSingle()
-  if (!membership) throw new Error("The employee is not active in the selected company")
-
   const { data: company } = await supabase
     .from("sancus_companies")
-    .select("id, name, base_currency")
+    .select("id, parent_id, root_id, name, country, base_currency, created_at")
     .eq("id", input.companyId)
     .maybeSingle()
   if (!company) throw new Error("The employee's company no longer exists")
+
+  const [{ data: companies }, { data: memberships }] = await Promise.all([
+    supabase
+      .from("sancus_companies")
+      .select("id, parent_id, root_id, name, country, base_currency, created_at")
+      .eq("root_id", company.root_id),
+    supabase
+      .from("sancus_memberships")
+      .select("company_id, user_id, role, status")
+      .eq("user_id", input.employeeId)
+      .eq("status", "ACTIVE"),
+  ])
+  const role = effectiveRole(
+    (companies ?? []) as CompanyRow[],
+    (memberships ?? []) as MembershipRow[],
+    input.employeeId,
+    input.companyId,
+  ).role
+  if (role !== "EMPLOYEE" && role !== "FINANCE") {
+    throw new Error("The employee is not active in the selected company")
+  }
   if (String(company.base_currency).toUpperCase() !== currency) {
     throw new Error(`${company.name} is funded in ${company.base_currency}, not ${currency}`)
   }

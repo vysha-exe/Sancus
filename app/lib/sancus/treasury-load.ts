@@ -32,7 +32,7 @@ export async function loadTreasuryInputs(
   const achQuery = supabase.from("sancus_ach_payments").select("status, usdc_amount_minor, funded_onchain, created_at").gte("created_at", BALANCE_SINCE)
   const pixQuery = supabase.from("sancus_pix_payments").select("status, amount_brl_minor, created_at").gte("created_at", BALANCE_SINCE)
   // Each payment counts in exactly one scope: the company that made it, or personal (no company).
-  const [walletsRes, payoutsRes, ledgerRes, achRes, pixRes, live] = await Promise.all([
+  const [walletsRes, payoutsRes, ledgerRes, achRes, pixRes, bankRes, live] = await Promise.all([
     company ? walletsQuery.in("company_id", company) : walletsQuery.eq("user_id", userId).is("company_id", null),
     company ? payoutsQuery.in("company_id", company) : payoutsQuery.eq("user_id", userId).is("company_id", null),
     company
@@ -40,6 +40,9 @@ export async function loadTreasuryInputs(
       : supabase.from("sancus_ledger_entries").select("account, direction, amount_minor").eq("user_id", userId),
     company ? achQuery.in("company_id", company) : achQuery.eq("user_id", userId).is("company_id", null),
     company ? pixQuery.in("company_id", company) : pixQuery.eq("user_id", userId).is("company_id", null),
+    company
+      ? Promise.resolve({ data: null })
+      : supabase.from("sancus_personal_bank_accounts").select("balance_minor").eq("user_id", userId).maybeSingle(),
     getLiveRates(),
   ])
 
@@ -89,6 +92,8 @@ export async function loadTreasuryInputs(
   return {
     wallets,
     gatewayMinor,
+    // Bank ledgers use cents; treasury summaries use six-decimal USD/USDC units.
+    bankMinor: company ? 0n : BigInt(bankRes.data?.balance_minor ?? 0) * 10_000n,
     payouts,
     ledgerRows: (ledgerRes.data ?? []) as EntryRow[],
     simulated: simulatedSpend({

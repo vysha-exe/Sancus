@@ -21,13 +21,13 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
       .eq("status", "ACTIVE"),
     admin
       .from("sancus_spending_methods")
-      .select("id, method_type, provider, label, currency, monthly_limit_minor, status, created_at")
+      .select("id, company_id, method_type, provider, label, currency, monthly_limit_minor, status, created_at")
       .eq("employee_id", user.id)
       .neq("status", "REVOKED")
       .order("created_at", { ascending: true }),
     admin
       .from("sancus_cards")
-      .select("id, label, currency, monthly_limit_minor, last_four, status, simulated, created_at")
+      .select("id, company_id, label, currency, monthly_limit_minor, last_four, status, simulated, created_at")
       .eq("employee_id", user.id)
       .neq("status", "TERMINATED")
       .order("created_at", { ascending: true }),
@@ -72,6 +72,7 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
     methods: [
       ...(cards ?? []).map((card) => ({
         id: card.id,
+        companyId: card.company_id,
         type: "CARD" as const,
         provider: "MARQETA",
         label: card.label,
@@ -85,6 +86,7 @@ export const GET = withAuth(async (_req, { user, supabase }) => {
       })),
       ...(methods ?? []).map((x) => ({
       id: x.id,
+      companyId: x.company_id,
       type: x.method_type,
       provider: x.provider,
       label: x.label,

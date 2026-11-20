@@ -4,7 +4,8 @@
 // timeline. Backed by /api/sancus/recipients and /api/sancus/payments; the same spending policy,
 // approvals and ledger as every other Sancus payout.
 import Link from "next/link"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { INVOICE_PAY_STORAGE_KEY, type InvoicePayContext } from "@/lib/sancus/invoices"
 import { notifyApprovalsChanged } from "@/lib/sancus/use-live-approvals"
 
 type Recipient = {
@@ -77,6 +78,20 @@ export function AchPayout() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [invoice, setInvoice] = useState<InvoicePayContext | null>(null)
+  const invoiceApplied = useRef(false)
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(INVOICE_PAY_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as InvoicePayContext
+      if (parsed.rail === "ACH") setInvoice(parsed)
+      sessionStorage.removeItem(INVOICE_PAY_STORAGE_KEY)
+    } catch {
+      setInvoice(null)
+    }
+  }, [])
 
   const load = useCallback(async () => {
     try {
@@ -98,6 +113,31 @@ export function AchPayout() {
     const t = setTimeout(load, 0)
     return () => clearTimeout(t)
   }, [load])
+
+  useEffect(() => {
+    if (state !== "ready" || !invoice || invoiceApplied.current) return
+    const details = invoice.paymentDetails
+    const last4 = details?.accountNumber?.replace(/\D/g, "").slice(-4)
+    const saved = recipients.find((recipient) =>
+      recipient.name.trim().toLowerCase() === (details?.accountName || invoice.supplier).trim().toLowerCase()
+      && (!last4 || recipient.accountMasked.endsWith(last4))
+    )
+    setAmount(String(invoice.amount))
+    setReference(invoice.invoiceNumber ?? "")
+    if (saved) {
+      setRecipientId(saved.id)
+      setAdding(false)
+    } else {
+      setAdding(true)
+      setForm({
+        name: details?.accountName || invoice.supplier,
+        routingNumber: details?.routingNumber || "",
+        accountNumber: details?.accountNumber || "",
+        accountType: details?.accountType || "CHECKING",
+      })
+    }
+    invoiceApplied.current = true
+  }, [invoice, recipients, state])
 
   const active = useMemo(() => payments.find((p) => p.id === activeId) ?? payments[0] ?? null, [payments, activeId])
 
@@ -191,6 +231,11 @@ export function AchPayout() {
       setPayments((prev) => [body.payment, ...prev.filter((p) => p.id !== body.payment.id)])
       setActiveId(body.payment.id)
       if (body.needsApproval) notifyApprovalsChanged()
+      const terminalFailure = ["FAILED", "RETURNED", "REJECTED"].includes(body.payment.status)
+      if (invoice?.invoiceId && !body.needsApproval && !terminalFailure) {
+        const marked = await fetch(`/api/sancus/invoices/${invoice.invoiceId}/pay`, { method: "POST" })
+        if (!marked.ok) setError("ACH was submitted, but the invoice could not be marked paid.")
+      }
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -247,7 +292,7 @@ export function AchPayout() {
       <section className="tile s7" aria-labelledby="ach-send">
         <div className="tile-head">
           <h2 className="tile-title" id="ach-send">
-            Send USD to a US bank
+            {invoice ? `Pay invoice ${invoice.invoiceNumber || ""}`.trim() : "Send USD to a US bank"}
           </h2>
           <span className="sx-pill sx-pill--settled">ACH</span>
         </div>

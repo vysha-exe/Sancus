@@ -134,7 +134,17 @@ export default function AssignMethodPage() {
 
   useEffect(() => {
     if (!validInitialId) return
-    void fetch(`/api/sancus/companies/members/${initialId}`, { cache: "no-store" })
+    const searchParams = new URLSearchParams(window.location.search)
+    const requestedKind: Kind = searchParams.get("kind") === "card" ? "card" : "qr"
+    const requestedCompanyId = searchParams.get("companyId")
+    const companyQuery = requestedCompanyId && /^[0-9a-f-]{36}$/i.test(requestedCompanyId)
+      ? `?companyId=${encodeURIComponent(requestedCompanyId)}`
+      : ""
+    if (requestedKind === "card") {
+      setKind("card")
+      setName("Office and supplies")
+    }
+    void fetch(`/api/sancus/companies/members/${initialId}${companyQuery}`, { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) return
         const body = await res.json()
@@ -145,7 +155,7 @@ export default function AssignMethodPage() {
         const next = countryForCode(body.company?.country)
         const nextInfo = countryInfo[next]
         setCountry(next)
-        setLimitRaw(formatLocal(nextInfo.code, kind === "card" ? nextInfo.defaultCard : nextInfo.defaultQr))
+        setLimitRaw(formatLocal(nextInfo.code, requestedKind === "card" ? nextInfo.defaultCard : nextInfo.defaultQr))
       })
       .catch(() => undefined)
       .finally(() => setLiveLoaded(true))

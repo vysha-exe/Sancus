@@ -18,6 +18,8 @@ const paymentDetailsSchema = z.object({
   bankName: z.string().trim().max(120).nullable().optional(),
   accountName: z.string().trim().max(160).nullable().optional(),
   accountNumber: z.string().trim().max(100).nullable().optional(),
+  routingNumber: z.string().trim().max(20).nullable().optional(),
+  accountType: z.enum(["CHECKING", "SAVINGS"]).nullable().optional(),
   swift: z.string().trim().max(34).nullable().optional(),
 })
 const manualSchema = z.object({
@@ -102,6 +104,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
         bankName: manual.paymentDetails?.bankName || null,
         accountName: manual.paymentDetails?.accountName || null,
         accountNumber: manual.paymentDetails?.accountNumber || null,
+        routingNumber: manual.paymentDetails?.routingNumber || null,
+        accountType: manual.paymentDetails?.accountType || null,
         swift: manual.paymentDetails?.swift || null,
       },
     }
