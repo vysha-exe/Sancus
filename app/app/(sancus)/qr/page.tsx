@@ -326,10 +326,17 @@ function ReceivePanel({ initialCurrency, initialAmount, initialNote }: { initial
     const n = Number((opts.amount ?? "").replace(/,/g, ""))
     if (n > 0) qs.set("amount", String(n))
     if (opts.note?.trim()) qs.set("note", opts.note.trim())
-    const res = await fetch(`/api/sancus/qr?${qs}`, { cache: "no-store" }).catch(() => null)
+    const get = () => fetch(`/api/sancus/qr?${qs}`, { cache: "no-store" }).catch(() => null)
+    let res = await get()
+    // A session that just expired is usually refreshed by the first call; try once more.
+    if (res?.status === 401) {
+      await new Promise((r) => setTimeout(r, 600))
+      res = await get()
+    }
     const body = await res?.json().catch(() => null)
+    if (res?.status === 401) return setError("Your session expired. Refresh the page (or sign in again) and try once more.")
     if (!res?.ok || !body?.url) return setError(body?.error ?? "Couldn't make your code")
-    const image = await QRCode.toDataURL(body.url, { width: 560, margin: 1, errorCorrectionLevel: "M" })
+    const image = await QRCode.toDataURL(body.url, { width: 640, margin: 4, errorCorrectionLevel: "L" })
     setCode({ url: body.url, name: body.receiver.name, image, amount: body.amount, currency: body.currency, note: body.note })
   }, [])
 
