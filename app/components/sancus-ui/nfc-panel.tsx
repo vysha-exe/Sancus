@@ -69,21 +69,22 @@ const IconCheck = () => (
 )
 
 export function NfcPanel({ card, onPaid }: { card: Card | null; onPaid: () => void }) {
-  const { account } = useAccount()
-  const isAdmin = account?.type === "ADMIN"
+  const { account, ready: accountReady } = useAccount()
+  // Guest demo (no session) behaves like admin — same as the rest of the app.
+  const isAdmin = !account || account.type === "ADMIN"
   const canReceive = account ? account.type !== "EMPLOYEE" : true
   const [tab, setTab] = useState<"receive" | "pay">("pay")
   const [defaultedTab, setDefaultedTab] = useState(false)
 
   // Businesses mostly take payments; everyone else mostly pays.
   useEffect(() => {
-    if (defaultedTab || !account) return
+    if (defaultedTab || !accountReady) return
     const t = setTimeout(() => {
-      setTab(account.type === "ADMIN" || account.type === "BRANCH" ? "receive" : "pay")
+      setTab(!account || account.type === "ADMIN" || account.type === "BRANCH" ? "receive" : "pay")
       setDefaultedTab(true)
     }, 0)
     return () => clearTimeout(t)
-  }, [account, defaultedTab])
+  }, [account, accountReady, defaultedTab])
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
