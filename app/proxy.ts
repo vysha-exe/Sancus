@@ -80,7 +80,6 @@ export async function proxy(request: NextRequest) {
   }
 
   const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);
-  const demoGuest = request.cookies.get(DEMO_GUEST_COOKIE)?.value === "1";
   if (pathname === "/auth/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
@@ -105,11 +104,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // Demo-login guest cookie unlocks app screens with demo data (no Supabase session).
-  // Must run before the !hasEnvVars / unauthenticated bounces, or Open demo loops to /sign-in.
-  if (demoGuest && isProtected) {
-    return response;
-  }
+  // Guest demo cookie no longer unlocks the app — real Supabase (or simple) auth required.
 
   // Without browser Supabase config, the small signed-cookie login still protects the app.
   if (!hasEnvVars) {

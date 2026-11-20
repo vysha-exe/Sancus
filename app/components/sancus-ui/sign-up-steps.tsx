@@ -14,13 +14,14 @@ function SignInLink() {
   )
 }
 
-/** Step 1: name and email. Sends a real Supabase email OTP. */
+/** Step 1: name, email, and password. Sends a real Supabase email OTP. */
 export function SignUpEmailStep() {
   const router = useRouter()
   const { data, update } = useSignUp()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const ready = data.agreed && data.firstName.trim() !== "" && data.email.trim() !== ""
+  const passwordOk = data.password.length >= 8
+  const ready = data.agreed && data.firstName.trim() !== "" && data.email.trim() !== "" && passwordOk
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -64,6 +65,7 @@ export function SignUpEmailStep() {
               autoComplete="given-name"
               value={data.firstName}
               onChange={(e) => update({ firstName: e.target.value })}
+              required
             />
           </label>
           <label className="sx-field">
@@ -74,7 +76,21 @@ export function SignUpEmailStep() {
               autoComplete="email"
               value={data.email}
               onChange={(e) => update({ email: e.target.value })}
+              required
             />
+          </label>
+          <label className="sx-field">
+            <span className="sx-label">Password</span>
+            <input
+              className="sx-field__input"
+              type="password"
+              autoComplete="new-password"
+              value={data.password}
+              onChange={(e) => update({ password: e.target.value })}
+              required
+              minLength={8}
+            />
+            <span className="sx-field__help">At least 8 characters. You&apos;ll use this to sign in.</span>
           </label>
           <label className="check">
             <input type="checkbox" checked={data.agreed} onChange={(e) => update({ agreed: e.target.checked })} />
@@ -88,9 +104,6 @@ export function SignUpEmailStep() {
           <button type="submit" className="sx-btn sx-btn--primary" disabled={!ready || busy}>
             {busy ? "Sending code…" : "Continue"}
           </button>
-          <Link href="/demo" className="sx-btn sx-btn--secondary">
-            Try the demo
-          </Link>
         </div>
       </form>
     </AuthShell>
@@ -168,6 +181,12 @@ export function SignUpCodeStep() {
         type: "email",
       })
       if (verifyError) throw verifyError
+      // OTP creates a session but no password; set the one collected on step 1
+      // so /sign-in with email + password works afterward.
+      if (data.password.length >= 8) {
+        const { error: passwordError } = await supabase.auth.updateUser({ password: data.password })
+        if (passwordError) throw passwordError
+      }
       router.push("/sign-up/account-type")
     } catch (err) {
       setError(err instanceof Error ? err.message : "That code didn’t work")

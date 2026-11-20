@@ -5,12 +5,7 @@ import { useEffect, useState } from "react"
 import { HomeBalance, type HomeTreasuryPositions } from "@/components/sancus-ui/home-balance"
 import { LatestPayments } from "@/components/sancus-ui/latest-payments"
 import { NeedsYou } from "@/components/sancus-ui/needs-you"
-import {
-  bills,
-  monthStats,
-  teamSpending,
-  workspace,
-} from "@/lib/sancus/demo-data"
+import { workspace } from "@/lib/sancus/demo-data"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { accountDisplayName, useAccount } from "@/lib/sancus/use-account"
 import { countryByCode } from "@/lib/sancus/countries"
@@ -151,24 +146,26 @@ export default function HomePage() {
               <h2 className="tile-title" id="month">
                 This month
               </h2>
-              <span className="body-s muted">{monthStats.label}</span>
+              <span className="body-s muted">
+                {new Date().toLocaleString(undefined, { month: "long" })}
+              </span>
             </div>
             <div className="kv">
               <span>Money in</span>
-              <span style={{ color: "var(--settled)" }}>{monthStats.moneyIn}</span>
+              <span style={{ color: "var(--settled)" }}>$0.00</span>
             </div>
             <div className="kv">
               <span>Money out</span>
-              <span>{monthStats.moneyOut}</span>
+              <span>$0.00</span>
             </div>
             <div className="kv">
               <span>Fees</span>
-              <span>{monthStats.fees}</span>
+              <span>$0.00</span>
             </div>
             {!personal ? (
               <div className="kv">
                 <span>Held for cards</span>
-                <span style={{ color: "var(--held)" }}>{monthStats.held}</span>
+                <span style={{ color: "var(--held)" }}>$0.00</span>
               </div>
             ) : null}
           </section>
@@ -185,19 +182,11 @@ export default function HomePage() {
                   See all
                 </Link>
               </div>
-              {teamSpending.map((row) => (
-                <div key={row.who} style={{ display: "grid", gap: 6 }}>
-                  <div className="kv">
-                    <span className="trunc">{row.who}</span>
-                    <span>{row.used}</span>
-                  </div>
-                  <div className="meter" role="progressbar" aria-valuenow={row.pct} aria-valuemin={0} aria-valuemax={100}>
-                    <i style={{ width: `${row.pct}%` }} />
-                  </div>
-                </div>
-              ))}
-              <div className="tile-foot">
-                <span className="body-s muted">3 of 5 methods, most used first</span>
+              <div className="empty">
+                No cards or QR yet.
+                <Link href="/team" className="sx-btn sx-btn--secondary sx-btn--sm">
+                  Give someone a card
+                </Link>
               </div>
             </section>
 
@@ -210,23 +199,11 @@ export default function HomePage() {
                   Invoices
                 </Link>
               </div>
-              <div className="sx-rows">
-                {bills.map((b) => (
-                  <Link key={b.who} href="/invoices" className="sx-row">
-                    <span className="sx-row__who">{b.who}</span>
-                    <span className="sx-row__amount">{b.amount}</span>
-                    <span className="sx-row__meta">
-                      <span className="sx-rail">{b.rail}</span>
-                      {b.meta}
-                    </span>
-                    <span className="sx-row__status">
-                      <span className="sx-pill sx-pill--pending">{b.status}</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-              <div className="tile-foot">
-                <span className="body-s muted">About $3,003.68 together</span>
+              <div className="empty">
+                Drop in a supplier&apos;s invoice and we&apos;ll get it ready to pay.
+                <Link href="/invoices" className="sx-btn sx-btn--secondary sx-btn--sm">
+                  Add an invoice
+                </Link>
               </div>
             </section>
           </>

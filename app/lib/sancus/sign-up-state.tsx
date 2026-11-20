@@ -2,12 +2,14 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
 
-/** Mock sign-up answers, carried across the steps by the /sign-up layout (kept in memory only). Defaults follow the wireframes (Café Paulista demo). */
+/** Sign-up answers, carried across the steps by the /sign-up layout (kept in memory only). */
 export type AccountType = "personal" | "business"
 
 export type SignUpData = {
   firstName: string
   email: string
+  /** Set on step 1 so password sign-in works after OTP verify. */
+  password: string
   agreed: boolean
   accountType: AccountType
   /** Full legal name for personal accounts (wireframe “About you”). */
@@ -24,17 +26,18 @@ export type SignUpData = {
 }
 
 export const SIGN_UP_DEFAULTS: SignUpData = {
-  firstName: "Admin",
-  email: "admin@gmail.com",
-  agreed: true,
+  firstName: "",
+  email: "",
+  password: "",
+  agreed: false,
   accountType: "business",
-  fullName: "Admin User",
-  company: "Café Paulista Ltda",
+  fullName: "",
+  company: "",
   country: "United States",
-  currency: "BRL",
+  currency: "USD",
   invites: [
-    { email: "rafael@cafepaulista.com.br", role: "Finance" },
-    { email: "ana@cafepaulista.com.br", role: "Employee" },
+    { email: "", role: "Employee" },
+    { email: "", role: "Employee" },
     { email: "", role: "Employee" },
   ],
   invitesSent: 0,

@@ -90,9 +90,9 @@ export function useLiveTreasury(refreshKey?: string | number, scope: string | nu
 
   if (!visibleSummary) {
     return {
-      source: "demo",
-      availableLabel: "***",
-      meta: "***",
+      source: loading ? "demo" : "live",
+      availableLabel: loading ? "***" : "$0.00",
+      meta: loading ? "***" : "",
       loading,
       error,
       summary: null,

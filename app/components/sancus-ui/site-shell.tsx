@@ -1,6 +1,5 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
-import { DemoLink } from "./demo-link"
 import { RisingColumn } from "./logo"
 import { SiteNavLinks, type SiteNavKey } from "./site-nav-links"
 
@@ -78,7 +77,9 @@ function SiteFooter() {
               <Link className="sx-btn sx-btn--primary" href="/sign-up">
                 Open your account
               </Link>
-              <DemoLink className="sx-btn sx-btn--secondary">Try the demo</DemoLink>
+              <Link className="sx-btn sx-btn--secondary" href="/sign-in">
+                Sign in
+              </Link>
             </div>
           </div>
           <div className="foot-meta">

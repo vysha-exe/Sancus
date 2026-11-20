@@ -127,14 +127,10 @@ export function LoginForm({
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{" "}
               <Link
-                href="/auth/sign-up"
+                href="/sign-up"
                 className="underline underline-offset-4"
               >
                 Sign up
-              </Link>
-              {" · "}
-              <Link href="/demo" className="underline underline-offset-4">
-                Enter the demo
               </Link>
             </div>
           </form>
