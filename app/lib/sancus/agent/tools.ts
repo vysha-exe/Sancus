@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod/v4"
 import type { SancusAccount } from "@/lib/sancus/accounts"
 import { applyCompanyBalances, type CompanyBalanceSnapshot, type CompanyNode } from "@/lib/sancus/companies"
+import { localBankMinorToReportingMinor } from "@/lib/sancus/company-total"
 import { recipientsFor } from "@/lib/sancus/demo-data"
 import { signProposal, type Proposal, type ProposalKind } from "./proposals"
 import { payX402 } from "./x402-wallet"
@@ -224,6 +225,136 @@ function receiveQrTool(ctx: AgentContext): AgentTool {
       return `Opened Pay with QR on My code: a QR to receive ${i.amount ? `${i.amount} ${i.currency}` : `any amount in ${i.currency}`}${i.note ? ` for "${i.note}"` : ""}. Tell the person it's on screen and the payer just scans it.`
     }),
   })
+}
+
+/** One account in the company (HQ or a branch) as GET /api/sancus/branches/[id] returns it. */
+type OrgAccount = {
+  id: string
+  name: string
+  country: string | null
+  currency: string
+  isRoot: boolean
+  /** False: name only (no balance), e.g. HQ seen from a branch admin. */
+  canSee: boolean
+  /** This person may move money out of this account (owner, admin or finance there). */
+  canSendFrom: boolean
+  /** HQ: USDC, 6 decimals. Branch: local operating-bank cents. */
+  availableMinor: string
+}
+
+/** HQ and every branch, from the same endpoint the Branches › Move money screen uses. */
+async function orgAccounts(ctx: AgentContext): Promise<OrgAccount[] | string> {
+  let anchor = ctx.companyId
+  if (!anchor) {
+    const { body } = await api<{ tree?: CompanyNode[] }>(ctx, "/api/sancus/companies/me")
+    anchor = body.tree?.[0]?.id ?? null
+  }
+  if (!anchor) return "This workspace has no company accounts."
+  const { status, body } = await api<{ branch?: OrgAccount; sources?: OrgAccount[]; error?: string }>(ctx, `/api/sancus/branches/${anchor}`)
+  if (status !== 200 || !body.branch) return `Couldn't load the company's accounts: ${body.error ?? status}`
+  return [body.branch, ...(body.sources ?? [])]
+}
+
+/** Finds an account by id or by what the person called it ("Bangkok", "new york", "HQ").
+ *  Returns the account, or a sentence saying why it couldn't pick one. */
+export function resolveAccount<A extends { id: string; name: string; isRoot: boolean }>(accounts: A[], query: string): A | string {
+  const q = query.trim().toLowerCase()
+  const byId = accounts.find((a) => a.id.toLowerCase() === q)
+  if (byId) return byId
+  if (["hq", "headquarters", "head office", "parent", "main account"].includes(q)) {
+    return accounts.find((a) => a.isRoot) ?? "there's no HQ account."
+  }
+  const exact = accounts.filter((a) => a.name.toLowerCase() === q)
+  if (exact.length === 1) return exact[0]
+  const partial = accounts.filter((a) => a.name.toLowerCase().includes(q))
+  if (partial.length === 1) return partial[0]
+  const names = accounts.map((a) => a.name).join(", ")
+  return partial.length > 1
+    ? `"${query}" matches more than one account (${partial.map((a) => a.name).join(", ")}). Ask which one.`
+    : `there's no account called "${query}". The accounts are: ${names}.`
+}
+
+/** Available balance in USD (6 decimals), the unit transfers are entered in. */
+const availableUsdMinor = (a: OrgAccount) =>
+  a.isRoot ? BigInt(a.availableMinor || "0") : localBankMinorToReportingMinor(a.availableMinor || "0", a.currency, "USD")
+
+/** Moving money between HQ and branches: the same request, role check, policy and approvals as
+ *  Branches › Move money. The API decides; these tools only refuse early with a clearer message. */
+function transferTools(ctx: AgentContext): AgentTool[] {
+  return [
+    defineTool({
+      name: "list_accounts",
+      description:
+        "HQ and every branch of this company with currency and available balance. Use to answer questions about branches. You don't need it before propose_internal_transfer, which takes branch names and checks everything itself.",
+      inputSchema: z.object({}),
+      run: step(ctx, "list_accounts", () => "Looked up your branches", async () => {
+        const accounts = await orgAccounts(ctx)
+        if (typeof accounts === "string") return accounts
+        const rows = accounts.map((a) =>
+          [
+            a.id,
+            `${a.name}${a.isRoot ? " (HQ)" : ""}`,
+            a.isRoot ? "USDC" : a.currency,
+            a.canSee ? `available ${usd6(availableUsdMinor(a))}` : "balance hidden",
+          ].join(" | ")
+        )
+        const senders = accounts.filter((a) => a.canSendFrom).map((a) => a.name)
+        return `${rows.join("\n")}\nThis person can send money out of: ${senders.join(", ") || "none of them"}. Any account can receive.`
+      }),
+    }),
+
+    defineTool({
+      name: "propose_internal_transfer",
+      description:
+        "Prepare a move of money between two accounts of the same company (HQ to a branch, a branch to HQ, or branch to branch) for the person to confirm. Pass the branch names exactly as the person said them (e.g. from 'Bangkok' to 'New York', or 'HQ'). This tool checks who may send from which account and whether there's enough money, and explains any problem: never refuse a transfer yourself, call this and relay what it says. Does NOT move money: the person sees a confirm card. Over the spending policy it goes to Approvals after confirming.",
+      inputSchema: z.object({
+        from: z.string().describe("Account the money LEAVES: a branch name like 'Bangkok', 'HQ', or an id from list_accounts"),
+        to: z.string().describe("Account that RECEIVES the money: a branch name like 'New York', 'HQ', or an id from list_accounts"),
+        amount_usd: z.union([z.string(), z.number()]).describe("Amount in US dollars, e.g. 1 or 250.50"),
+        memo: z.string().max(140).optional(),
+      }),
+      run: step(ctx, "propose_internal_transfer", (i) => `Checked a $${i.amount_usd} transfer from ${i.from} to ${i.to}`, async (i) => {
+        const accounts = await orgAccounts(ctx)
+        if (typeof accounts === "string") throw new Error(accounts)
+        const from = resolveAccount(accounts, i.from)
+        const to = resolveAccount(accounts, i.to)
+        // Refusals throw, so the step shows as failed and the model gets "Error: <reason>" to relay.
+        if (typeof from === "string") throw new Error(`Not prepared: ${from}`)
+        if (typeof to === "string") throw new Error(`Not prepared: ${to}`)
+        if (from.id === to.id) throw new Error("Not prepared: the money has to go to a different account.")
+        if (!from.canSendFrom) {
+          throw new Error(`Not prepared: this person doesn't have permission to move money out of ${from.name} (the account the money would leave). Only an owner, admin or finance member there can.`)
+        }
+        const amount = String(i.amount_usd).replace(/[$,\s]/g, "")
+        if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) throw new Error("Not prepared: the amount must be a positive dollar amount with at most two decimals.")
+        if (Number(amount) > 200_000) throw new Error("Not prepared: that's over the $200,000 limit for one transfer.")
+        const amountMinor = BigInt(Math.round(Number(amount) * 100)) * 10_000n
+        if (from.canSee && amountMinor > availableUsdMinor(from)) {
+          throw new Error(`Not prepared: ${from.name} only has ${usd6(availableUsdMinor(from))} available, less than $${amount}. Offer a smaller amount.`)
+        }
+        const label = (a: OrgAccount) => `${a.name}${a.isRoot ? " (HQ)" : ""}`
+        const shown = Number(amount).toLocaleString("en-US", { minimumFractionDigits: amount.includes(".") ? 2 : 0, maximumFractionDigits: 2 })
+        return propose(
+          ctx,
+          "transfer",
+          `Move US$${shown} from ${from.name} to ${to.name}`,
+          [
+            { label: "From", value: `${label(from)} · ${from.isRoot ? "USDC" : from.currency}` },
+            { label: "To", value: `${label(to)} · ${to.isRoot ? "USDC" : to.currency}` },
+            { label: "Amount", value: `US$${shown}` },
+            ...(i.memo ? [{ label: "Memo", value: i.memo }] : []),
+          ],
+          {
+            method: "POST",
+            path: "/api/sancus/internal-transfers",
+            idempotent: true,
+            body: { sourceCompanyId: from.id, destinationCompanyId: to.id, amountUsdc: Number(amount), ...(i.memo ? { memo: i.memo } : {}) },
+          },
+          "Settles in USDC on Arc at the fixed rate. Over your limits it waits for an approver."
+        )
+      }),
+    }),
+  ]
 }
 
 export function buildTools(ctx: AgentContext): AgentTool[] {
@@ -491,6 +622,8 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
   }
   // Branch admins can't send money: they don't get the payment tools at all.
   const payTools = new Set(["list_recipients", "quote_payment", "propose_payment"])
+  // Admins and branch admins move money between HQ and branches (the API checks the role per account).
+  if (ctx.account.type === "ADMIN" || ctx.account.type === "BRANCH") tools.push(...transferTools(ctx))
   tools.push(openPageTool(ctx), receiveQrTool(ctx))
   return ctx.account.can("money.send") ? tools : tools.filter((t) => !payTools.has(t.name))
 }

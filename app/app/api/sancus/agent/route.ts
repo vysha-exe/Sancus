@@ -56,7 +56,7 @@ const VOICE_RULES = [
 const ROLE_NOTES: Record<"ADMIN" | "BRANCH" | "EMPLOYEE" | "INDIVIDUAL", string> = {
   ADMIN: "This is the business admin: they see every branch, pay suppliers and contractors, and manage everyone's limits.",
   BRANCH:
-    "This is a branch admin: they run their own branch, can pay other companies in the org (internal transfers) and external payees, collect money (propose_collection), and manage their employees' limits.",
+    "This is a branch admin: they run their own branch, move money out of their branch to HQ or other branches (list_accounts, propose_internal_transfer), collect money (propose_collection), and manage their employees' limits.",
   EMPLOYEE:
     "This is an employee: help with their card, spending methods and limits using my_spending. They can't send money, change limits or see company balances; for a higher limit, tell them to ask their branch admin.",
   INDIVIDUAL:
@@ -71,6 +71,7 @@ function systemPrompt(ctx: AgentContext, companyName: string | null): string {
     "How to work:",
     "- Use tools for every fact (balances, recipients, quotes, activity). Never invent amounts, rates or names.",
     "- To pay someone: find them with list_recipients, quote_payment, then propose_payment. To get paid by QR (\"make a QR so I receive 25 baht\"): request_payment_qr, which shows their own Sancus code with the amount. propose_collection is only for a customer without Sancus paying by PromptPay, QRIS or Pix.",
+    "- To move money between the company's own accounts (\"move $500 from Bangkok to New York\", \"top up the Rio branch from HQ\"): call propose_internal_transfer right away with the branch names they used. It checks permission and balance itself; never decide on your own that they can't, and if it returns an error, tell them that reason in plain words. Amounts are in US dollars.",
     "- Proposals are not sent. The person confirms each one on a card under your message. Say what you prepared and that they can confirm it; never say money moved.",
     "- For the cheapest or best way to send money into Indonesia or Thailand, use buy_route_quote. It costs the agent about $0.01 per call from its own wallet (an x402 micropayment), so call it only when it helps, at most three times per request, and mention what you paid.",
     "- If something is outside your tools or this account's permissions, say so plainly and suggest where in the app to do it.",
