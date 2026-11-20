@@ -73,7 +73,10 @@ export interface AppKitSendInput {
 
 export interface AppKitSendResult {
   txId: string;
+  /** For fUSDC this is the burn from the sender. */
   txHash?: string;
+  /** fUSDC only: the mint to the recipient (the second Arc transaction). */
+  mintTxHash?: string;
   estimatedFee?: string;
 }
 
@@ -196,7 +199,7 @@ export async function sendUsdcOnSameChainWithAppKit(
           amount: input.amount,
           ref: `${input.sourceWalletAddress.slice(0, 10)}-${Date.now()}`,
         });
-        return { txId: sent.txId, txHash: sent.txHash, estimatedFee: "0" };
+        return { txId: sent.txId, txHash: sent.txHash, mintTxHash: sent.mintTxHash, estimatedFee: "0" };
       }
     } catch (error) {
       // If face USDC path fails hard, surface it — don't silently spend real USDC.

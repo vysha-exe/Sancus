@@ -802,3 +802,11 @@ body:has(.frame) {
   .proc-log__when { grid-column: 1 / -1; }
   .proc-log__meta { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* Process log: each onchain leg (fUSDC burn, then mint) with its own Arc link. */
+.proc-legs { display: grid; gap: 8px; margin: 4px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-000); }
+.proc-leg { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.proc-leg__text { display: grid; gap: 2px; font-size: 14px; line-height: 20px; }
+.proc-leg__text small { color: var(--ink-muted); font-size: 12px; line-height: 16px; }
+.proc-leg__hash { font: 500 12px/1.4 var(--font-mono); color: var(--accent); text-decoration: none; white-space: nowrap; }
+.proc-leg__hash:hover { text-decoration: underline; }

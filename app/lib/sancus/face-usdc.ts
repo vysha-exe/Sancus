@@ -48,7 +48,7 @@ export async function sendFaceUsdc(input: {
   /** Human decimal string, e.g. "12.50" */
   amount: string
   ref: string
-}): Promise<{ txId: string; txHash: string }> {
+}): Promise<{ txId: string; txHash: string; mintTxHash: string }> {
   if (!FACE_USDC) throw new Error("Face USDC isn't deployed")
   const minor = parseUnits(input.amount, FACE_USDC.decimals)
   if (minor <= 0n) throw new Error("Amount must be positive")
@@ -59,7 +59,9 @@ export async function sendFaceUsdc(input: {
     await faceUsdcMint(input.from, FACE_USDC_FAUCET_MINOR, `sancus:face-usdc:topup:${input.ref}`)
   }
 
+  // Two Arc transactions: burn from the payer, then mint to the receiver. Both hashes are returned
+  // so the Process log can show each leg.
   const burnHash = await faceUsdcBurn(input.from, minor, `sancus:face-usdc:burn:${input.ref}`)
-  await faceUsdcMint(input.to, minor, `sancus:face-usdc:mint:${input.ref}`)
-  return { txId: burnHash, txHash: burnHash }
+  const mintHash = await faceUsdcMint(input.to, minor, `sancus:face-usdc:mint:${input.ref}`)
+  return { txId: burnHash, txHash: burnHash, mintTxHash: mintHash }
 }

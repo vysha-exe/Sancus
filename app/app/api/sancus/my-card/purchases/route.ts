@@ -56,6 +56,7 @@ export const POST = withAuth(async (req, { user }) => {
   }
 
   let txHash: string | null = null
+  let mintTxHash: string | null = null
   try {
     const onchain = await fundLocalRailOnchain(admin, user.id, card.company_id ?? null, {
       currency: "USD",
@@ -64,6 +65,7 @@ export const POST = withAuth(async (req, { user }) => {
       ref: `card:${card.id}`,
     })
     txHash = onchain?.txHash ?? null
+    mintTxHash = onchain?.mintTxHash ?? null
   } catch (error) {
     await admin.from("sancus_card_purchases").insert({
       user_id: card.user_id,
@@ -100,7 +102,7 @@ export const POST = withAuth(async (req, { user }) => {
       settled_at: now,
       provider: "MARQETA",
       simulated: true,
-      provider_payload: { txHash, network: "ARC-TESTNET" },
+      provider_payload: { txHash, mintTxHash, network: "ARC-TESTNET" },
       funding_status: "SETTLED",
       funding_amount_minor: amountMinor,
     })
@@ -117,6 +119,7 @@ export const POST = withAuth(async (req, { user }) => {
         currency: data.currency,
         status: data.status,
         txHash,
+        mintTxHash,
         createdAt: data.created_at,
       },
     },

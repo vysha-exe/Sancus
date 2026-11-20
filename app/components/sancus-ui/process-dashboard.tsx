@@ -248,6 +248,22 @@ export function ProcessDashboard() {
                             <span className="body-s muted">No on-chain hash yet</span>
                           )}
                         </div>
+                        {e.onchainLegs.length ? (
+                          <div className="proc-legs" aria-label="Onchain transactions">
+                            <span className="sx-label">Onchain on Arc testnet</span>
+                            {e.onchainLegs.map((leg) => (
+                              <div key={leg.hash} className="proc-leg">
+                                <span className="proc-leg__text">
+                                  <b>{leg.label}</b>
+                                  <small>{leg.detail}</small>
+                                </span>
+                                <a className="proc-leg__hash" href={leg.url} target="_blank" rel="noreferrer" title={leg.hash}>
+                                  {leg.hash.slice(0, 10)}…{leg.hash.slice(-6)} ↗
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                         <ol className="proc-steps">
                           {e.steps.map((s) => (
                             <li key={s.id} className={`proc-step proc-step--${s.status}`}>

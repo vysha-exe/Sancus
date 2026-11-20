@@ -42,7 +42,21 @@ function QrPage() {
   const canSend = can(account, "money.send")
   const canReceive = account ? account.type !== "EMPLOYEE" : true
   const incoming = params.get("pay")
-  const [tab, setTab] = useState<"pay" | "receive">("pay")
+  // Links (and the agent) can open "My code" with an amount ready: /qr?tab=receive&amount=25&currency=THB
+  const wantsReceive = params.get("tab") === "receive"
+  const receiveCurrency = (["USD", "THB", "IDR", "BRL"].includes((params.get("currency") ?? "").toUpperCase())
+    ? (params.get("currency") ?? "").toUpperCase()
+    : "USD") as Currency
+  const receiveAmount = params.get("amount") ?? ""
+  const receiveNote = params.get("note") ?? ""
+  const receiveKey = `${wantsReceive}|${receiveCurrency}|${receiveAmount}|${receiveNote}`
+  const [tab, setTab] = useState<"pay" | "receive">(wantsReceive ? "receive" : "pay")
+  // Already on this page when the agent opens a new receive link: switch tabs.
+  useEffect(() => {
+    if (!wantsReceive) return
+    const t = setTimeout(() => setTab("receive"), 0)
+    return () => clearTimeout(t)
+  }, [wantsReceive, receiveKey])
   const [payments, setPayments] = useState<Payment[]>([])
 
   const loadPayments = useCallback(async () => {
@@ -88,7 +102,7 @@ function QrPage() {
               }}
             />
           ) : (
-            <ReceivePanel defaultCurrency="USD" />
+            <ReceivePanel key={receiveKey} initialCurrency={receiveCurrency} initialAmount={receiveAmount} initialNote={receiveNote} />
           )}
         </section>
         <aside className="tile s5">
@@ -245,7 +259,7 @@ function PayPanel({ initialCode, canSend, onPaid }: { initialCode: string | null
         {resolved.note ? <span className="body-s">For: {resolved.note}</span> : null}
         {resolved.self ? <span className="body-s" role="alert">This is your own code.</span> : null}
         <label className="sx-field" style={{ margin: 0 }}>
-          <span className="sx-label">Amount ({resolved.currency})</span>
+          <span className="sx-label">{resolved.amount == null ? `How much do you want to send? (${resolved.currency})` : `Amount (${resolved.currency})`}</span>
           <input
             className="sx-field__input"
             inputMode="decimal"
@@ -256,7 +270,11 @@ function PayPanel({ initialCode, canSend, onPaid }: { initialCode: string | null
             autoFocus={resolved.amount == null}
           />
         </label>
-        {resolved.amount != null ? <span className="body-s muted">Amount set by {resolved.receiver.name}.</span> : null}
+        {resolved.amount != null ? (
+          <span className="body-s muted">Amount set by {resolved.receiver.name}.</span>
+        ) : (
+          <span className="body-s muted">This code doesn&apos;t include an amount. Enter what you want to send; {resolved.receiver.name} receives it in {cur(resolved.currency).label}.</span>
+        )}
         <div className="kv">
           <span>From your balance</span>
           <span>{usdc != null ? `$${usdc.toFixed(2)} USDC` : "–"}</span>
@@ -293,10 +311,11 @@ function PayPanel({ initialCode, canSend, onPaid }: { initialCode: string | null
   )
 }
 
-function ReceivePanel({ defaultCurrency }: { defaultCurrency: Currency }) {
-  const [currency, setCurrency] = useState<Currency>(defaultCurrency)
-  const [amount, setAmount] = useState("")
-  const [note, setNote] = useState("")
+function ReceivePanel({ initialCurrency, initialAmount, initialNote }: { initialCurrency: Currency; initialAmount: string; initialNote: string }) {
+  const { account } = useAccount()
+  const [currency, setCurrency] = useState<Currency>(initialCurrency)
+  const [amount, setAmount] = useState(initialAmount)
+  const [note, setNote] = useState(initialNote)
   const [code, setCode] = useState<{ url: string; name: string; image: string; amount: number | null; currency: Currency; note: string | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -316,9 +335,9 @@ function ReceivePanel({ defaultCurrency }: { defaultCurrency: Currency }) {
 
   // Show a reusable code straight away.
   useEffect(() => {
-    const t = setTimeout(() => void generate({ currency: defaultCurrency }), 0)
+    const t = setTimeout(() => void generate({ currency: initialCurrency, amount: initialAmount, note: initialNote }), 0)
     return () => clearTimeout(t)
-  }, [generate, defaultCurrency])
+  }, [generate, initialCurrency, initialAmount, initialNote])
 
   async function share() {
     if (!code) return
@@ -384,6 +403,11 @@ function ReceivePanel({ defaultCurrency }: { defaultCurrency: Currency }) {
       <p className="body-s muted" style={{ margin: 0 }}>
         The payer scans this with Sancus (or their phone camera), sees your name and the amount, and pays. The money lands in your Sancus balance as USDC. Codes with an amount expire after a day.
       </p>
+      {account && account.type !== "EMPLOYEE" ? (
+        <p className="body-s muted" style={{ margin: 0 }}>
+          Customer without Sancus paying by PromptPay, QRIS or Pix? <Link href="/receive">Make a local QR</Link>.
+        </p>
+      ) : null}
       {error ? <p className="body-s" role="alert" style={{ margin: 0, color: "var(--failed, #c0392b)" }}>{error}</p> : null}
     </div>
   )

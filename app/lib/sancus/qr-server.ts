@@ -34,7 +34,10 @@ export type QrPaymentDto = {
   usdcAmountMinor: string
   note: string | null
   status: string
+  /** fUSDC: burn from the payer */
   txHash: string | null
+  /** fUSDC: mint to the receiver */
+  mintTxHash: string | null
   createdAt: string
 }
 
@@ -50,6 +53,7 @@ export function toQrPaymentDto(row: Record<string, unknown>, me: string): QrPaym
     note: (row.note as string | null) ?? null,
     status: row.status as string,
     txHash: (row.tx_hash as string | null) ?? null,
+    mintTxHash: (row.mint_tx_hash as string | null) ?? null,
     createdAt: row.created_at as string,
   }
 }

@@ -23,6 +23,8 @@ export type XenditPayoutDto = {
   simulated: boolean
   txHash: string | null
   explorer: string | null
+  /** fUSDC mint to the settlement wallet (second leg) */
+  mintTxHash: string | null
 }
 
 export type XenditPayoutRow = {
@@ -32,7 +34,7 @@ export type XenditPayoutRow = {
   amount_minor: number | string; description: string | null; provider_transaction_id: string;
   provider_status: string; status: XenditPayoutState; failure_reason: string | null;
   settled_at: string | null; created_at: string; simulated: boolean;
-  tx_hash?: string | null; source_address?: string | null; settlement_address?: string | null;
+  tx_hash?: string | null; mint_tx_hash?: string | null; source_address?: string | null; settlement_address?: string | null;
 }
 
 export function toXenditPayoutDto(row: XenditPayoutRow): XenditPayoutDto {
@@ -47,6 +49,7 @@ export function toXenditPayoutDto(row: XenditPayoutRow): XenditPayoutDto {
     createdAt: row.created_at, simulated: row.simulated,
     txHash,
     explorer: txHash ? `https://explorer.testnet.arc.io/tx/${txHash}` : null,
+    mintTxHash: row.mint_tx_hash ?? null,
   }
 }
 

@@ -28,6 +28,7 @@ export type MyCardPurchaseDto = {
   currency: string
   status: string
   txHash: string | null
+  mintTxHash: string | null
   createdAt: string
 }
 
@@ -59,6 +60,7 @@ export const GET = withAuth(async (_req, { user }) => {
         currency: p.currency,
         status: p.status,
         txHash: (p.provider_payload as { txHash?: string } | null)?.txHash ?? null,
+        mintTxHash: (p.provider_payload as { mintTxHash?: string } | null)?.mintTxHash ?? null,
         createdAt: p.created_at,
       })
     ),

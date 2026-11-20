@@ -203,6 +203,29 @@ function openPageTool(ctx: AgentContext): AgentTool {
   })
 }
 
+/** "Make me a QR to get paid ฿25": opens Pay with QR › My code with the amount filled in. */
+function receiveQrTool(ctx: AgentContext): AgentTool {
+  return defineTool({
+    name: "request_payment_qr",
+    description:
+      "Show the person's own Sancus QR code so someone can pay them, optionally for a set amount (e.g. 'make a QR so I get 25 baht'). Opens Pay with QR on the My code tab with the amount and currency filled in. No money moves. Without an amount, whoever scans it types the amount.",
+    inputSchema: z.object({
+      amount: z.number().positive().optional().describe("Amount the person wants to receive, in `currency`"),
+      currency: z.enum(["USD", "THB", "IDR", "BRL"]).describe("Currency to receive in: USD, THB (baht), IDR (rupiah), BRL (reais)"),
+      note: z.string().max(80).optional().describe("What it's for, shown to the payer"),
+    }),
+    run: step(ctx, "request_payment_qr", (i: { currency: string; amount?: number }) => `Made a QR to receive ${i.amount ?? "any amount"} ${i.currency}`, async (i: { currency: string; amount?: number; note?: string }) => {
+      const qs = new URLSearchParams({ tab: "receive", currency: i.currency })
+      if (i.amount) qs.set("amount", String(i.amount))
+      if (i.note) qs.set("note", i.note)
+      const action: AgentAction = { type: "navigate", path: `/qr?${qs}`, label: "Pay with QR › My code" }
+      ;(ctx.actions ??= []).push(action)
+      ctx.emit?.({ type: "action", action })
+      return `Opened Pay with QR on My code: a QR to receive ${i.amount ? `${i.amount} ${i.currency}` : `any amount in ${i.currency}`}${i.note ? ` for "${i.note}"` : ""}. Tell the person it's on screen and the payer just scans it.`
+    }),
+  })
+}
+
 export function buildTools(ctx: AgentContext): AgentTool[] {
   if (ctx.account.type === "EMPLOYEE") return [...employeeTools(ctx), openPageTool(ctx)]
   const tools: AgentTool[] = [
@@ -468,6 +491,6 @@ export function buildTools(ctx: AgentContext): AgentTool[] {
   }
   // Branch admins can't send money: they don't get the payment tools at all.
   const payTools = new Set(["list_recipients", "quote_payment", "propose_payment"])
-  tools.push(openPageTool(ctx))
+  tools.push(openPageTool(ctx), receiveQrTool(ctx))
   return ctx.account.can("money.send") ? tools : tools.filter((t) => !payTools.has(t.name))
 }

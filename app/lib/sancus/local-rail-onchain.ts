@@ -15,7 +15,10 @@ export function localAmountToUsdcString(currency: string, amountMinor: number, d
 }
 
 export type LocalRailOnchainFunding = {
+  /** Burn from the treasury (fUSDC) */
   txHash: string
+  /** Mint to the settlement wallet (fUSDC) */
+  mintTxHash: string | null
   sourceAddress: string
   settlementAddress: string
   usdcAmount: string
@@ -44,6 +47,7 @@ export async function fundLocalRailOnchain(
   if (!txHash) throw new Error("On-chain settlement returned no transaction hash")
   return {
     txHash,
+    mintTxHash: sent.mintTxHash ?? null,
     sourceAddress: wallets.treasury,
     settlementAddress,
     usdcAmount,

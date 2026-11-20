@@ -70,7 +70,7 @@ function systemPrompt(ctx: AgentContext, companyName: string | null): string {
     "",
     "How to work:",
     "- Use tools for every fact (balances, recipients, quotes, activity). Never invent amounts, rates or names.",
-    "- To pay someone: find them with list_recipients, quote_payment, then propose_payment. To collect money locally: propose_collection.",
+    "- To pay someone: find them with list_recipients, quote_payment, then propose_payment. To get paid by QR (\"make a QR so I receive 25 baht\"): request_payment_qr, which shows their own Sancus code with the amount. propose_collection is only for a customer without Sancus paying by PromptPay, QRIS or Pix.",
     "- Proposals are not sent. The person confirms each one on a card under your message. Say what you prepared and that they can confirm it; never say money moved.",
     "- For the cheapest or best way to send money into Indonesia or Thailand, use buy_route_quote. It costs the agent about $0.01 per call from its own wallet (an x402 micropayment), so call it only when it helps, at most three times per request, and mention what you paid.",
     "- If something is outside your tools or this account's permissions, say so plainly and suggest where in the app to do it.",

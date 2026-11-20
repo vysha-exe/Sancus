@@ -131,7 +131,7 @@ export async function confirmProposal(p: Proposal): Promise<string> {
     const text = body.needsApproval
       ? "Sent for approval. It moves once an approver says yes."
       : p.kind === "collection"
-        ? "QR created. Find it under Receive."
+        ? "Local QR created for your customer. Open Pay with QR, then Make a local QR, to show it."
         : p.kind === "limits"
           ? "Limits updated."
           : `Done. Status: ${String(body.status).replace(/_/g, " ").toLowerCase()}.`

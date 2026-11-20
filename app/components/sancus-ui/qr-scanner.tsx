@@ -42,7 +42,7 @@ const CAMERA_ERRORS: Record<string, string> = {
 
 export function QrScanner({
   onResult,
-  autoStart = false,
+  autoStart = true,
   hint = "Point the camera at a QR code",
 }: {
   /** Called once with the decoded text; the camera stops. */

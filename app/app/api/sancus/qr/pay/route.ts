@@ -87,7 +87,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     })
     const { data: done } = await admin
       .from("sancus_qr_payments")
-      .update({ status: "COMPLETED", tx_hash: sent.txHash ?? sent.txId ?? null })
+      .update({ status: "COMPLETED", tx_hash: sent.txHash ?? sent.txId ?? null, mint_tx_hash: sent.mintTxHash ?? null })
       .eq("id", row.id)
       .select("*")
       .single()
