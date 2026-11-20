@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { resolveAccount } from "@/lib/sancus/accounts"
-import { checkApprover, EMPLOYEE_REQUEST_REASON, paymentMode } from "@/lib/sancus/approval-rules"
+import { checkApprover, checkDecision, EMPLOYEE_REQUEST_REASON, paymentMode } from "@/lib/sancus/approval-rules"
 
 // Lion City Trading (root) → Thailand → Bangkok; Acme is someone else's company.
 const companies = [
@@ -87,5 +87,25 @@ describe("paymentMode", () => {
 
   it("has a plain-English reason for requests", () => {
     expect(EMPLOYEE_REQUEST_REASON).toMatch(/admin/)
+  })
+})
+
+describe("checkDecision: withdrawing your own request", () => {
+  it("lets a branch admin withdraw their own transfer even without approval rights", () => {
+    expect(checkDecision(ploy, { requesterId: "ploy", companyId: "th" }, "decline")).toEqual({ ok: true })
+  })
+
+  it("lets an employee withdraw their own request", () => {
+    expect(checkDecision(niran, { requesterId: "niran", companyId: "bkk" }, "decline")).toEqual({ ok: true })
+  })
+
+  it("lets an admin withdraw their own payment but still not approve it", () => {
+    expect(checkDecision(maya, { requesterId: "maya", companyId: "root" }, "decline")).toEqual({ ok: true })
+    expect(checkDecision(maya, { requesterId: "maya", companyId: "root" }, "approve")).toMatchObject({ ok: false, code: "OWN_REQUEST" })
+  })
+
+  it("doesn't let a branch admin approve or decline someone else's payment", () => {
+    expect(checkDecision(ploy, { requesterId: "niran", companyId: "bkk" }, "decline")).toMatchObject({ ok: false, code: "NO_PERMISSION" })
+    expect(checkDecision(ploy, { requesterId: "niran", companyId: "bkk" }, "approve")).toMatchObject({ ok: false, code: "NO_PERMISSION" })
   })
 })
