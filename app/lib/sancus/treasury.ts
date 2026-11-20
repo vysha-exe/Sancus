@@ -3,7 +3,7 @@
 // Real balances come from the chain (Circle wallets' USDC via RPC) and from
 // Circle Gateway (unified balance). Commitments come from Sancus payouts.
 //
-//   total      = wallet USDC + Gateway USDC                    (real, onchain)
+//   total      = bank USD + wallet USDC + Gateway USDC
 //   reserved   = in-flight payouts whose USDC hasn't left yet   (still in the treasury)
 //                + in-progress simulated ACH holds
 //   inFlight   = in-flight payouts whose USDC already left      (on its way to the partner)
@@ -37,6 +37,8 @@ export type PayoutLite = {
 export type TreasuryInputs = {
   wallets: WalletBalance[]
   gatewayMinor: bigint | null
+  /** Personal bank account balance in USD minor units (6 decimals). Company bank cash is aggregated elsewhere. */
+  bankMinor?: bigint
   payouts: PayoutLite[]
   ledgerRows: EntryRow[]
   /** Money that left on simulated legs (no USDC moved onchain), see simulatedSpend(). */
@@ -97,7 +99,8 @@ export function summarizeTreasury(input: TreasuryInputs) {
 
   const walletsMinor = readable.reduce((s, w) => s + (w.usdcMinor ?? 0n), 0n)
   const gatewayMinor = input.gatewayMinor ?? 0n
-  const totalMinor = walletsMinor + gatewayMinor
+  const bankMinor = input.bankMinor ?? 0n
+  const totalMinor = bankMinor + walletsMinor + gatewayMinor
 
   let reservedMinor = 0n
   let inFlightMinor = 0n
@@ -140,6 +143,7 @@ export function summarizeTreasury(input: TreasuryInputs) {
     simulatedSpentMinor: str(simulatedSpentMinor),
     inFlightMinor: str(inFlightMinor),
     walletsMinor: str(walletsMinor),
+    bankMinor: str(bankMinor),
     gatewayMinor: input.gatewayMinor === null ? null : str(input.gatewayMinor),
     payouts: {
       inFlightCount,
