@@ -76,7 +76,7 @@ function MerchantQrPreview({ payload, label }: { payload: string; label: string 
       alt={label}
       width={200}
       height={200}
-      style={{ background: "white", borderRadius: 12, padding: 8, justify: "block", margin: "0 auto" }}
+      style={{ background: "white", borderRadius: 12, padding: 8, display: "block", margin: "0 auto" }}
     />
   )
 }
