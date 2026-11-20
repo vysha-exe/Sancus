@@ -60,12 +60,12 @@ export function SignUpForm({
     }
 
     try {
-      const confirmUrl = `${window.location.origin}/auth/confirm?next=${encodeURIComponent("/home")}`;
+      const { signupEmailRedirectTo } = await import("@/lib/sancus/app-origin");
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: confirmUrl,
+          emailRedirectTo: signupEmailRedirectTo("/home"),
         },
       });
       

@@ -24,17 +24,17 @@ export type SignUpData = {
 }
 
 export const SIGN_UP_DEFAULTS: SignUpData = {
-  firstName: "Admin",
-  email: "admin@gmail.com",
-  agreed: true,
+  firstName: "",
+  email: "",
+  agreed: false,
   accountType: "business",
-  fullName: "Admin User",
-  company: "Café Paulista Ltda",
+  fullName: "",
+  company: "",
   country: "United States",
-  currency: "BRL",
+  currency: "USD",
   invites: [
-    { email: "rafael@cafepaulista.com.br", role: "Finance" },
-    { email: "ana@cafepaulista.com.br", role: "Employee" },
+    { email: "", role: "Employee" },
+    { email: "", role: "Employee" },
     { email: "", role: "Employee" },
   ],
   invitesSent: 0,

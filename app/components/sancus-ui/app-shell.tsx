@@ -92,10 +92,9 @@ export function AppShell({
     (k) => k !== "settings" && (account?.type === "BRANCH" || showBusinessNav || (k !== "team" && k !== "branches"))
   )
   const navItems = keys.map((k) => nav.find((n) => n.key === k)).filter((n): n is (typeof nav)[number] => Boolean(n))
-  // Primary line is the account type (Business admin, Branch admin, …). Secondary is company or person.
-  // Guest demo (no account) is the business-admin demo.
-  const actorName = account ? ACCOUNT_TYPE_LABEL[account.type] : ACCOUNT_TYPE_LABEL.ADMIN
-  const actorRole = accountDisplayName(account, workspace.name)
+  // Signed-in: account type + company/person. Guest demo: company only (no "Admin" / demo email).
+  const actorName = account ? ACCOUNT_TYPE_LABEL[account.type] : workspace.name
+  const actorRole = account ? accountDisplayName(account, workspace.name) : "Demo"
 
   // Business admin (and guest admin demo): never stay in Personal — pin to HQ.
   // Demo login also sets the HQ company cookie so a leftover branch selection doesn't stick.

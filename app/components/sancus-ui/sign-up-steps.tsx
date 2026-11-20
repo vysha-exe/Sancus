@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from "react"
+import { signupEmailRedirectTo } from "@/lib/sancus/app-origin"
 import { useSignUp, validInviteCount } from "@/lib/sancus/sign-up-state"
 import { AuthShell, BUSINESS_SIGN_UP_STEPS, PERSONAL_SIGN_UP_STEPS } from "./auth-shell"
 
@@ -35,7 +36,7 @@ export function SignUpEmailStep() {
         options: {
           shouldCreateUser: true,
           data: { first_name: data.firstName.trim() },
-          emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent("/sign-up/account-type")}`,
+          emailRedirectTo: signupEmailRedirectTo("/sign-up/account-type"),
         },
       })
       if (otpError) throw otpError
@@ -143,7 +144,7 @@ export function SignUpCodeStep() {
         options: {
           shouldCreateUser: true,
           data: { first_name: data.firstName.trim() },
-          emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent("/sign-up/account-type")}`,
+          emailRedirectTo: signupEmailRedirectTo("/sign-up/account-type"),
         },
       })
       if (otpError) throw otpError
@@ -162,11 +163,12 @@ export function SignUpCodeStep() {
       const { createClient } = await import("@/lib/supabase/client")
       const supabase = createClient()
       const token = digits.join("")
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: data.email.trim(),
-        token,
-        type: "email",
-      })
+      const email = data.email.trim()
+      // Supabase may issue the code as type "email" or "signup" depending on template.
+      let verifyError = (await supabase.auth.verifyOtp({ email, token, type: "email" })).error
+      if (verifyError) {
+        verifyError = (await supabase.auth.verifyOtp({ email, token, type: "signup" })).error
+      }
       if (verifyError) throw verifyError
       router.push("/sign-up/account-type")
     } catch (err) {
@@ -216,7 +218,7 @@ export function SignUpCodeStep() {
           <Link href="/sign-up">Change email</Link>
         </div>
         <span className="sx-field__help" style={{ marginTop: -12 }}>
-          Enter the six-digit code we sent to your email.
+          Enter the six-digit code from your email. You can also open the confirmation link in that email — it should bring you back here.
         </span>
         {error ? <p className="body-s" style={{ color: "var(--held)" }}>{error}</p> : null}
         <div className="auth-btns">

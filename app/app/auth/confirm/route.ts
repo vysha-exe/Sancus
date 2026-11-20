@@ -1,54 +1,47 @@
 /**
- * Copyright 2026 Circle Internet Group, Inc.  All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * SPDX-License-Identifier: Apache-2.0
+ * Supabase email confirmation / magic-link landing.
+ * Handles both PKCE (`?code=`) and older `token_hash` links, then continues sign-up.
  */
+import { createClient } from "@/lib/supabase/server"
+import { provisionTreasury } from "@/lib/sancus/provision-circle"
+import { type EmailOtpType } from "@supabase/supabase-js"
+import { redirect } from "next/navigation"
+import { type NextRequest } from "next/server"
 
-import { createClient } from "@/lib/supabase/server";
-import { provisionTreasury } from "@/lib/sancus/provision-circle";
-import { type EmailOtpType } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
-import { type NextRequest } from "next/server";
+function safeNext(raw: string | null): string {
+  if (!raw) return "/sign-up/account-type"
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/sign-up/account-type"
+  return raw
+}
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const token_hash = searchParams.get("token_hash");
-  const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/";
+  const { searchParams } = new URL(request.url)
+  const next = safeNext(searchParams.get("next"))
+  const code = searchParams.get("code")
+  const token_hash = searchParams.get("token_hash")
+  const type = searchParams.get("type") as EmailOtpType | null
+  const supabase = await createClient()
 
-  if (token_hash && type) {
-    const supabase = await createClient();
+  let errorMessage: string | null = null
 
-    const { error } = await supabase.auth.verifyOtp({
-      type,
-      token_hash,
-    });
-    if (!error) {
-      // Sancus (modified 2026): a confirmed sign-up gets its Arc treasury wallets right away.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) await provisionTreasury(supabase, user.id);
-      // redirect user to specified redirect URL or root of app
-      redirect(next);
-    } else {
-      // redirect the user to an error page with some instructions
-      redirect(`/auth/error?error=${error?.message}`);
-    }
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (error) errorMessage = error.message
+  } else if (token_hash && type) {
+    const { error } = await supabase.auth.verifyOtp({ type, token_hash })
+    if (error) errorMessage = error.message
+  } else {
+    errorMessage = "This confirmation link is missing its code. Enter the six-digit code on the sign-up screen instead."
   }
 
-  // redirect the user to an error page with some instructions
-  redirect(`/auth/error?error=No token hash or type`);
+  if (errorMessage) {
+    redirect(`/auth/error?error=${encodeURIComponent(errorMessage)}`)
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (user) await provisionTreasury(supabase, user.id)
+
+  redirect(next)
 }

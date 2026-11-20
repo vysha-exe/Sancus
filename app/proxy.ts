@@ -72,6 +72,17 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Supabase email verify sometimes lands on Site URL with ?code=… (not /auth/confirm).
+  // Forward PKCE codes so signup confirmation always completes.
+  const authCode = request.nextUrl.searchParams.get("code");
+  if (authCode && pathname !== "/auth/confirm") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/confirm";
+    url.searchParams.set("code", authCode);
+    if (!url.searchParams.get("next")) url.searchParams.set("next", "/sign-up/account-type");
+    return NextResponse.redirect(url);
+  }
+
   // API routes do their own per-route auth checks. The proxy only refreshes an expiring
   // Supabase session here, once, so parallel API calls don't race on the same refresh token.
   if (pathname.startsWith("/api")) {
