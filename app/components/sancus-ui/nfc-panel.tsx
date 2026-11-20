@@ -23,7 +23,7 @@ const money = (c: Currency, n: number) =>
 type Card = { id: string; lastFour: string; status: string; employeeName: string }
 
 /** Admin receive completes on its own after this long. */
-const ADMIN_RECEIVE_AUTOCOMPLETE_MS = 4000
+const ADMIN_RECEIVE_AUTOCOMPLETE_MS = 5000
 
 /** A clear checkout "beep": two quick tones, then a held one. */
 function playBeep(ctx: AudioContext | null) {
