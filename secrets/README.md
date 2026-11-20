@@ -1,16 +1,15 @@
-# Team secrets (hackathon)
+﻿# Team secrets (hackathon)
 
-This folder holds the shared env file for the private Sancus repo so teammates can run the app without pasting keys around.
+Do **not** commit real API keys. Keep them only in your local `app/.env.local` (gitignored).
 
 ## Setup
 
-```bash
-cp secrets/env.team app/.env.local
-cd app && npm run dev
-```
+1. Copy `app/.env.example` to `app/.env.local`
+2. Fill in keys from the team password manager / secure channel (not from git)
+3. `cd app && npm run dev`
 
-`app/.env.local` stays gitignored. Edit your local copy freely; when the team keys change, update `secrets/env.team` and push.
+If you previously used a tracked `secrets/env.team`, that file has been removed from the repo. Use your local backup or rotate and re-issue keys.
 
 ## Warning
 
-These are **real sandbox/test keys**. The GitHub repo is private. If it is ever made public, or someone leaves the team, **rotate every key** in Circle, Supabase, Marqeta, Omise, and Midtrans.
+If keys were ever pushed to git (even a private repo), **rotate them** in Circle, Supabase, Marqeta, Omise, Midtrans, and any other providers.

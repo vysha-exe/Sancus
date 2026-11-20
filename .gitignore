@@ -42,3 +42,7 @@ screenshot/
 
 # Local research checkouts
 .research/
+
+# Team shared env with real keys — never commit
+secrets/env.team
+**/env.team
