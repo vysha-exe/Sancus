@@ -4,6 +4,7 @@ import { evmAddressSchema } from "@/lib/api/validate"
 import { type AchQuote, type AchRecipientRow, quoteAch, settlementModeFromEnv } from "./ach"
 import { evaluatePayout, isNewAchRecipient, loadPolicy, spentToday, type Evaluation } from "./policy"
 import { type AchSpeed, demoModeFromEnv } from "./rails/ach-sim"
+import { applyRoleApproval } from "./approval-rules"
 
 export async function getRecipient(db: SupabaseClient, userId: string, id: string): Promise<AchRecipientRow | null> {
   const { data } = await db.from("sancus_ach_recipients").select("*").eq("user_id", userId).eq("id", id).maybeSingle()
@@ -35,8 +36,17 @@ export type PreparedAch =
   | { ok: true; recipient: AchRecipientRow; quote: AchQuote; evaluation: Evaluation }
   | { ok: false; status: number; body: Record<string, unknown> }
 
-/** Recipient + fresh server-side quote + spending policy. Shared by quote and create. */
-export async function prepareAch(db: SupabaseClient, userId: string, input: { recipientId: string; usdAmount: string; speed: AchSpeed }): Promise<PreparedAch> {
+/**
+ * Recipient + fresh server-side quote + spending policy. Shared by quote and create, so the page
+ * shows the same approval decision the payment gets. `scope` adds the role rule for company
+ * payments (the business admin skips approval; everyone else keeps the spending policy).
+ */
+export async function prepareAch(
+  db: SupabaseClient,
+  userId: string,
+  input: { recipientId: string; usdAmount: string; speed: AchSpeed },
+  scope?: { account: { type: string }; companyId: string | null }
+): Promise<PreparedAch> {
   const recipient = await getRecipient(db, userId, input.recipientId)
   if (!recipient) return { ok: false, status: 404, body: { error: "Recipient not found" } }
   const q = quoteAch(input.usdAmount, input.speed, { settlementMode: settlementModeFromEnv(), demoMode: demoModeFromEnv() })
@@ -49,5 +59,5 @@ export async function prepareAch(db: SupabaseClient, userId: string, input: { re
     spentTodayMinor: await spentToday(db, userId),
     isNewRecipient: policy.rules.newRecipients ? await isNewAchRecipient(db, userId, recipient.id) : false,
   })
-  return { ok: true, recipient, quote: q.quote, evaluation }
+  return { ok: true, recipient, quote: q.quote, evaluation: scope ? applyRoleApproval(scope.account, scope.companyId, evaluation) : evaluation }
 }

@@ -67,3 +67,18 @@ export function paymentMode(account: Pick<Approver, "can">): "SEND" | "REQUEST" 
 
 /** Reason shown in Approvals for a request that policy alone would have let through. */
 export const EMPLOYEE_REQUEST_REASON = "Employee payments always need an admin's approval"
+
+type PolicyEvaluation = { decision: "ALLOW" | "NEEDS_APPROVAL" | "BLOCK"; reason: string | null }
+
+/**
+ * The business admin (global ADMIN account) never waits for approval on a company payment: the
+ * approval rules (new payee, amount threshold) are skipped. Everyone else keeps the spending policy
+ * as-is. Hard stops (blocked payee, per-payment and daily limits) still apply to the admin, and
+ * personal payments (no company) keep the plain spending policy.
+ */
+export function applyRoleApproval(account: { type: string }, companyId: string | null, evaluation: PolicyEvaluation): PolicyEvaluation {
+  if (companyId !== null && account.type === "ADMIN" && evaluation.decision === "NEEDS_APPROVAL") {
+    return { decision: "ALLOW", reason: null }
+  }
+  return evaluation
+}

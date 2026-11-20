@@ -11,7 +11,7 @@ import { z } from "zod"
 import { evmAddressSchema, validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
-import { EMPLOYEE_REQUEST_REASON, paymentMode } from "@/lib/sancus/approval-rules"
+import { applyRoleApproval, EMPLOYEE_REQUEST_REASON, paymentMode } from "@/lib/sancus/approval-rules"
 import { notifyApprovers } from "@/lib/sancus/approval-notify"
 import { formatRate } from "@/lib/sancus/fx"
 import { getPayoutProvider } from "@/lib/sancus/payout-provider"
@@ -166,7 +166,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const policy = companyId
     ? await loadCompanyPolicy(supabase, companyId, user.id)
     : await loadPolicy(supabase, user.id)
-  const evaluation = evaluatePayout({
+  const policyEvaluation = evaluatePayout({
     policy,
     amountMinor: quote.usdcAmountMinor,
     recipient: { name: recipient.name, proxyValue: recipient.proxyValue },
@@ -175,6 +175,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       ? await isNewRecipient(supabase, user.id, { name: recipient.name, proxyValue: recipient.proxyValue })
       : false,
   })
+  // Business admin skips the approval rules on company payments; everyone else keeps the policy.
+  const evaluation = applyRoleApproval(account, companyId, policyEvaluation)
   if (evaluation.decision === "BLOCK") {
     return NextResponse.json(
       { error: evaluation.reason, issues: [{ field: "amount", message: evaluation.reason }] },
@@ -182,7 +184,9 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     )
   }
   const needsApproval = requestOnly || evaluation.decision === "NEEDS_APPROVAL"
-  const approvalReason = evaluation.reason ?? (requestOnly ? EMPLOYEE_REQUEST_REASON : null)
+  const approvalReason = !needsApproval
+    ? null
+    : requestOnly && policyEvaluation.decision === "ALLOW" ? EMPLOYEE_REQUEST_REASON : evaluation.reason
 
   const { data: inserted, error: insertError } = await supabase
     .from("sancus_payouts")
