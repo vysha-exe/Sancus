@@ -3,9 +3,11 @@
 // Pay › Scan a QR: point the camera at (or upload) a PromptPay, Pix or QRIS code and pay it
 // from your USDC balance at the live rate. PromptPay goes out through
 // Xendit, Pix through Payzu. Built for personal accounts; business accounts can use it too.
-import jsQR from "jsqr"
 import Link from "next/link"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { QrScanner } from "@/components/sancus-ui/qr-scanner"
+import { parseSancusQrUrl } from "@/lib/sancus/sancus-qr-parse"
 import {
   buildPaymentQr,
   parsePaymentQr,
@@ -32,25 +34,19 @@ function mask(v: string) {
   return v.length <= 4 ? v : `${"•".repeat(4)}${v.slice(-4)}`
 }
 
-function decodeImage(img: CanvasImageSource, w: number, h: number, canvas: HTMLCanvasElement): string | null {
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })
-  if (!ctx) return null
-  ctx.drawImage(img, 0, 0, w, h)
-  const data = ctx.getImageData(0, 0, w, h)
-  return jsQR(data.data, w, h, { inversionAttempts: "attemptBoth" })?.data ?? null
-}
-
 type Result = { ok: true; message: string } | { ok: false; message: string }
 
-export default function PayScanPage() {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const rafRef = useRef<number | null>(null)
-  const [camera, setCamera] = useState<"off" | "starting" | "on">("off")
-  const [cameraError, setCameraError] = useState<string | null>(null)
+export default function PayScanPageWrapper() {
+  return (
+    <Suspense fallback={<div className="page" />}>
+      <PayScanPage />
+    </Suspense>
+  )
+}
+
+function PayScanPage() {
+  const router = useRouter()
+  const params = useSearchParams()
   const [text, setText] = useState("")
   const [qr, setQr] = useState<ParsedQr | null>(null)
   const [amount, setAmount] = useState("")
@@ -59,68 +55,25 @@ export default function PayScanPage() {
   const [result, setResult] = useState<Result | null>(null)
   const key = useRef<string | null>(null)
 
-  const stopCamera = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    rafRef.current = null
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
-    setCamera("off")
-  }, [])
-
-  useEffect(() => stopCamera, [stopCamera])
-
   const load = useCallback((payload: string) => {
+    // A Sancus person-to-person code belongs on Pay with QR.
+    const sancus = parseSancusQrUrl(payload)
+    if (sancus) return router.push(`/qr?pay=${encodeURIComponent(sancus)}`)
     const parsed = parsePaymentQr(payload)
     setText(payload)
     setQr(parsed)
     setAmount(parsed.amount ?? "")
     setResult(null)
     key.current = null
-  }, [])
+  }, [router])
 
-  async function startCamera() {
-    setCameraError(null)
-    setCamera("starting")
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-      streamRef.current = stream
-      const video = videoRef.current!
-      video.srcObject = stream
-      await video.play()
-      setCamera("on")
-      const tick = () => {
-        if (!streamRef.current) return
-        if (video.readyState >= 2 && canvasRef.current) {
-          const scale = Math.min(1, 640 / (video.videoWidth || 640))
-          const found = decodeImage(video, Math.round(video.videoWidth * scale), Math.round(video.videoHeight * scale), canvasRef.current)
-          if (found) {
-            load(found)
-            stopCamera()
-            return
-          }
-        }
-        rafRef.current = requestAnimationFrame(tick)
-      }
-      tick()
-    } catch (e) {
-      setCamera("off")
-      setCameraError(e instanceof Error && e.name === "NotAllowedError" ? "Camera access was blocked. Upload a picture of the code instead." : "No camera available. Upload a picture of the code instead.")
-    }
-  }
-
-  function onUpload(file: File | undefined) {
-    if (!file) return
-    const url = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      const scale = Math.min(1, 1200 / Math.max(img.width, img.height))
-      const found = canvasRef.current ? decodeImage(img, Math.round(img.width * scale), Math.round(img.height * scale), canvasRef.current) : null
-      URL.revokeObjectURL(url)
-      if (found) load(found)
-      else setResult({ ok: false, message: "Couldn't find a QR code in that picture. Try a closer, sharper photo." })
-    }
-    img.src = url
-  }
+  // Handed over from Pay with QR (?code=000201…).
+  const handed = params.get("code")
+  useEffect(() => {
+    if (!handed) return
+    const t = setTimeout(() => load(handed), 0)
+    return () => clearTimeout(t)
+  }, [handed, load])
 
   // Live quote: what the payee gets locally vs what leaves your balance in USDC.
   useEffect(() => {
@@ -212,27 +165,7 @@ export default function PayScanPage() {
 
       <div className="grid">
         <section className="tile s7" aria-label="Scan">
-          <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", background: "var(--sx-surface-2, #111)", aspectRatio: "4 / 3", display: "grid", placeItems: "center" }}>
-            <video ref={videoRef} muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: camera === "off" ? "none" : "block" }} />
-            {camera === "off" ? <span className="body-s muted" style={{ padding: 16, textAlign: "center" }}>Camera is off</span> : null}
-          </div>
-          <canvas ref={canvasRef} hidden />
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            {camera === "off" ? (
-              <button type="button" className="sx-btn sx-btn--primary" onClick={startCamera}>
-                Start camera
-              </button>
-            ) : (
-              <button type="button" className="sx-btn sx-btn--secondary" onClick={stopCamera}>
-                {camera === "starting" ? "Starting…" : "Stop camera"}
-              </button>
-            )}
-            <label className="sx-btn sx-btn--secondary" style={{ cursor: "pointer" }}>
-              Upload a picture
-              <input type="file" accept="image/*" hidden onChange={(e) => onUpload(e.target.files?.[0])} />
-            </label>
-          </div>
-          {cameraError ? <p className="body-s" style={{ color: "var(--sx-danger, #c33)" }}>{cameraError}</p> : null}
+          <QrScanner onResult={load} hint="Point your camera at a PromptPay or Pix code" />
 
           <label className="sx-field" style={{ marginTop: 16 }}>
             <span className="sx-label">Or paste the QR text</span>
