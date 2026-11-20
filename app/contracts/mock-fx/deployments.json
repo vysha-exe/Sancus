@@ -1,0 +1,34 @@
+{
+  "chainId": 5042002,
+  "network": "arc-testnet",
+  "address": "0x88f731c91b23ef05fd3bb448a148f7cf46b08a90",
+  "assets": {
+    "USDC": {
+      "address": "0x5ae6d882b075628ea839e57cf422172434f27e0c",
+      "symbol": "fUSDC",
+      "decimals": 6,
+      "unitsPerUsdMicro": 1000000
+    },
+    "BRL": {
+      "address": "0xa4998745ede2f259f392ee4b71156badb5da8755",
+      "symbol": "mBRL",
+      "decimals": 2,
+      "unitsPerUsdMicro": 5412300
+    },
+    "IDR": {
+      "address": "0xdca139d380fbd00c61b4ed696d8f81e659957ae6",
+      "symbol": "mIDR",
+      "decimals": 2,
+      "unitsPerUsdMicro": 16000000000
+    },
+    "THB": {
+      "address": "0x00bf05794364ef67815094d7158a0270e555f944",
+      "symbol": "mTHB",
+      "decimals": 2,
+      "unitsPerUsdMicro": 35000000
+    }
+  },
+  "deployTx": "0xd4930faf15b464be36d050dc614c96497a74d569c27d3757dca1370ff7a84249",
+  "owner": "0xf801d2EB8B55FfDF3b664A058Bbd6B0cB6C7ee0B",
+  "explorer": "https://explorer.testnet.arc.io/address/0x88f731c91b23ef05fd3bb448a148f7cf46b08a90"
+}
