@@ -13,7 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod"
 import { validateJsonBody } from "@/lib/api/validate"
 import { withAuth } from "@/lib/api/with-auth"
-import { requirePermission } from "@/lib/sancus/accounts-server"
+import { loadAccount, requirePermission } from "@/lib/sancus/accounts-server"
 import { quoteInputSchema, toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
 import { prepareAch, settlementWallets } from "@/lib/sancus/ach-api"
 import { faceUsdcEnabled } from "@/lib/sancus/face-usdc"
@@ -46,16 +46,16 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   const parsed = await validateJsonBody(req, createSchema)
   if (!parsed.ok) return parsed.response
-  const prepared = await prepareAch(supabase, user.id, parsed.data)
+  // Acting for a company (workspace switcher): the payment is the company's, paid from its treasury.
+  const companyId = await workspaceCompany(req, supabase, user.id)
+  const account = await loadAccount(supabase, user)
+  const prepared = await prepareAch(supabase, user.id, parsed.data, { account, companyId })
   if (!prepared.ok) return NextResponse.json(prepared.body, { status: prepared.status })
   const { recipient, quote, evaluation } = prepared
   if (evaluation.decision === "BLOCK") {
     return NextResponse.json({ error: evaluation.reason, issues: [{ field: "usdAmount", message: evaluation.reason }] }, { status: 403 })
   }
   const needsApproval = evaluation.decision === "NEEDS_APPROVAL"
-
-  // Acting for a company (workspace switcher): the payment is the company's, paid from its treasury.
-  const companyId = await workspaceCompany(req, supabase, user.id)
   const wantsOnchain = quote.settlementMode === "TESTNET_SETTLEMENT" || faceUsdcEnabled()
   const wallets = wantsOnchain ? await settlementWallets(supabase, user.id, companyId) : { treasury: null, settlement: null }
   if (wantsOnchain && !wallets.treasury) {

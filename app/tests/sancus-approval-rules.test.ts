@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { resolveAccount } from "@/lib/sancus/accounts"
-import { checkApprover, checkDecision, EMPLOYEE_REQUEST_REASON, paymentMode } from "@/lib/sancus/approval-rules"
+import { applyRoleApproval, checkApprover, checkDecision, EMPLOYEE_REQUEST_REASON, paymentMode } from "@/lib/sancus/approval-rules"
 
 // Lion City Trading (root) → Thailand → Bangkok; Acme is someone else's company.
 const companies = [
@@ -107,5 +107,35 @@ describe("checkDecision: withdrawing your own request", () => {
   it("doesn't let a branch admin approve or decline someone else's payment", () => {
     expect(checkDecision(ploy, { requesterId: "niran", companyId: "bkk" }, "decline")).toMatchObject({ ok: false, code: "NO_PERMISSION" })
     expect(checkDecision(ploy, { requesterId: "niran", companyId: "bkk" }, "approve")).toMatchObject({ ok: false, code: "NO_PERMISSION" })
+  })
+})
+
+describe("applyRoleApproval: the business admin skips approvals", () => {
+  const allow = { decision: "ALLOW" as const, reason: null }
+  const newPayee = { decision: "NEEDS_APPROVAL" as const, reason: "First payment to someone new needs an approver" }
+  const overRule = { decision: "NEEDS_APPROVAL" as const, reason: "$1,200.00 is at or over the $1,000.00 approval rule" }
+  const blocked = { decision: "BLOCK" as const, reason: "Over the $5,000.00 per-payment limit" }
+
+  it("lets the business admin pay straight away: new payee or over the threshold", () => {
+    expect(applyRoleApproval(maya, "root", newPayee)).toEqual(allow)
+    expect(applyRoleApproval(maya, "root", overRule)).toEqual(allow)
+    expect(applyRoleApproval(maya, "root", allow)).toEqual(allow)
+  })
+
+  it("leaves everyone else on the spending policy as before", () => {
+    expect(applyRoleApproval(ploy, "th", allow)).toEqual(allow)
+    expect(applyRoleApproval(ploy, "th", newPayee)).toEqual(newPayee)
+    expect(applyRoleApproval(ploy, "th", overRule)).toEqual(overRule)
+    expect(applyRoleApproval(niran, "bkk", overRule)).toEqual(overRule)
+  })
+
+  it("keeps hard limits for everyone, admin included", () => {
+    expect(applyRoleApproval(maya, "root", blocked)).toEqual(blocked)
+    expect(applyRoleApproval(ploy, "th", blocked)).toEqual(blocked)
+  })
+
+  it("leaves personal payments to the spending policy", () => {
+    expect(applyRoleApproval(maya, null, newPayee)).toEqual(newPayee)
+    expect(applyRoleApproval(alex, null, newPayee)).toEqual(newPayee)
   })
 })
