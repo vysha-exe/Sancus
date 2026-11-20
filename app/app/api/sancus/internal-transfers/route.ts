@@ -16,6 +16,12 @@ import { notifyApprovers } from "@/lib/sancus/approval-notify"
 import { serviceClient } from "@/lib/sancus/service-client"
 import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
 import type { CompanyRow } from "@/lib/sancus/companies"
+import {
+  bankMinorFromTransportMinor,
+  fixedFxEnabled,
+  quoteFixedFx,
+  transportMinorFromBankMinor,
+} from "@/lib/sancus/mock-fx"
 
 const createSchema = z.object({
   sourceCompanyId: z.string().uuid(),
@@ -183,7 +189,21 @@ export const POST = withAuth(async (req, { user, supabase }) => {
 
   const usdcAmountMinor = BigInt(Math.round(amountUsdc * 1_000_000))
   const sourceAmountMinor = localMinorForUsdc(usdcAmountMinor, sourceCurrency)
-  const destinationAmountMinor = localMinorForUsdc(usdcAmountMinor, destinationCurrency)
+  if (!fixedFxEnabled()) {
+    return NextResponse.json({ error: "Fixed FX is not configured on Arc testnet" }, { status: 503 })
+  }
+  let destinationAmountMinor: bigint
+  try {
+    const sourceTokenMinor = source.parent_id
+      ? transportMinorFromBankMinor(sourceCurrency, sourceAmountMinor)
+      : usdcAmountMinor
+    const destinationTokenMinor = quoteFixedFx(sourceCurrency, destinationCurrency, sourceTokenMinor)
+    destinationAmountMinor = destination.parent_id
+      ? bankMinorFromTransportMinor(destinationCurrency, destinationTokenMinor)
+      : destinationTokenMinor
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "This FX corridor is not supported" }, { status: 409 })
+  }
   let evaluation: { decision: "ALLOW" | "NEEDS_APPROVAL" | "BLOCK"; reason: string | null } = { decision: "ALLOW", reason: null }
   if (!globalAdmin) {
     const policy = await loadCompanyPolicy(supabase, source.id, user.id)
