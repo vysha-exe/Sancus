@@ -8,7 +8,7 @@
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { VirtualCard } from "@/components/sancus-ui/virtual-card"
-import { NfcCardTap } from "@/components/sancus-ui/nfc-card-tap"
+import { NfcPanel } from "@/components/sancus-ui/nfc-panel"
 import { useAccount } from "@/lib/sancus/use-account"
 
 type Card = {
@@ -79,6 +79,12 @@ export default function CardPage() {
 
       {error ? <div className="tile s12" role="alert"><span className="body-s" style={{ color: "var(--failed)" }}>{error}</span></div> : null}
 
+      {cards !== null ? (
+        <section className="tile s12" style={{ marginBottom: 16 }}>
+          <NfcPanel card={card} onPaid={() => void load()} />
+        </section>
+      ) : null}
+
       {cards === null ? (
         <div className="empty">Loading your card…</div>
       ) : !card ? (
@@ -120,7 +126,6 @@ export default function CardPage() {
           </section>
 
           <section className="tile s7" style={{ display: "grid", gap: 14, alignContent: "start" }}>
-            <NfcCardTap card={card} onPaid={() => void load()} />
             <TapToPay card={card} onPaid={() => void load()} />
             <div>
               <span className="sx-label">Recent card payments</span>

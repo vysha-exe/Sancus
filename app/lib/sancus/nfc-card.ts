@@ -13,7 +13,8 @@ export type SancusNfcCardPay = {
   kind: "card_pay"
   cardId: string
   lastFour: string
-  amount: number
+  /** USD the payer approved, or null to pay whatever the receiver asks (within the card's limits). */
+  amount: number | null
   merchantName: string
   payerName: string
   userId: string
@@ -65,7 +66,8 @@ export function verifyNfcCardPay(token: string): SancusNfcCardPay {
     throw new Error("NFC payload isn't valid JSON")
   }
   if (parsed?.v !== 1 || parsed.kind !== "card_pay") throw new Error("Unsupported NFC payload")
-  if (!parsed.cardId || !(parsed.amount > 0)) throw new Error("NFC payload missing card or amount")
+  if (!parsed.cardId) throw new Error("NFC payload missing card")
+  if (parsed.amount != null && !(parsed.amount > 0)) throw new Error("NFC payload has an invalid amount")
   if (Date.now() > parsed.exp) throw new Error("This tap expired — ask the payer to tap again")
   return parsed
 }
