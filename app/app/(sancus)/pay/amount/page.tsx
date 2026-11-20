@@ -1,6 +1,8 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { usePayFlow } from "@/lib/sancus/pay-flow"
 import { formatUsdc, isPayRail, RAILS } from "@/lib/sancus/pay-quote"
@@ -25,6 +27,7 @@ function sourceFundsLabel(account: CompanyNode): string {
 }
 
 export default function PayAmountPage() {
+  const router = useRouter()
   const {
     recipient,
     state,
@@ -41,8 +44,12 @@ export default function PayAmountPage() {
     setSourceCompanyId,
   } = usePayFlow()
 
+  useEffect(() => {
+    if (!recipient) router.replace("/pay")
+  }, [recipient, router])
+
   // The rails this payee actually has, with each rail's speed and fee.
-  const railOptions = recipient.methods.map((m) => ({
+  const railOptions = (recipient?.methods ?? []).map((m) => ({
         id: m.rail,
         label: m.rail,
         meta: isPayRail(m.rail) ? `${RAILS[m.rail].eta} · ${formatUsdc(RAILS[m.rail].feeUsdcMinor)} fee` : m.detail,
@@ -51,6 +58,8 @@ export default function PayAmountPage() {
 
   // Review needs a current quote.
   const canReview = view.localLabel !== "–" && !quoteError && !quoteLoading
+
+  if (!recipient) return null
 
   return (
     <div className="page">
