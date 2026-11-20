@@ -131,12 +131,12 @@ async function fundAchOnchain(db: SupabaseClient, userId: string, row: AchPaymen
     })
     const { data } = await db
       .from("sancus_ach_payments")
-      .update({ funded_onchain: true, status: "FUNDS_RECEIVED", circle_transaction_id: sent.txId, tx_hash: sent.txHash ?? null })
+      .update({ funded_onchain: true, status: "FUNDS_RECEIVED", circle_transaction_id: sent.txId, tx_hash: sent.txHash ?? null, mint_tx_hash: sent.mintTxHash ?? null })
       .eq("id", row.id)
       .eq("status", "CREATED")
       .select("*")
       .maybeSingle()
-    const updated = (data as AchPaymentRow | null) ?? { ...row, funded_onchain: true, status: "FUNDS_RECEIVED" as const, tx_hash: sent.txHash ?? null }
+    const updated = (data as AchPaymentRow | null) ?? { ...row, funded_onchain: true, status: "FUNDS_RECEIVED" as const, tx_hash: sent.txHash ?? null, mint_tx_hash: sent.mintTxHash ?? null }
     await db.from("transactions").insert({
       user_id: userId,
       amount: Number(amount),

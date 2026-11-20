@@ -8,6 +8,7 @@
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { VirtualCard } from "@/components/sancus-ui/virtual-card"
+import { NfcCardTap } from "@/components/sancus-ui/nfc-card-tap"
 import { useAccount } from "@/lib/sancus/use-account"
 
 type Card = {
@@ -119,6 +120,7 @@ export default function CardPage() {
           </section>
 
           <section className="tile s7" style={{ display: "grid", gap: 14, alignContent: "start" }}>
+            <NfcCardTap card={card} onPaid={() => void load()} />
             <TapToPay card={card} onPaid={() => void load()} />
             <div>
               <span className="sx-label">Recent card payments</span>
@@ -200,7 +202,7 @@ function TapToPay({ card, onPaid }: { card: Card; onPaid: () => void }) {
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <h2 className="sx-h heading-3" style={{ margin: 0 }}>Tap to pay</h2>
+      <h2 className="sx-h heading-3" style={{ margin: 0 }}>Manual card pay</h2>
       <div className="filters" role="group" aria-label="Merchant">
         {MERCHANTS.map((m) => (
           <button key={m} type="button" className="chip" aria-pressed={merchant === m} onClick={() => setMerchant(m)}>

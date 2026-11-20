@@ -142,6 +142,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       simulated: true,
       settled_at: status === "SETTLED" ? payout.updated || new Date().toISOString() : null,
       tx_hash: onchain?.txHash ?? null,
+      mint_tx_hash: onchain?.mintTxHash ?? null,
       source_address: onchain?.sourceAddress ?? null,
       settlement_address: onchain?.settlementAddress ?? null,
     }).select("*").single()

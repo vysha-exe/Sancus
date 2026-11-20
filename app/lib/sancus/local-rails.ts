@@ -42,6 +42,8 @@ export type PixPaymentDto = {
   simulated: boolean
   txHash: string | null
   explorer: string | null
+  /** fUSDC mint to the settlement wallet (second leg) */
+  mintTxHash: string | null
 }
 
 export type SpendingMethodType = "PIX" | "QRIS" | "PROMPTPAY" | "CARD"
@@ -77,7 +79,7 @@ export type PixPaymentDbRow = {
   recipient_name: string; pix_method: PixPaymentDto["pixMethod"]; amount_brl_minor: number | string;
   provider_transaction_id: string; provider_status: string; status: LocalRailStatus; end_to_end_id: string | null;
   failure_reason: string | null; settled_at: string | null; created_at: string; simulated: boolean;
-  tx_hash?: string | null; source_address?: string | null; settlement_address?: string | null;
+  tx_hash?: string | null; mint_tx_hash?: string | null; source_address?: string | null; settlement_address?: string | null;
 }
 
 export function toCollectionDto(row: CollectionDbRow, companyName: string | null = null): CollectionDto {
@@ -102,6 +104,7 @@ export function toPixPaymentDto(row: PixPaymentDbRow): PixPaymentDto {
     simulated: row.simulated,
     txHash,
     explorer: txHash ? `https://explorer.testnet.arc.io/tx/${txHash}` : null,
+    mintTxHash: row.mint_tx_hash ?? null,
   }
 }
 

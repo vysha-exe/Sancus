@@ -30,8 +30,36 @@ export type ProcessLogEntry = {
   destinationKind: DestinationKind
   steps: ProcessStep[]
   explorerUrl: string | null
+  /** Each onchain leg with its own Arc link. fUSDC moves in two: burn from the payer, mint to the receiver. */
+  onchainLegs: OnchainLeg[]
   simulated?: boolean
   source: "live" | "demo"
+}
+
+export type OnchainLeg = { label: string; detail: string; hash: string; url: string }
+
+type QrPaymentRow = {
+  id: string
+  direction: "in" | "out"
+  counterparty: string
+  currency: string
+  amountMinor: string
+  usdcAmountMinor: string
+  status: string
+  txHash: string | null
+  mintTxHash: string | null
+  createdAt: string
+}
+
+type MyCardPurchaseRow = {
+  id: string
+  merchantName: string
+  amountMinor: string
+  currency: string
+  status: string
+  txHash: string | null
+  mintTxHash: string | null
+  createdAt: string
 }
 
 type RailCollectionRow = {
@@ -103,6 +131,9 @@ function wrap(input: {
   txHash?: string | null
   explorerUrl?: string | null
   mintTxHash?: string | null
+  /** Labels for the two legs (defaults describe an fUSDC payment). */
+  burnLabel?: string
+  mintLabel?: string
   simulated?: boolean
   source: "live" | "demo"
 }): ProcessLogEntry {
@@ -121,6 +152,23 @@ function wrap(input: {
     simulated: input.simulated,
   })
   const explorerUrl = input.explorerUrl || arcExplorer(input.txHash) || arcExplorer(input.mintTxHash)
+  const onchainLegs: OnchainLeg[] = []
+  if (input.txHash) {
+    onchainLegs.push({
+      label: input.burnLabel ?? (input.mintTxHash ? "1 · Burned from the payer" : "Arc transaction"),
+      detail: input.mintTxHash ? "fUSDC leaves the paying wallet" : "Treasury leg on Arc",
+      hash: input.txHash,
+      url: arcExplorer(input.txHash)!,
+    })
+  }
+  if (input.mintTxHash) {
+    onchainLegs.push({
+      label: input.mintLabel ?? (input.txHash ? "2 · Minted to the receiver" : "Minted on Arc"),
+      detail: input.txHash ? "The same amount arrives in the receiving wallet" : "Tokens minted to the receiving wallet",
+      hash: input.mintTxHash,
+      url: arcExplorer(input.mintTxHash)!,
+    })
+  }
   return {
     id: input.id,
     at: input.at,
@@ -134,6 +182,7 @@ function wrap(input: {
     destinationKind: corridor.destinationKind,
     steps,
     explorerUrl,
+    onchainLegs,
     simulated: input.simulated,
     source: input.source,
   }
@@ -172,7 +221,7 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
           res = await fetch("/api/sancus/payouts", { cache: "no-store" })
         }
         const payoutBody = res.ok ? ((await res.json()) as { payouts?: PayoutDto[] }) : {}
-        const [collectionsBody, pixBody, xenditBody, cardBody, internalBody, achBody, railBody] = await Promise.all([
+        const [collectionsBody, pixBody, xenditBody, cardBody, internalBody, achBody, railBody, qrBody, myCardBody] = await Promise.all([
           json<{ collections?: CollectionDto[] }>("/api/sancus/collections"),
           json<{ payments?: PixPaymentDto[] }>("/api/sancus/pix/payments"),
           json<{ payouts?: XenditPayoutDto[] }>("/api/sancus/xendit/payouts"),
@@ -180,6 +229,8 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
           json<{ transfers?: InternalTransferDto[] }>("/api/sancus/internal-transfers"),
           json<{ payments?: AchPaymentDto[] }>("/api/sancus/payments"),
           json<{ collections?: RailCollectionRow[] }>("/api/sancus/rails/collections"),
+          json<{ payments?: QrPaymentRow[] }>("/api/sancus/qr/payments"),
+          json<{ purchases?: MyCardPurchaseRow[] }>("/api/sancus/my-card"),
         ])
 
         const rows: ProcessLogEntry[] = []
@@ -220,7 +271,9 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
               localAmountLabel: `US$ ${usd}`,
               usdcLabel: `${usdc} USDC`,
               txHash: p.settlement.txHash,
+              mintTxHash: p.settlement.mintTxHash,
               explorerUrl: p.settlement.explorer,
+              mintLabel: "2 · Minted to the settlement wallet",
               simulated: !p.settlement.fundedOnchain,
               destinationKind: "bank",
               source: "live",
@@ -240,6 +293,8 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
               status: statusFrom(p.status, "local"),
               localAmountLabel: amount,
               txHash: p.txHash,
+              mintTxHash: p.mintTxHash,
+              mintLabel: "2 · Minted to the settlement wallet",
               explorerUrl: p.explorer,
               simulated: p.simulated && !p.txHash,
               destinationKind: "bank",
@@ -262,6 +317,8 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
               localAmountLabel: amount,
               destinationKind: "bank",
               txHash: p.txHash,
+              mintTxHash: p.mintTxHash,
+              mintLabel: "2 · Minted to the settlement wallet",
               explorerUrl: p.explorer,
               simulated: p.simulated && !p.txHash,
               source: "live",
@@ -326,6 +383,55 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
               explorerUrl: c.mintExplorer ?? arcExplorer(c.mintTx),
               destinationKind: "collection",
               simulated: true,
+              source: "live",
+            })
+          )
+        }
+
+        for (const p of qrBody?.payments ?? []) {
+          const amount = localMoney(p.currency, p.amountMinor)
+          const out = p.direction === "out"
+          rows.push(
+            wrap({
+              id: `qr-${p.id}`,
+              at: p.createdAt,
+              who: `${out ? "To" : "From"} ${p.counterparty}`,
+              amount: `${out ? "−" : "+"}${amount}`,
+              amountIn: !out,
+              rail: "Sancus QR",
+              status: p.status === "COMPLETED" ? "Settled" : p.status === "FAILED" ? "Failed" : "Pending",
+              usdcLabel: `$${displayMinor(BigInt(p.usdcAmountMinor), USDC_DECIMALS, "", 2)}`,
+              txHash: p.txHash,
+              mintTxHash: p.mintTxHash,
+              burnLabel: out ? "1 · Burned from your wallet" : "1 · Burned from the payer",
+              mintLabel: out ? "2 · Minted to the receiver" : "2 · Minted to your wallet",
+              destinationKind: "internal",
+              simulated: false,
+              source: "live",
+            })
+          )
+        }
+
+        const seenCard = new Set(rows.filter((r) => r.id.startsWith("card-")).map((r) => r.id))
+        for (const p of myCardBody?.purchases ?? []) {
+          if (seenCard.has(`card-${p.id}`) || !p.txHash) continue
+          const amount = localMoney(p.currency, p.amountMinor)
+          rows.push(
+            wrap({
+              id: `card-${p.id}`,
+              at: p.createdAt,
+              who: p.merchantName,
+              amount: `−${amount}`,
+              rail: "Card",
+              status: statusFrom(p.status, "card"),
+              localAmountLabel: amount,
+              destinationKind: "card",
+              currency: p.currency,
+              txHash: p.txHash,
+              mintTxHash: p.mintTxHash,
+              burnLabel: "1 · Burned from the card's balance",
+              mintLabel: "2 · Minted to the card settlement wallet",
+              simulated: false,
               source: "live",
             })
           )

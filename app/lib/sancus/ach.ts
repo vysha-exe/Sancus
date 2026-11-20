@@ -216,6 +216,7 @@ export type AchPaymentRow = {
   settlement_address: string | null
   circle_transaction_id: string | null
   tx_hash: string | null
+  mint_tx_hash?: string | null
   provider: string
   provider_ref: string
   status: AchStatus
@@ -384,6 +385,7 @@ export function toAchPaymentDto(row: AchPaymentRow) {
       fundedOnchain: row.funded_onchain,
       txHash: row.tx_hash,
       explorer: row.tx_hash ? `https://explorer.testnet.arc.io/tx/${row.tx_hash}` : null,
+      mintTxHash: row.mint_tx_hash ?? null,
       settlementAddress: row.settlement_address,
     },
     provider: row.provider,

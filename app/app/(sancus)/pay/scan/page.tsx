@@ -165,7 +165,7 @@ function PayScanPage() {
 
       <div className="grid">
         <section className="tile s7" aria-label="Scan">
-          <QrScanner onResult={load} hint="Point your camera at a PromptPay or Pix code" />
+          <QrScanner onResult={load} autoStart={!handed} hint="Point your camera at a PromptPay or Pix code" />
 
           <label className="sx-field" style={{ marginTop: 16 }}>
             <span className="sx-label">Or paste the QR text</span>

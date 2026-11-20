@@ -131,6 +131,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       funding_amount_minor: requestedMinor.toString(),
       funding_hold_tx_hash: fundingAccountId ? holdRef : onchain?.txHash ?? null,
       tx_hash: onchain?.txHash ?? null,
+      mint_tx_hash: onchain?.mintTxHash ?? null,
       source_address: onchain?.sourceAddress ?? null,
       settlement_address: onchain?.settlementAddress ?? null,
     }).select("*").single()
