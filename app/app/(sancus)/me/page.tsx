@@ -49,7 +49,6 @@ const money = (minor: string, currency: string) => {
 const usd6 = (minor: string | null) => minor ? `$${(Number(minor) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "No limit"
 const fallbackLast4 = (id: string) => String(parseInt(id.replace(/-/g, "").slice(-6), 16) % 10000).padStart(4, "0")
 const DEMO_PIX_QR = "00020101021226850014BR.GOV.BCB.PIX2563sancus.demo/pix/churrascaria5204000053039865802BR5920CHURRASCARIA DEMO6009SAO PAULO62070503***6304BEEF"
-const DEMO_PROMPTPAY_QR = "00020101021229370016A0000006770101110113006691234567853037645406100.005802TH5913BANGKOK CAFE6007BANGKOK6304DEMO"
 
 /** Show a real QR image for an EMV payload — never dump the raw digits in the main UI. */
 function MerchantQrPreview({ payload, label }: { payload: string; label: string }) {
@@ -98,14 +97,6 @@ export default function EmployeePage() {
   const [pixBusy, setPixBusy] = useState(false)
   const [pixMessage, setPixMessage] = useState<string | null>(null)
   const [pixPasteOpen, setPixPasteOpen] = useState(false)
-  const [promptPayId, setPromptPayId] = useState("")
-  const [promptPayQr, setPromptPayQr] = useState("")
-  const [promptPayRecipient, setPromptPayRecipient] = useState("")
-  const [promptPayAmount, setPromptPayAmount] = useState("")
-  const [promptPayBusy, setPromptPayBusy] = useState(false)
-  const [promptPayMessage, setPromptPayMessage] = useState<string | null>(null)
-  const [promptPayPayout, setPromptPayPayout] = useState<XenditPayoutDto | null>(null)
-  const [promptPayPasteOpen, setPromptPayPasteOpen] = useState(false)
   // Payments this employee asked for; an admin approves or declines each one.
   const approvals = useLiveApprovals()
   const requests = [...approvals.waiting, ...approvals.decided].filter((a) => a.live && a.mine)
@@ -131,9 +122,7 @@ export default function EmployeePage() {
 
   const cards = useMemo(() => data?.methods.filter((method) => method.type === "CARD") ?? [], [data])
   const pixMethods = useMemo(() => data?.methods.filter((method) => method.type === "PIX") ?? [], [data])
-  const otherQr = useMemo(() => data?.methods.filter((method) => method.type === "QRIS" || method.type === "PROMPTPAY") ?? [], [data])
-  const promptPayMethods = useMemo(() => data?.methods.filter((method) => method.type === "PROMPTPAY") ?? [], [data])
-  const selectedPromptPay = promptPayMethods[0] ?? null
+  const hasQris = useMemo(() => data?.methods.some((method) => method.type === "QRIS") ?? false, [data])
   const selectedCard = cards.find((card) => card.id === cardId) ?? cards[0] ?? null
   const selectedPix = pixMethods.find((method) => method.id === pixId) ?? pixMethods[0] ?? null
   const where = data?.company ? `${countryByCode(data.company.country)?.flag ?? ""} ${data.company.name}` : ""
@@ -226,52 +215,6 @@ export default function EmployeePage() {
     }
   }
 
-  function readPromptPayQr(payload = promptPayQr) {
-    setPromptPayMessage(null)
-    if (payload.trim().length < 20) {
-      setPromptPayMessage("Load a demo merchant QR or paste a copy-and-paste code first.")
-      return
-    }
-    // Hackathon decoder: exposes the review step without pretending that Xendit resolves merchant QRs.
-    setPromptPayRecipient("Bangkok Cafe")
-    setPromptPayId("66912345678")
-    setPromptPayAmount("100")
-    setPromptPayMessage("QR read for the demo. Review the merchant and PromptPay destination before paying.")
-  }
-
-  function useDemoPromptPayQr() {
-    setPromptPayQr(DEMO_PROMPTPAY_QR)
-    setPromptPayRecipient("")
-    setPromptPayPayout(null)
-    setPromptPayPasteOpen(false)
-    readPromptPayQr(DEMO_PROMPTPAY_QR)
-  }
-
-  async function spendPromptPay(event: FormEvent) {
-    event.preventDefault()
-    if (!selectedPromptPay) return
-    setPromptPayBusy(true)
-    setPromptPayMessage(null)
-    try {
-      const response = await fetch("/api/sancus/employee/local-payments", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spendingMethodId: selectedPromptPay.id, recipientName: promptPayRecipient,
-          promptPayId, amountThb: Number(promptPayAmount), qrPayload: promptPayQr,
-        }),
-      })
-      const body = await response.json() as { payout?: XenditPayoutDto; error?: string }
-      if (!response.ok || !body.payout) throw new Error(body.error || "The PromptPay payment was declined")
-      setPromptPayPayout(body.payout)
-      setPromptPayMessage(body.payout.status === "SETTLED" ? "PromptPay payment settled." : "PromptPay payment submitted.")
-      await load()
-    } catch (error) {
-      setPromptPayMessage(error instanceof Error ? error.message : "The PromptPay payment was declined")
-    } finally {
-      setPromptPayBusy(false)
-    }
-  }
-
   if (state === "error") return <div className="page"><div className="tile"><div className="empty">Couldn&apos;t load your employee portal. Refresh to try again.</div></div></div>
 
   return (
@@ -333,61 +276,16 @@ export default function EmployeePage() {
               {pixMessage ? <div className="empty" role="status">{pixMessage}</div> : null}
             </form>
           ) : <div className="empty">No Pix access is assigned to this login yet. Your admin can issue it from your team profile.</div>}
-          {otherQr.some((method) => method.type === "QRIS") ? <p className="body-s muted">QRIS access is assigned for Indonesia. Outbound QRIS merchant scanning remains simulated in this hackathon build.</p> : null}
+          {hasQris ? <p className="body-s muted">QRIS access is assigned for Indonesia. Outbound QRIS merchant scanning remains simulated in this hackathon build.</p> : null}
         </section>
 
-        {selectedPromptPay ? (
-          <section className="tile s12" aria-labelledby="employee-promptpay">
-            <div className="tile-head">
-              <div>
-                <h2 className="tile-title" id="employee-promptpay">Pay a Thai merchant</h2>
-                <p className="body-s muted" style={{ margin: "4px 0 0" }}>Your admin issued PromptPay access. The QR identifies the merchant; Sancus applies your company limits and Xendit sends the THB payout.</p>
-              </div>
-              <span className={`sx-pill ${selectedPromptPay.status === "ACTIVE" ? "sx-pill--settled" : ""}`}>{selectedPromptPay.status}</span>
-            </div>
-            <form onSubmit={spendPromptPay} className="grid" style={{ gap: 12 }}>
-              <div className="s7" style={{ display: "grid", gap: 12 }}>
-                <div className="kv"><span>Used this month</span><span>{money(selectedPromptPay.usedMinor, "THB")} of {money(selectedPromptPay.monthlyLimitMinor, "THB")}</span></div>
-                {promptPayQr ? (
-                  <div style={{ display: "grid", gap: 8, justifyContent: "center" }}>
-                    <MerchantQrPreview payload={promptPayQr} label="Merchant PromptPay QR" />
-                    <span className="body-s muted" style={{ textAlign: "center" }}>Merchant PromptPay QR ready to pay</span>
-                  </div>
-                ) : (
-                  <div className="empty">Load a demo merchant QR, or paste a PromptPay copy-and-paste code.</div>
-                )}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button type="button" className="sx-btn sx-btn--secondary" onClick={useDemoPromptPayQr} disabled={promptPayBusy}>Use demo merchant QR</button>
-                  <button type="button" className="sx-btn" onClick={() => readPromptPayQr()} disabled={promptPayBusy || !promptPayQr}>Read QR</button>
-                  <button type="button" className="sx-btn sx-btn--quiet" onClick={() => setPromptPayPasteOpen((v) => !v)}>{promptPayPasteOpen ? "Hide paste" : "Paste code"}</button>
-                </div>
-                {promptPayPasteOpen ? (
-                  <label className="field">
-                    <span>PromptPay copy-and-paste code</span>
-                    <textarea rows={3} value={promptPayQr} onChange={(event) => { setPromptPayQr(event.target.value); setPromptPayRecipient(""); setPromptPayPayout(null) }} minLength={20} placeholder="Paste EMV payload only if needed" />
-                  </label>
-                ) : null}
-              </div>
-              <div className="s5" style={{ display: "grid", gap: 12, alignContent: "start" }}>
-                {promptPayRecipient ? <>
-                  <label className="field"><span>Merchant</span><input value={promptPayRecipient} onChange={(event) => setPromptPayRecipient(event.target.value)} required /></label>
-                  <label className="field"><span>PromptPay destination</span><input value={promptPayId} onChange={(event) => setPromptPayId(event.target.value)} required /></label>
-                  <label className="field"><span>Amount (THB)</span><input type="number" min="1" step="0.01" value={promptPayAmount} onChange={(event) => setPromptPayAmount(event.target.value)} required /></label>
-                  <button type="submit" className="sx-btn sx-btn--primary" disabled={promptPayBusy || selectedPromptPay.status !== "ACTIVE" || !promptPayQr}>{promptPayBusy ? "Sending…" : `Pay ${promptPayAmount ? `฿${promptPayAmount}` : "with PromptPay"}`}</button>
-                </> : <div className="empty">Load or read the merchant QR to review who will be paid.</div>}
-              </div>
-            </form>
-            {promptPayMessage ? <div className="empty" role="status" style={{ marginTop: 12 }}>{promptPayMessage}{promptPayPayout ? ` · ${promptPayPayout.simulated ? "Simulated fallback" : "Xendit test mode"}` : ""}</div> : null}
-          </section>
-        ) : null}
-
-        <section className="tile s4" aria-labelledby="employee-limits">
+        <section className="tile s6" aria-labelledby="employee-limits">
           <div className="tile-head"><h2 className="tile-title" id="employee-limits">Your limits</h2><span className="body-s muted">Set by admin</span></div>
           <div className="kv"><span>Per payment</span><span className="body-strong">{usd6(data?.limits.perPaymentMinor ?? null)}</span></div>
           <div className="kv"><span>Per day</span><span className="body-strong">{usd6(data?.limits.dailyMinor ?? null)}</span></div>
         </section>
 
-        <section className="tile s12" aria-labelledby="employee-requests">
+        <section className="tile s6" aria-labelledby="employee-requests">
           <div className="tile-head"><h2 className="tile-title" id="employee-requests">Your payment requests</h2><span className="body-s muted">An admin approves each one before money moves</span></div>
           {approvals.loading ? <div className="empty" aria-busy="true">Loading…</div> : requests.length ? requests.slice(0, 8).map((r) => (
             <div className="kv" key={r.id}>
@@ -397,7 +295,7 @@ export default function EmployeePage() {
           )) : <div className="empty">No requests yet. Use Request a payment to pay a supplier; an admin approves it.</div>}
         </section>
 
-        <section className="tile s8" aria-labelledby="employee-activity">
+        <section className="tile s12" aria-labelledby="employee-activity">
           <div className="tile-head"><h2 className="tile-title" id="employee-activity">Recent spending</h2><span className="body-s muted">Authorizations and settled debits</span></div>
           {data && (data.cardPurchases.length || data.pixPayments.length || data.localPayments.length) ? [
             ...data.cardPurchases.map((purchase) => ({ id: `card-${purchase.id}`, name: purchase.merchantName, amount: money(purchase.amountMinor, purchase.currency), method: "Card", status: purchase.status, at: purchase.authorizedAt })),
