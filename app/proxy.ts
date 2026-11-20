@@ -29,6 +29,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseReqResClient } from "@/lib/supabase/server-client";
+import { refreshApiSession } from "@/lib/supabase/api-session";
 import { isDemoUserEmail } from "@/lib/sancus/demo-accounts";
 import { DEMO_GUEST_COOKIE, DEMO_LOGIN_PATH, isDemoLoginEnabled } from "@/lib/sancus/demo-login";
 import { SANCUS_ADMIN_COOKIE, SANCUS_EMPLOYEE_COOKIE, verifyAdminSession, verifyEmployeeSession } from "@/lib/sancus/simple-auth";
@@ -71,9 +72,11 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // API routes do their own per-route auth checks. Skip proxy logic.
+  // API routes do their own per-route auth checks. The proxy only refreshes an expiring
+  // Supabase session here, once, so parallel API calls don't race on the same refresh token.
   if (pathname.startsWith("/api")) {
-    return response;
+    if (!hasEnvVars) return response;
+    return refreshApiSession(request);
   }
 
   const isProtected = startsWithAny(pathname, PROTECTED_PREFIXES);

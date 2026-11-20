@@ -26,7 +26,7 @@ export const GET = withAuth(async (req, { user, supabase }) => {
   const companyId = qrCompanyFor(account, await workspaceCompany(req, supabase, user.id))
   const companyName = companyId ? account.scopes.find((s) => s.companyId === companyId)?.companyName : undefined
   const name = companyName ?? personName(user)
-  const token = signSancusQr({ u: user.id, c: companyId, n: name, cur: currency, amt: amount, note })
+  const token = signSancusQr({ u: user.id, c: companyId, cur: currency, amt: amount, note })
   return NextResponse.json({
     url: `${req.nextUrl.origin}/qr?pay=${encodeURIComponent(token)}`,
     receiver: { name, kind: companyId ? "business" : "personal" },

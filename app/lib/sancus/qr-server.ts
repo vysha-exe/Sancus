@@ -17,6 +17,16 @@ export function personName(user: Pick<User, "email" | "user_metadata">): string 
   return [m.first_name, m.last_name].filter(Boolean).join(" ") || user.email?.split("@")[0] || "Sancus user"
 }
 
+/** Who a code pays, for the payer's screen: the company / branch name, or the person's name. */
+export async function receiverName(admin: SupabaseClient, userId: string, companyId: string | null): Promise<string> {
+  if (companyId) {
+    const { data } = await admin.from("sancus_companies").select("name").eq("id", companyId).maybeSingle()
+    if (data?.name) return data.name as string
+  }
+  const { data } = await admin.auth.admin.getUserById(userId)
+  return data?.user ? personName(data.user) : "Sancus user"
+}
+
 /** Treasury wallet on Arc for a company node, or a person's personal treasury. */
 export async function treasuryAddress(admin: SupabaseClient, userId: string, companyId: string | null): Promise<string | null> {
   let q = admin.from("wallets").select("address").eq("blockchain", "ARC-TESTNET").eq("type", "treasury").order("created_at", { ascending: true }).limit(1)
