@@ -13,7 +13,7 @@ import { withAuth } from "@/lib/api/with-auth"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { checkDecision, type Approver } from "@/lib/sancus/approval-rules"
 import { notifyRequester } from "@/lib/sancus/approval-notify"
-import { serviceClient } from "@/lib/sancus/service-client"
+import { serviceOrUser } from "@/lib/sancus/service-client"
 import { toAchPaymentDto, type AchPaymentRow } from "@/lib/sancus/ach"
 import { decideAch } from "@/lib/sancus/ach-server"
 import { executeInternalTransfer, toInternalTransferDto, type InternalTransferRow } from "@/lib/sancus/internal-transfers"
@@ -62,7 +62,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
       }
       const now = new Date().toISOString()
       // Authorized above; a branch admin's transfer may touch accounts RLS hides, so use the service client.
-      const transferDb = serviceClient() ?? supabase
+      const transferDb = await serviceOrUser(supabase)
       const { data: claimed } = await transferDb
         .from("sancus_internal_transfers")
         .update(
@@ -87,7 +87,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     const achRow = ach as AchPaymentRow & { company_id?: string | null }
     const achDenied = deny(account, achRow.user_id, achRow.company_id ?? null, action)
     if (achDenied) return achDenied
-    const decided = await decideAch(serviceClient() ?? supabase, user.id, achRow, action, note)
+    const decided = await decideAch(await serviceOrUser(supabase), user.id, achRow, action, note)
     if (!decided.ok) return NextResponse.json({ error: decided.error, payment: toAchPaymentDto(ach as AchPaymentRow) }, { status: decided.status })
     return NextResponse.json({ payment: toAchPaymentDto(decided.row) })
   }
@@ -102,7 +102,7 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   const refused = deny(account, row.user_id, companyId, action)
   if (refused) return refused
   // Authorized above; the row is the requester's, so write it with the service client.
-  const db = serviceClient() ?? supabase
+  const db = await serviceOrUser(supabase)
 
   const now = new Date().toISOString()
 

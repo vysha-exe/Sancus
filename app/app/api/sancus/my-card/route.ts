@@ -11,6 +11,7 @@ import { loadAccount } from "@/lib/sancus/accounts-server"
 import { toSancusCardDto, type SancusCardRow } from "@/lib/sancus/cards"
 import { demoFallbacksEnabled } from "@/lib/sancus/demo-fallback"
 import { isMarqetaConfigured, issueMarqetaCard, simulatedMarqetaCard } from "@/lib/sancus/rails/marqeta"
+import { serviceOrUser } from "@/lib/sancus/service-client"
 
 const schema = z.object({
   label: z.string().trim().min(1).max(60).default("Virtual card"),
@@ -29,13 +30,13 @@ export type MyCardPurchaseDto = {
   createdAt: string
 }
 
-export const GET = withAuth(async (_req, { user }) => {
-  // Cards issued *to* this person can belong to whoever issued them, so read with the service client,
-  // filtered strictly to this person.
-  const { supabase: admin } = await createAdminContext()
+export const GET = withAuth(async (_req, { user, supabase }) => {
+  // Prefer service-role read (cards may be owned by the issuer). Fall back to the user
+  // session if the service key is missing/invalid so the page still loads.
+  const db = await serviceOrUser(supabase)
   const [{ data: cards, error }, { data: purchases }] = await Promise.all([
-    admin.from("sancus_cards").select("*").eq("employee_id", user.id).neq("status", "TERMINATED").order("created_at", { ascending: false }),
-    admin.from("sancus_card_purchases").select("*").eq("employee_id", user.id).order("created_at", { ascending: false }).limit(20),
+    db.from("sancus_cards").select("*").eq("employee_id", user.id).neq("status", "TERMINATED").order("created_at", { ascending: false }),
+    db.from("sancus_card_purchases").select("*").eq("employee_id", user.id).order("created_at", { ascending: false }).limit(20),
   ])
   if (error) return NextResponse.json({ error: "Could not load your cards" }, { status: 500 })
   const monthStart = new Date()

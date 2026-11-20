@@ -1,11 +1,12 @@
 // Sancus QR payments you sent or received, newest first.
 import { NextResponse } from "next/server"
-import { createAdminContext, withAuth } from "@/lib/api/with-auth"
+import { withAuth } from "@/lib/api/with-auth"
 import { toQrPaymentDto } from "@/lib/sancus/qr-server"
+import { serviceOrUser } from "@/lib/sancus/service-client"
 
-export const GET = withAuth(async (_req, { user }) => {
-  const { supabase: admin } = await createAdminContext()
-  const { data, error } = await admin
+export const GET = withAuth(async (_req, { user, supabase }) => {
+  const db = await serviceOrUser(supabase)
+  const { data, error } = await db
     .from("sancus_qr_payments")
     .select("*")
     .or(`payer_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)

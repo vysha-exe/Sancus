@@ -49,7 +49,7 @@ export function createAdminContext(): Promise<AuthContext> {
   if (adminContextPromise) return adminContextPromise
   adminContextPromise = (async () => {
     const url = projectUrl()
-    const secret = process.env.SUPABASE_SECRET_KEY?.trim()
+    const secret = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim()
     if (!url || !secret) throw new Error("Admin login needs a Supabase project URL/connection string and SUPABASE_SECRET_KEY")
 
     const supabase = createAdminClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } })

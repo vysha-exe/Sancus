@@ -4,7 +4,7 @@ import { getCompany, idFromPath } from "@/lib/sancus/company-api"
 import { listCompanyWallets, withBalances } from "@/lib/sancus/company-wallets"
 import { toInternalTransferDto, type InternalTransferRow } from "@/lib/sancus/internal-transfers"
 import { toPayoutDto, type PayoutRow } from "@/lib/sancus/payouts"
-import { serviceClient } from "@/lib/sancus/service-client"
+import { serviceOrUser } from "@/lib/sancus/service-client"
 import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
 import { loadRootTransferPositions } from "@/lib/sancus/transfer-positions"
 
@@ -22,7 +22,7 @@ export const GET = withAuth(async (req, { user, supabase }) => {
 
   // The company's other accounts are listed with the service client (a branch admin can't see HQ, but
   // may send money there). Balances and wallets are only shown for accounts this user can access.
-  const db = serviceClient() ?? supabase
+  const db = await serviceOrUser(supabase)
   const { data: companies } = await db
     .from("sancus_companies")
     .select("id, parent_id, root_id, name, country, base_currency, created_at")

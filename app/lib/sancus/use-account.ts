@@ -18,6 +18,8 @@ async function fetchAccount(): Promise<State> {
     if (res.status === 401) return { account: null, ready: true, signedOut: true }
     if (!res.ok) return { account: null, ready: true, signedOut: false }
     const body = await res.json()
+    // Drop stale company/balance *** caches from an earlier guest/401 session.
+    if (cached?.signedOut || cached?.account == null) resetCompaniesCache()
     return { account: body.account as AccountDto, ready: true, signedOut: false }
   } catch {
     return { account: null, ready: true, signedOut: false }

@@ -13,7 +13,7 @@ import {
 import { evaluatePayout, loadCompanyPolicy, spentToday } from "@/lib/sancus/policy"
 import { loadAccount } from "@/lib/sancus/accounts-server"
 import { notifyApprovers } from "@/lib/sancus/approval-notify"
-import { serviceClient } from "@/lib/sancus/service-client"
+import { serviceOrUser } from "@/lib/sancus/service-client"
 import { ensureCompanyReceiveAccount } from "@/lib/sancus/receive-accounts"
 import type { CompanyRow } from "@/lib/sancus/companies"
 import {
@@ -103,7 +103,7 @@ export const GET = withAuth(async (req, { user, supabase }) => {
   const ids = companyId ? accessible.filter((id) => id === companyId) : accessible
   if (!ids.length) return NextResponse.json({ transfers: [] })
 
-  const db = serviceClient() ?? supabase
+  const db = await serviceOrUser(supabase)
   const list = ids.join(",")
   const { data, error } = await db
     .from("sancus_internal_transfers")
@@ -111,7 +111,26 @@ export const GET = withAuth(async (req, { user, supabase }) => {
     .or(`source_company_id.in.(${list}),destination_company_id.in.(${list})`)
     .order("created_at", { ascending: false })
     .limit(100)
-  if (error) return NextResponse.json({ error: "Could not load internal transfers" }, { status: 500 })
+  if (error) {
+    // Bad service key already falls back above; still fail soft if RLS hides the table.
+    const retry = db === supabase ? null : await supabase
+      .from("sancus_internal_transfers")
+      .select("*")
+      .or(`source_company_id.in.(${list}),destination_company_id.in.(${list})`)
+      .order("created_at", { ascending: false })
+      .limit(100)
+    if (!retry || retry.error) return NextResponse.json({ error: "Could not load internal transfers" }, { status: 500 })
+    const rows = (retry.data ?? []) as InternalTransferRow[]
+    const names = await namesFor(supabase, rows)
+    return NextResponse.json({
+      transfers: rows.map((row) =>
+        toInternalTransferDto(row, {
+          source: names.get(row.source_company_id),
+          destination: names.get(row.destination_company_id),
+        })
+      ),
+    })
+  }
 
   const rows = (data ?? []) as InternalTransferRow[]
   // Names of the other end (e.g. HQ seen from a branch) are shown by name only, as on the branch page.
@@ -132,7 +151,8 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 })
   }
 
-  const { data: replay } = await (serviceClient() ?? supabase)
+  const db = await serviceOrUser(supabase)
+  const { data: replay } = await db
     .from("sancus_internal_transfers")
     .select("*")
     .eq("user_id", user.id)
@@ -157,7 +177,6 @@ export const POST = withAuth(async (req, { user, supabase }) => {
   if (!sourceRole || !["OWNER", "ADMIN", "FINANCE"].includes(sourceRole)) {
     return NextResponse.json({ error: "You do not have access to move money out of this account" }, { status: 403 })
   }
-  const db = serviceClient() ?? supabase
   const destination = await getCompany(db, destinationCompanyId)
   if (!destination) return NextResponse.json({ error: "Branch not found" }, { status: 404 })
   if (source.root_id !== destination.root_id) {

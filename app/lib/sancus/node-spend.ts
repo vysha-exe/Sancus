@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { getLiveRates, toRateMicro } from "./live-fx"
 import { BALANCE_SINCE, simulatedSpend, type SimSpendInputs } from "./treasury"
 import { isTerminal, type PayoutStatus } from "./payout-provider"
-import { serviceClient } from "./service-client"
+import { serviceOrUser } from "./service-client"
 import { loadRootTransferPositions } from "./transfer-positions"
 
 /**
@@ -18,7 +18,7 @@ export async function loadNodeDeductions(supabase: SupabaseClient, companyIds: s
   const { data: nodes } = await supabase.from("sancus_companies").select("id, parent_id").in("id", companyIds)
   const rootIds = (nodes ?? []).filter((node) => node.parent_id === null).map((node) => node.id as string)
   // Service client: a transfer's other end may be a branch this user can't read through RLS.
-  const positions = await loadRootTransferPositions(serviceClient() ?? supabase, rootIds)
+  const positions = await loadRootTransferPositions(await serviceOrUser(supabase), rootIds)
   const [payouts, ach, pix, live] = await Promise.all([
     supabase.from("sancus_payouts").select("company_id, status, usdc_amount_minor, tx_hash, simulated, created_at").in("company_id", companyIds),
     supabase.from("sancus_ach_payments").select("company_id, status, usdc_amount_minor, funded_onchain, created_at").in("company_id", companyIds).gte("created_at", BALANCE_SINCE),
