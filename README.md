@@ -91,9 +91,69 @@ flowchart LR
   Ledger --> DB
 ```
 
-**Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Supabase (Postgres + row-level security) · viem · Circle Developer-Controlled Wallets, Gateway, App Kit, x402 batching · OpenAI (agent) · ElevenLabs (voice) · Vercel.
+The app started from Circle's [arc-fintech](https://github.com/circlefin/arc-fintech) sample (Apache-2.0) for auth, wallets and Gateway plumbing; everything under "Sancus" (accounts, payouts, agent, voice, x402, ledger, branches, cards, QR) was built during the hackathon. See [app/UPSTREAM.md](app/UPSTREAM.md).
 
-The app started from Circle's [arc-fintech](https://github.com/circlefin/arc-fintech) sample (Apache-2.0) for auth, wallets and Gateway plumbing; everything under "Sancus" (accounts, payouts, agent, voice, x402, ledger, branches) was built during the hackathon. See [app/UPSTREAM.md](app/UPSTREAM.md).
+---
+
+## Tech stack
+
+### Chain: Arc Testnet (chain ID 5042002)
+USDC is the gas token, so every fee is in dollars and nobody needs a second token. All Sancus onchain activity (treasuries, payouts, card settlement, QR payments, x402) happens on Arc Testnet.
+
+### Circle products we call
+
+| Circle product | Package | What Sancus does with it | Where |
+|---|---|---|---|
+| **Developer-Controlled Wallets** | `@circle-fin/developer-controlled-wallets` | One wallet set per company; an **SCA** treasury and a settlement wallet on Arc for every company node (HQ and each branch), plus personal treasury / settlement wallets and Gateway signer wallets. | `lib/sancus/provision-circle.ts`, `lib/sancus/company-wallets.ts` |
+| **App Kit** (with the Circle Wallets adapter) | `@circle-fin/app-kit`, `@circle-fin/adapter-circle-wallets` | `kit.send` moves USDC between Circle wallets on Arc (payout settlement legs, ACH funding, QR payments when fUSDC is off); `kit.unifiedBalance.*` reads, deposits to and spends the Gateway balance; `kit.swap` swaps USDC ⇄ EURC on Arc. | `lib/circle/app-kit-send.ts`, `lib/circle/gateway-sdk.ts`, `app/api/swap/` |
+| **Gateway** (unified USDC balance) | via App Kit `unifiedBalance` | Treasury deposits and the x402 revenue sit in the Gateway balance; the treasury total = wallet USDC + Gateway USDC. Gateway webhooks keep balances fresh. | `lib/circle/gateway-sdk.ts`, `lib/sancus/treasury.ts`, `app/api/circle/gateway-webhook/` |
+| **Gateway Nanopayments / x402** | `@circle-fin/x402-batching` (`GatewayClient`, `BatchFacilitatorClient`) | Both sides of x402 on Arc: the agent *pays* per request from its own Gateway-funded wallet, and Sancus *sells* `/api/x402/route-quote` to other agents, verifying and settling each payment with Circle's batching facilitator. Gasless, batched. | `lib/sancus/agent/x402-wallet.ts`, `lib/sancus/x402.ts`, `app/api/x402/` |
+| **Webhooks** | Circle notifications | Wallet and Gateway events update transfers and balances. | `app/api/circle/webhook/`, `app/api/circle/gateway-webhook/` |
+
+Also in the codebase from the arc-fintech starter but not part of the Sancus demo: CCTP bridging and rebalancing (`app/api/bridge/`), EarnKit vaults (`app/api/earn/`), the Onramp Kit (`app/api/onramp/`) and the Compliance Engine. We don't use Circle Gas Station / Paymaster directly; transactions go through the developer-controlled wallets with a set fee level.
+
+### x402 in detail
+| | |
+|---|---|
+| **Sold endpoint** | `GET /api/x402/route-quote?country=ID\|TH&amount=…&recipientType=MOBILE\|BANK`: cheapest payout route (rail, live FX rate, fee, USDC cost, arrival) |
+| **Price** | $0.01 USDC per call (`SANCUS_X402_PRICE`) |
+| **Network** | Arc Testnet, `eip155:5042002`, asset Arc USDC `0x3600…0000`, Gateway Wallet `0x0077…19B9` |
+| **Flow** | Request → `402 Payment Required` with a `PAYMENT-REQUIRED` header (terms) → client retries with a signed `PAYMENT-SIGNATURE` (Gateway payment) → Sancus verifies + settles with `BatchFacilitatorClient` → records the earning, posts ledger revenue, returns the data with `PAYMENT-RESPONSE` |
+| **Where revenue lands** | The Gateway balance of the receiving account's Arc treasury wallet (`SANCUS_X402_PAY_TO`); shown as x402 earnings on the Agents page |
+| **Buyer side (our agent)** | `GatewayClient` on `arcTestnet` with its own key (`BUYER_PRIVATE_KEY`), topped up into Gateway (`AGENT_X402_DEPOSIT_USDC`); every purchase is checked against the **$0.50 daily cap** (`AGENT_X402_DAILY_CAP_USDC`) and logged; payment validity window 7 days |
+
+### Smart contracts on Arc
+Sancus deploys one ERC-20 contract, [`SancusMockStablecoin.sol`](app/contracts/mock-stablecoin/SancusMockStablecoin.sol), several times: **fUSDC** (Face USDC, our mintable test settlement token) and local-currency tokens **mTHB, mIDR, mBRL** minted when a local QR collection is paid. A rail bot holds the minter role; an fUSDC "transfer" is a burn from the payer then a mint to the receiver, and the Process page shows both transactions. A mock equity broker and tokens back the tokenized-stock treasury stretch. Addresses: [Contract addresses](#contract-addresses-arc-testnet-chain-id-5042002).
+
+Spending rules (budgets, per-payment and daily limits, approvals) are enforced in the app and the database, not in a contract yet.
+
+### AI and voice
+| | |
+|---|---|
+| **Agent model** | OpenAI **GPT-4o** by default (`OPENAI_AGENT_MODEL`), Chat Completions with function calling, run by our own tool loop (`lib/sancus/agent/openai-runner.ts`), max 12 steps, streamed to the browser as NDJSON |
+| **Agent tools** | balances, payees, live quotes, `propose_payment` / `propose_collection` / `propose_limits` (signed proposals), `buy_route_quote` (x402), `recent_activity`, `my_spending`, `open_page`, `request_payment_qr` |
+| **Proposals** | HMAC-SHA256 signed, bound to the user and the exact request, expire in 10 minutes, allowlisted endpoint per kind, idempotent execution |
+| **Voice out** | **ElevenLabs** streaming text-to-speech, **Flash v2.5** (`eleven_flash_v2_5`), text normalization on, voice "Sarah"; sentences stream in parallel, progress phrases pre-recorded |
+| **Voice in** | Browser Web Speech API (Chrome / Edge) |
+
+### Payment rails and partners
+| Rail | Direction | Partner | Status |
+|---|---|---|---|
+| PromptPay (Thailand) | Pay out | Xendit | Test mode, labeled simulation when money-out is off |
+| BI-FAST (Indonesia) | Pay out | Xendit | Test mode, labeled simulation when money-out is off |
+| Pix (Brazil) | Pay out | PayZu | Sandbox when a key is set, otherwise labeled simulation |
+| ACH (US) | Pay out | Mock ACH rail | Simulated bank leg, real onchain funding |
+| PromptPay QR | Collect | Omise | Sandbox |
+| QRIS (Indonesia) | Collect | Midtrans | Sandbox |
+| Virtual cards | Spend | Marqeta | Sandbox (simulated when unconfigured); settles onchain on Arc |
+| NFC tap to pay | Spend | Web NFC + Android HCE companion (`nfc-android/`) | Proof of concept on real Android radios, card settlement through Sancus |
+| Sancus QR | Person to person | Sancus (signed QR) | Real onchain payment on Arc between Sancus accounts |
+| USDC | Send / receive | Arc | Real (testnet) |
+
+FX: live ECB reference rates from Frankfurter, with open.er-api as a fallback, cached 10 minutes. QR: EMVCo parser for PromptPay / Pix / QRIS, `jsQR` and the browser's `BarcodeDetector` for scanning, `qrcode` for generating.
+
+### App and data
+Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Supabase Postgres with row-level security and SQL migrations · Supabase Auth · viem · Zod · Vitest · Vercel.
 
 ---
 
