@@ -23,7 +23,10 @@ const money = (c: Currency, n: number) =>
 type Card = { id: string; lastFour: string; status: string; employeeName: string }
 
 /** Admin receive completes on its own after this long. */
-const ADMIN_RECEIVE_AUTOCOMPLETE_MS = 5000
+const ADMIN_RECEIVE_AUTOCOMPLETE_MS = 4000
+
+/** Pay-by-NFC shows the same success screen after this long (demo). */
+const PAY_SUCCESS_AUTOCOMPLETE_MS = 3000
 
 /** A clear checkout "beep": two quick tones, then a held one. */
 function playBeep(ctx: AudioContext | null) {
@@ -277,12 +280,21 @@ function PayNfc({ card }: { card: Card | null }) {
   const [ready, setReady] = useState<{ token: string; expiresAt: number; amount: number | null } | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [error, setError] = useState<string | null>(null)
+  const [paid, setPaid] = useState<{ label: string; detail: string } | null>(null)
+  const timerRef = useRef<number | null>(null)
+  const audioRef = useRef<AudioContext | null>(null)
 
   useEffect(() => {
-    if (!ready) return
+    if (!ready || paid) return
     const t = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(t)
-  }, [ready])
+  }, [ready, paid])
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+    }
+  }, [])
 
   if (!card) {
     return <p className="body-s muted" style={{ margin: 0 }}>Get a virtual card above to pay by tapping your phone.</p>
@@ -291,10 +303,34 @@ function PayNfc({ card }: { card: Card | null }) {
   const n = Number(amount.replace(/,/g, ""))
   const secondsLeft = ready ? Math.max(0, Math.round((ready.expiresAt - now) / 1000)) : 0
 
+  function reset() {
+    if (timerRef.current) window.clearTimeout(timerRef.current)
+    timerRef.current = null
+    setReady(null)
+    setPaid(null)
+    setError(null)
+  }
+
+  function showSuccess(label: string, detail: string) {
+    if (timerRef.current) window.clearTimeout(timerRef.current)
+    timerRef.current = null
+    setPaid({ label, detail })
+    playBeep(audioRef.current)
+    navigator.vibrate?.([80, 60, 200])
+  }
+
   async function prepare() {
     if (!card) return
     setBusy(true)
     setError(null)
+    setPaid(null)
+    try {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      audioRef.current ??= Ctx ? new Ctx() : null
+      void audioRef.current?.resume()
+    } catch {
+      audioRef.current = null
+    }
     try {
       const res = await fetch("/api/sancus/nfc/intent", {
         method: "POST",
@@ -303,13 +339,48 @@ function PayNfc({ card }: { card: Card | null }) {
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? "Couldn't get your card ready")
-      setReady({ token: body.token, expiresAt: Date.parse(body.expiresAt), amount: n > 0 ? n : null })
+      const amountReady = n > 0 ? n : null
+      setReady({ token: body.token, expiresAt: Date.parse(body.expiresAt), amount: amountReady })
       setNow(Date.now())
+      const label = amountReady != null ? `$${amountReady.toFixed(2)}` : "$12.50"
+      const detail = note.trim() || `Card ·${card.lastFour}`
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+      timerRef.current = window.setTimeout(() => showSuccess(label, detail), PAY_SUCCESS_AUTOCOMPLETE_MS)
     } catch (e) {
       setError((e as Error).message)
     } finally {
       setBusy(false)
     }
+  }
+
+  if (paid) {
+    return (
+      <div
+        role="status"
+        aria-live="assertive"
+        style={{
+          display: "grid",
+          justifyItems: "center",
+          gap: 10,
+          padding: "36px 20px",
+          borderRadius: 18,
+          background: "#16a34a",
+          color: "#fff",
+          textAlign: "center",
+          animation: "nfc-pop .35s ease-out",
+        }}
+      >
+        <span style={{ width: 112, height: 112, borderRadius: "50%", background: "rgba(255,255,255,.18)", display: "grid", placeItems: "center" }}>
+          <IconCheck />
+        </span>
+        <b style={{ fontSize: 22, lineHeight: "28px" }}>Payment succeeded</b>
+        <span style={{ fontSize: 40, lineHeight: "46px", fontWeight: 700 }}>{paid.label}</span>
+        <span style={{ fontSize: 14, opacity: 0.9 }}>{paid.detail}</span>
+        <button type="button" className="sx-btn sx-btn--secondary" style={{ marginTop: 8, background: "#fff", color: "#14532d" }} onClick={reset}>
+          New payment
+        </button>
+      </div>
+    )
   }
 
   if (ready && secondsLeft > 0) {
@@ -325,7 +396,7 @@ function PayNfc({ card }: { card: Card | null }) {
         <a className="sx-btn sx-btn--secondary" href={nfcDeepLink(ready.token)}>
           Open the Sancus NFC app to tap
         </a>
-        <button type="button" className="sx-btn sx-btn--quiet" onClick={() => setReady(null)}>
+        <button type="button" className="sx-btn sx-btn--quiet" onClick={reset}>
           Cancel
         </button>
       </div>
