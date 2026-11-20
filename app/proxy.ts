@@ -137,7 +137,8 @@ export async function proxy(request: NextRequest) {
   if (!user && demoOn && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = DEMO_LOGIN_PATH;
-    url.search = `?next=${encodeURIComponent(pathname)}`;
+    // Keep the query so deep links (e.g. a payment link's ?to=…&amount=…) survive the sign-in.
+    url.search = `?next=${encodeURIComponent(pathname + request.nextUrl.search)}`;
     return NextResponse.redirect(url);
   }
 

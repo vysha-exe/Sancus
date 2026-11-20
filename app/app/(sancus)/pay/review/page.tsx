@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
-import { usePayFlow } from "@/lib/sancus/pay-flow"
+import { PAYMENT_LINK_PAYEE_PREFIX, usePayFlow } from "@/lib/sancus/pay-flow"
 import { can, useAccount } from "@/lib/sancus/use-account"
 
 export default function PayReviewPage() {
@@ -108,6 +108,12 @@ export default function PayReviewPage() {
           {error || quoteError ? (
             <p className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)", margin: 0 }}>
               {error ?? quoteError}
+            </p>
+          ) : null}
+
+          {recipient.id.startsWith(PAYMENT_LINK_PAYEE_PREFIX) ? (
+            <p className="body-s muted" style={{ margin: 0 }}>
+              <span className="sx-pill sx-pill--simulated">Simulated</span> Sending to a USDC address is a demo here. No money moves.
             </p>
           ) : null}
 
