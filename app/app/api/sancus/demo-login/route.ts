@@ -13,7 +13,13 @@ import {
   isDemoLoginEnabled,
   safeNextPath,
 } from "@/lib/sancus/demo-login"
-import { DEMO_HOME, ensureDemoAccount, parseDemoAs, type DemoAccountReady } from "@/lib/sancus/demo-accounts"
+import {
+  DEMO_HOME,
+  demoEmailFor,
+  ensureDemoAccount,
+  parseDemoAs,
+  type DemoAccountReady,
+} from "@/lib/sancus/demo-accounts"
 import { SANCUS_ADMIN_COOKIE, SANCUS_EMPLOYEE_COOKIE } from "@/lib/sancus/simple-auth"
 import { COMPANY_COOKIE } from "@/lib/sancus/workspace"
 // Do NOT statically import provision-circle / Circle SDKs here. On Vercel those
@@ -31,6 +37,40 @@ function enterAsGuest(request: NextRequest, next: string, reason: string) {
   return response
 }
 
+async function adminClientOrNull() {
+  const secret = process.env.SUPABASE_SECRET_KEY?.trim()
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  if (!secret || !url) return null
+  const admin = createAdminClient(url, secret, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  // Probe: sb_secret keys that aren't registered fail here — don't block password sign-in.
+  const probe = await admin.auth.admin.listUsers({ page: 1, perPage: 1 })
+  if (probe.error) {
+    console.warn(`Demo login: service key unusable (${probe.error.message})`)
+    return null
+  }
+  return admin
+}
+
+/** After a successful sign-in, pick the HQ / branch cookie from the user's memberships. */
+async function companyIdsForUser(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<{ rootId?: string; branchId?: string }> {
+  const { data: memberships } = await supabase
+    .from("sancus_memberships")
+    .select("company_id, role")
+    .eq("user_id", userId)
+    .eq("status", "ACTIVE")
+  const ids = (memberships ?? []).map((m) => m.company_id as string)
+  if (!ids.length) return {}
+  const { data: companies } = await supabase.from("sancus_companies").select("id, parent_id").in("id", ids)
+  const rootId = (companies ?? []).find((c) => c.parent_id == null)?.id as string | undefined
+  const branchId = (companies ?? []).find((c) => c.parent_id != null)?.id as string | undefined
+  return { rootId, branchId }
+}
+
 export async function GET(request: NextRequest) {
   // ?as=admin|branch|employee|individual picks which demo account to open (default admin).
   const as = parseDemoAs(request.nextUrl.searchParams.get("as"))
@@ -43,31 +83,50 @@ export async function GET(request: NextRequest) {
   if (!baseCreds) {
     return enterAsGuest(request, next, "demo-misconfigured")
   }
-  let creds: DemoAccountReady = baseCreds
+
+  let creds: DemoAccountReady = {
+    ...baseCreds,
+    email: demoEmailFor(baseCreds.email, as),
+  }
 
   try {
-    // Create and wire every demo identity, including the global Admin account.
-    const secret = process.env.SUPABASE_SECRET_KEY?.trim()
-    if (secret) {
-      const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, secret, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-      creds = await ensureDemoAccount(admin, baseCreds, as)
-    } else if (as !== "admin") {
+    // Prefer password sign-in first. Demo admin already exists; a broken service-role
+    // key must not force the whole app into guest "***" balances.
+    const supabase = await createClient()
+    let { error } = await supabase.auth.signInWithPassword({
+      email: creds.email,
+      password: creds.password,
+    })
+
+    const admin = await adminClientOrNull()
+    if (admin) {
+      try {
+        creds = await ensureDemoAccount(admin, baseCreds, as)
+        // Re-sign in if ensureDemoAccount switched to a different identity email.
+        if (creds.email.toLowerCase() !== demoEmailFor(baseCreds.email, as).toLowerCase() || error) {
+          ;({ error } = await supabase.auth.signInWithPassword({
+            email: creds.email,
+            password: creds.password,
+          }))
+        }
+      } catch (ensureErr) {
+        console.warn(
+          "Demo login: ensureDemoAccount skipped",
+          ensureErr instanceof Error ? ensureErr.message : ensureErr
+        )
+      }
+    } else if (as !== "admin" && error) {
       return enterAsGuest(request, next, "demo-missing-secret")
     }
 
-    const supabase = await createClient()
-    let { error } = await supabase.auth.signInWithPassword(creds)
-
-    // First run: create the demo user, then sign in.
+    // First run without a working service key: try public sign-up for this identity.
     if (error) {
-      const secret = process.env.SUPABASE_SECRET_KEY?.trim()
-      if (secret) {
-        const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, secret, {
-          auth: { autoRefreshToken: false, persistSession: false },
+      if (admin) {
+        const created = await admin.auth.admin.createUser({
+          email: creds.email,
+          password: creds.password,
+          email_confirm: true,
         })
-        const created = await admin.auth.admin.createUser({ ...creds, email_confirm: true })
         if (created.error && !/already/i.test(created.error.message)) {
           return enterAsGuest(request, next, `create-failed: ${created.error.message}`)
         }
@@ -85,18 +144,25 @@ export async function GET(request: NextRequest) {
           return response
         }
       }
-      ;({ error } = await supabase.auth.signInWithPassword(creds))
+      ;({ error } = await supabase.auth.signInWithPassword({
+        email: creds.email,
+        password: creds.password,
+      }))
     }
 
     if (error) {
       return enterAsGuest(request, next, `signin-failed: ${error.message}`)
     }
 
-    // Best-effort wallet setup after sign-in. Dynamic import so a Circle SDK
-    // load failure never blocks demo entry.
     const {
       data: { user },
     } = await supabase.auth.getUser()
+
+    if (user && !creds.rootId && !creds.branchId) {
+      const ids = await companyIdsForUser(supabase, user.id)
+      creds = { ...creds, ...ids }
+    }
+
     // Only accounts that hold money get treasury wallets (not branch admins or employees).
     if (user && (as === "admin" || as === "individual")) {
       try {
