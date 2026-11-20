@@ -7,7 +7,8 @@ import { nfcDeepLink, nfcSigningConfigured, signNfcCardPay } from "@/lib/sancus/
 
 const schema = z.object({
   cardId: z.string().uuid(),
-  amount: z.number().positive().max(100_000),
+  /** Leave out to pay whatever the receiver asks (they set the amount when they charge the tap). */
+  amount: z.number().positive().max(100_000).optional(),
   merchantName: z.string().trim().min(1).max(120).default("NFC merchant"),
 })
 
@@ -28,7 +29,7 @@ export const POST = withAuth(async (req, { user }) => {
     kind: "card_pay" as const,
     cardId: card.id as string,
     lastFour: String(card.last_four ?? "0000"),
-    amount: parsed.data.amount,
+    amount: parsed.data.amount ?? null,
     merchantName: parsed.data.merchantName,
     payerName,
     userId: user.id,
