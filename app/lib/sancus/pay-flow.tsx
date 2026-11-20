@@ -29,8 +29,9 @@ import { useAccount } from "@/lib/sancus/use-account"
 import type { XenditPayoutDto } from "@/lib/sancus/xendit-payouts"
 import type { PixPaymentDto } from "@/lib/sancus/local-rails"
 import type { InternalTransferDto } from "@/lib/sancus/internal-transfers"
-import { defaultCurrency, isPayRail, type PayCurrency, type QuoteSide, type SerializedPayQuote } from "@/lib/sancus/pay-quote"
+import { CURRENCIES, defaultCurrency, isPayRail, type PayCurrency, type QuoteSide, type SerializedPayQuote } from "@/lib/sancus/pay-quote"
 import type { CompanyNode } from "@/lib/sancus/companies"
+import { DEFAULT_FX_CONFIG } from "@/lib/sancus/fx"
 import { orgCompaniesAsRecipients } from "@/lib/sancus/org-payees"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
 import { signalSancusDataChanged } from "@/lib/sancus/live-refresh"
@@ -122,6 +123,22 @@ function payoutCurrency(primaryRail: string, rail: string): PayCurrency | null {
   if (!isPayRail(rail)) return null
   if (rail === "Wire") return isPayRail(primaryRail) && primaryRail !== "Wire" ? defaultCurrency(primaryRail) : "USD"
   return defaultCurrency(rail)
+}
+
+/**
+ * Amount fields that carry an invoice's total over to the chosen payee: USD as the send amount,
+ * the payee's own currency as the receive amount, any other currency as its USD equivalent at the
+ * app's simulated rate (SGD uses the default Singapore payout rate). Blank only with no known rate.
+ */
+function invoiceAmounts(invoice: InvoicePayContext, rail: string): Pick<PayState, "usdAmount" | "localAmount" | "side"> {
+  const amountText = String(invoice.amount)
+  if (invoice.currency === "USD") return { usdAmount: amountText, localAmount: "", side: "send" }
+  if (payoutCurrency(rail, rail) === invoice.currency) return { usdAmount: "", localAmount: amountText, side: "receive" }
+  const rateMicro = invoice.currency === "SGD"
+    ? DEFAULT_FX_CONFIG.midRateMicro
+    : invoice.currency in CURRENCIES && invoice.currency !== "USDC" ? CURRENCIES[invoice.currency as PayCurrency].rateMicro : null
+  if (rateMicro) return { usdAmount: (invoice.amount / (Number(rateMicro) / 1_000_000)).toFixed(2), localAmount: "", side: "send" }
+  return { usdAmount: "", localAmount: "", side: "send" }
 }
 
 /** A typed local amount as a number: "1,234.56", "1.234,56" (pt-BR / id-ID) or "750.000" (IDR). */
@@ -231,20 +248,18 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
         all.find((r) => normalizeName(r.name) === wanted) ??
         (wanted.length >= 4 ? all.find((r) => { const n = normalizeName(r.name); return n.includes(wanted) || wanted.includes(n) }) : undefined)
       setInvoice({ ...invoiceContext, matched: Boolean(match) })
-      if (!match) return
-      const amountText = String(invoiceContext.amount)
-      const railName = match.rail
-      const matchCurrency = payoutCurrency(match.rail, railName)
+      const memo = invoiceContext.invoiceNumber ? `Invoice ${invoiceContext.invoiceNumber}` : null
+      // No matching payee: keep the memo now; the amount follows whichever payee the user picks.
+      if (!match) {
+        if (memo) setState((s) => ({ ...s, memo }))
+        return
+      }
       setState((s) => ({
         ...s,
         recipientId: match.id,
-        rail: railName,
-        memo: invoiceContext.invoiceNumber ? `Invoice ${invoiceContext.invoiceNumber}` : s.memo,
-        ...(invoiceContext.currency === "USD"
-          ? { usdAmount: amountText, localAmount: "", side: "send" as const }
-          : matchCurrency === invoiceContext.currency
-            ? { localAmount: amountText, usdAmount: "", side: "receive" as const }
-            : { usdAmount: "", localAmount: "", side: "send" as const }),
+        rail: match.rail,
+        memo: memo ?? s.memo,
+        ...invoiceAmounts(invoiceContext, match.rail),
       }))
     }, 0)
     return () => window.clearTimeout(timer)
@@ -287,16 +302,16 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       const r = recipients.find((item) => item.id === id) ?? findRecipient(id, customPayees)
       if (!r) return
       idempotencyKey.current = null
+      // Paying an invoice: carry its total to whichever payee is picked instead of clearing it.
+      const amounts = invoice ? invoiceAmounts(invoice, r.rail) : { localAmount: "", usdAmount: "", side: "send" as const }
       setState((s) => ({
         ...s,
         recipientId: r.id,
         rail: r.rail,
-        localAmount: "",
-        usdAmount: "",
-        side: "send",
+        ...amounts,
       }))
     },
-    [customPayees, recipients]
+    [customPayees, recipients, invoice]
   )
 
   // Drop a stale selection if that payee left the list (e.g. workspace change). Keep empty when none picked.
@@ -319,9 +334,10 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
       return next
     })
     idempotencyKey.current = null
-    setState((s) => ({ ...s, recipientId: payee.id, rail: payee.rail, localAmount: "", usdAmount: "", side: "send" }))
+    const amounts = invoice ? invoiceAmounts(invoice, payee.rail) : { localAmount: "", usdAmount: "", side: "send" as const }
+    setState((s) => ({ ...s, recipientId: payee.id, rail: payee.rail, ...amounts }))
     return { ok: true as const, recipient: payee }
-  }, [])
+  }, [invoice])
 
   const setUsdAmount = useCallback((v: string) => {
     idempotencyKey.current = null
