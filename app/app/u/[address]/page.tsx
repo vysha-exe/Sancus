@@ -27,6 +27,10 @@ export default function PersonalPayPage({
   const amountNumber = Number.parseFloat(first(query.amount))
   const amount = Number.isFinite(amountNumber) && amountNumber > 0 && amountNumber < 1_000_000 ? amountNumber : 0
   const [copied, setCopied] = useState<string | null>(null)
+  // Opens Sancus Pay with this person and amount already filled in.
+  const payQuery = new URLSearchParams({ to: address, name })
+  if (amount) payQuery.set("amount", amount.toFixed(2))
+  const payInSancusHref = `/pay/amount?${payQuery.toString()}`
 
   async function copy() {
     try {
@@ -79,7 +83,7 @@ export default function PersonalPayPage({
             <p style={{ margin: 0, color: "#63716d", fontSize: 14 }}>
               Paste the address into Sancus or any wallet that supports Arc. Only send USDC on Arc. Other coins or networks can be lost.
             </p>
-            <a href="/pay" style={{ justifySelf: "center", color: "#168777", fontWeight: 700 }}>
+            <a href={payInSancusHref} style={{ justifySelf: "center", color: "#168777", fontWeight: 700 }}>
               Have Sancus? Open it to pay
             </a>
           </>
