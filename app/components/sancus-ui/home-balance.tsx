@@ -116,7 +116,7 @@ export function HomeBalance({ positions = null }: { positions?: HomeTreasuryPosi
   // Business workspace: that company plus its branches. Personal: your own wallets + Gateway.
   const scope = !ws.ready ? undefined : ws.isPersonal || !ws.activeNode ? null : ws.activeNode.id
   const live = useLiveTreasury(undefined, scope)
-  const bank = scope && ws.activeNode ? ws.activeNode.bankBalance : null
+  const inCompany = Boolean(scope && ws.activeNode)
   const bankLoading = Boolean(scope && !ws.balancesReady)
   const companyTotal = scope && ws.activeNode && ws.balancesReady
     ? calculateCompanyTotal(ws.activeNode, positions)
@@ -142,17 +142,17 @@ export function HomeBalance({ positions = null }: { positions?: HomeTreasuryPosi
     <section className="tile s8 home-balance" aria-labelledby="bal" aria-busy={live.loading || bankLoading}>
       <div className="tile-head">
         <div>
-          <span className="sx-label" id="bal">{bank ? "Total company balance" : "Total balance"}</span>
-          <span className="body-s muted">{bank ? "Bank accounts, wallets, and parent Treasury positions" : "Bank account and USDC wallet"}</span>
+          <span className="sx-label" id="bal">{inCompany ? "Total company balance" : "Total balance"}</span>
+          <span className="body-s muted">{inCompany ? "Bank accounts, wallets, and parent Treasury positions" : "Bank account and USDC wallet"}</span>
         </div>
-        {live.source === "live" ? <span className="sx-pill sx-pill--settled">Live</span> : null}
+        {live.source === "live" || (inCompany && ws.balancesReady) ? <span className="sx-pill sx-pill--settled">Live</span> : null}
       </div>
       <div className="home-balance__body">
         <div className="sx-balance">
           <span className="sx-balance__amount">
             {bankLoading ? "***" : companyTotalLabel ?? (live.loading ? "***" : live.availableLabel)} <small>{companyTotal?.currency ?? "USD"}</small>
           </span>
-          <span className="sx-balance__meta">{bankLoading ? "***" : bank ? companyMeta : live.loading ? "***" : personalMeta}</span>
+          <span className="sx-balance__meta">{bankLoading ? "***" : inCompany ? (companyMeta || "***") : live.loading ? "***" : personalMeta}</span>
         </div>
       </div>
       <BalanceHistoryChart

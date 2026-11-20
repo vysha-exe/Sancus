@@ -117,6 +117,12 @@ export function resetCompaniesCache() {
   publish(serverSnapshot)
 }
 
+/** Drop stale caches and reload structure + balances (e.g. after demo login). */
+export function reloadCompanies() {
+  resetCompaniesCache()
+  return loadCompanies(true).then(() => loadCompanyBalances(true))
+}
+
 /** Loads company trees for shell gating (personal vs business chrome). */
 export function useCompanies() {
   const state = useSyncExternalStore(subscribe, getSnapshot, () => serverSnapshot)
@@ -129,6 +135,12 @@ export function useCompanies() {
   useEffect(() => {
     void loadCompanies().then(() => loadCompanyBalances())
   }, [])
+
+  // After resetCompaniesCache / reloadCompanies, ready flips false — fetch again.
+  useEffect(() => {
+    if (state.ready) return
+    void loadCompanies().then(() => loadCompanyBalances())
+  }, [state.ready])
 
   return {
     ready: state.ready,

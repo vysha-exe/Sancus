@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react"
 import type { AccountDto, Permission } from "./accounts"
 import { navKeyForPath } from "./accounts"
-import { resetCompaniesCache } from "./use-companies"
+import { reloadCompanies, resetCompaniesCache } from "./use-companies"
 
 type State = { account: AccountDto | null; ready: boolean; signedOut: boolean }
 
@@ -18,8 +18,8 @@ async function fetchAccount(): Promise<State> {
     if (res.status === 401) return { account: null, ready: true, signedOut: true }
     if (!res.ok) return { account: null, ready: true, signedOut: false }
     const body = await res.json()
-    // Drop stale company/balance *** caches from an earlier guest/401 session.
-    if (cached?.signedOut || cached?.account == null) resetCompaniesCache()
+    // Leaving guest/signed-out: wipe and reload so Home doesn't keep personal *** / empty tree.
+    if (cached?.signedOut) void reloadCompanies()
     return { account: body.account as AccountDto, ready: true, signedOut: false }
   } catch {
     return { account: null, ready: true, signedOut: false }
