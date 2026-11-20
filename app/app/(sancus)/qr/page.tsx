@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { QrScanner } from "@/components/sancus-ui/qr-scanner"
 import { parseSancusQrUrl } from "@/lib/sancus/sancus-qr-parse"
+import { PERSONAL_SCAN_PATH, parsePos } from "@/lib/sancus/cross-rail"
 import { can, useAccount } from "@/lib/sancus/use-account"
 
 type Currency = "USD" | "THB" | "IDR" | "BRL"
@@ -147,6 +148,9 @@ function QrPage() {
 }
 
 function PayPanel({ initialCode, canSend, onPaid }: { initialCode: string | null; canSend: boolean; onPaid: () => void }) {
+  const { account } = useAccount()
+  // Individuals pay local merchant codes on the cross-rail screen; business accounts keep /pay/scan.
+  const merchantScanPath = account?.type === "INDIVIDUAL" ? PERSONAL_SCAN_PATH : "/pay/scan"
   const router = useRouter()
   const [resolved, setResolved] = useState<Resolved | null>(null)
   const [amount, setAmount] = useState("")
@@ -183,7 +187,10 @@ function PayPanel({ initialCode, canSend, onPaid }: { initialCode: string | null
     const token = parseSancusQrUrl(text)
     if (token) return void resolve(token)
     // A local merchant code (PromptPay, Pix, QRIS): pay it on the local-rail scan page.
-    if (/^000201/.test(text.trim())) return router.push(`/pay/scan?code=${encodeURIComponent(text.trim())}`)
+    if (/^000201/.test(text.trim())) return router.push(`${merchantScanPath}?code=${encodeURIComponent(text.trim())}`)
+    // A Sancus card-terminal tap code (personal accounts only).
+    const pos = merchantScanPath === PERSONAL_SCAN_PATH ? parsePos(text) : null
+    if (pos) return router.push(`${PERSONAL_SCAN_PATH}?pos=${encodeURIComponent(text.trim().split("pos=")[1] ?? "")}`)
     setError("That QR isn't a Sancus code or a PromptPay / Pix code.")
   }
 
@@ -305,7 +312,7 @@ function PayPanel({ initialCode, canSend, onPaid }: { initialCode: string | null
       {busy ? <span className="body-s muted">Reading the code…</span> : null}
       {error ? <p className="body-s" role="alert" style={{ margin: 0, color: "var(--failed, #c0392b)" }}>{error}</p> : null}
       <p className="body-s muted" style={{ margin: 0 }}>
-        Paying a shop&apos;s PromptPay or Pix code? Scan it here too and we&apos;ll take you to <Link href="/pay/scan">Scan a QR</Link>.
+        Paying a shop&apos;s PromptPay or Pix code? Scan it here too and we&apos;ll take you to <Link href={merchantScanPath}>Scan a QR</Link>.
       </p>
     </div>
   )

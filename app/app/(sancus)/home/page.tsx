@@ -123,9 +123,9 @@ export default function HomePage() {
                 Pay or get paid
               </h2>
             </div>
-            <Link href="/pay/scan" className="kv" style={{ color: "inherit", textDecoration: "none" }}>
+            <Link href={personal ? "/pay/scan-personal" : "/pay/scan"} className="kv" style={{ color: "inherit", textDecoration: "none" }}>
               <span>Scan a QR code</span>
-              <span className="body-s muted">PromptPay, Pix</span>
+              <span className="body-s muted">Pix, PromptPay, QRIS, cards</span>
             </Link>
             <Link href="/pay/us-bank" className="kv" style={{ color: "inherit", textDecoration: "none" }}>
               <span>Enter bank details</span>
