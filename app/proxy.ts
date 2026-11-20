@@ -44,6 +44,8 @@ import { hasEnvVars } from "@/lib/utils";
 const PROTECTED_PREFIXES: string[] = [
   "/home",
   "/pay",
+  "/card",
+  "/qr",
   "/activity",
   "/receive",
   "/spending",

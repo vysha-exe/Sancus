@@ -42,6 +42,8 @@ export type NavKey =
   | "branch"
   | "me"
   | "pay"
+  | "card" // Pay by virtual card (every account type)
+  | "qr" // Pay with QR (every account type)
   | "receive"
   | "activity"
   | "spending"
@@ -123,6 +125,8 @@ export function navKeyForPath(pathname: string): NavKey | null {
     branch: "branch",
     me: "me",
     pay: "pay",
+    card: "card",
+    qr: "qr",
     receive: "receive",
     activity: "activity",
     spending: "spending",
@@ -214,7 +218,7 @@ export class AdminAccount extends SancusAccount {
   readonly type = "ADMIN" as const
   readonly label = "Admin"
   readonly homePath = "/home"
-  readonly nav: NavKey[] = ["home", "treasury", "pay", "activity", "spending", "branches", "team", "invoices", "agents", "settings"]
+  readonly nav: NavKey[] = ["home", "treasury", "pay", "card", "qr", "activity", "spending", "branches", "team", "invoices", "agents", "settings"]
   protected readonly paths: NavKey[] = [...this.nav, "receive", "branch"]
   protected readonly permissions = new Set<Permission>(ALL)
 
@@ -228,7 +232,7 @@ export class BranchAccount extends SancusAccount {
   readonly type = "BRANCH" as const
   readonly label = "Branch admin"
   readonly homePath = "/branch"
-  readonly nav: NavKey[] = ["branch", "pay", "activity", "team", "spending", "branches", "receive", "agents", "settings"]
+  readonly nav: NavKey[] = ["branch", "pay", "card", "qr", "activity", "team", "spending", "branches", "receive", "agents", "settings"]
   protected readonly paths: NavKey[] = [...this.nav]
   protected readonly permissions = new Set<Permission>([
     "money.send",
@@ -256,7 +260,7 @@ export class EmployeeAccount extends SancusAccount {
   readonly type = "EMPLOYEE" as const
   readonly label: string = "Employee"
   readonly homePath = "/me"
-  readonly nav: NavKey[] = ["me", "agents", "settings"]
+  readonly nav: NavKey[] = ["me", "card", "qr", "agents", "settings"]
   /** "pay" is reachable from Me → Request a payment. */
   protected readonly paths: NavKey[] = [...this.nav, "pay"]
   protected readonly permissions = new Set<Permission>(["money.request", "card.view", "limits.view", "agent.use", "settings"])
@@ -272,7 +276,7 @@ export class EmployeeAccount extends SancusAccount {
  */
 export class FinanceAccount extends EmployeeAccount {
   readonly label = "Finance"
-  readonly nav: NavKey[] = ["me", "activity", "agents", "settings"]
+  readonly nav: NavKey[] = ["me", "card", "qr", "activity", "agents", "settings"]
   protected readonly paths: NavKey[] = [...this.nav, "pay"]
   protected readonly permissions = new Set<Permission>([
     "money.request",
@@ -294,7 +298,7 @@ export class IndividualAccount extends SancusAccount {
   readonly type = "INDIVIDUAL" as const
   readonly label = "Personal"
   readonly homePath = "/home"
-  readonly nav: NavKey[] = ["home", "pay", "activity", "agents", "settings"]
+  readonly nav: NavKey[] = ["home", "pay", "card", "qr", "activity", "agents", "settings"]
   /** "branches" stays reachable so a person can open a business (and become its admin). */
   protected readonly paths: NavKey[] = [...this.nav, "receive", "branches"]
   protected readonly permissions = new Set<Permission>([

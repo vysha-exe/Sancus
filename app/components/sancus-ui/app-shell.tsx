@@ -23,6 +23,7 @@ import {
   IconTeam,
   IconBranches,
   IconDevQa,
+  IconQr,
 } from "./icons"
 import { SancusLockup } from "./logo"
 import { AccountMenu } from "./account-menu"
@@ -34,8 +35,10 @@ const nav = [
   { key: "home", href: "/home", label: "Home", icon: IconHome, match: (p: string) => p === "/home" || p.startsWith("/home/") },
   { key: "treasury", href: "/treasury", label: "Treasury", icon: IconBranches, match: (p: string) => p === "/treasury" || p.startsWith("/treasury/") },
   { key: "branch", href: "/branch", label: "My branch", icon: IconHome, match: (p: string) => p === "/branch" || p.startsWith("/branch/") },
-  { key: "me", href: "/me", label: "My card", icon: IconSpending, match: (p: string) => p === "/me" || p.startsWith("/me/") },
+  { key: "me", href: "/me", label: "My spending", icon: IconSpending, match: (p: string) => p === "/me" || p.startsWith("/me/") },
   { key: "pay", href: "/pay", label: "Pay", icon: IconPay, match: (p: string) => p.startsWith("/pay") },
+  { key: "card", href: "/card", label: "Pay by virtual card", icon: IconSpending, match: (p: string) => p === "/card" || p.startsWith("/card/") },
+  { key: "qr", href: "/qr", label: "Pay with QR", icon: IconQr, match: (p: string) => p === "/qr" || p.startsWith("/qr/") },
   { key: "receive", href: "/receive", label: "Receive", icon: IconInvoices, match: (p: string) => p.startsWith("/receive") },
   {
     key: "activity",
@@ -62,7 +65,7 @@ const nav = [
 ] as const
 
 /** The admin's classic set, used for the guest demo before an account loads. */
-const DEFAULT_NAV: NavKey[] = ["home", "treasury", "pay", "activity", "spending", "branches", "team", "invoices", "agents"]
+const DEFAULT_NAV: NavKey[] = ["home", "treasury", "pay", "card", "qr", "activity", "spending", "branches", "team", "invoices", "agents"]
 
 export function AppShell({
   children,

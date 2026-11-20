@@ -169,6 +169,8 @@ const PAGES: { path: string; label: string }[] = [
   { path: "/me", label: "My card and limits" },
   { path: "/pay", label: "Make a payment (pick a payee)" },
   { path: "/pay/scan", label: "Scan a QR code to pay" },
+  { path: "/card", label: "Pay by virtual card (your card, tap to pay)" },
+  { path: "/qr", label: "Pay with QR (scan someone's Sancus code to pay them, or show your code to get paid)" },
   { path: "/pay/us-bank", label: "Pay a US bank account by ACH (enter bank details)" },
   { path: "/receive", label: "Receive money / show my QR" },
   { path: "/activity", label: "Activity (all payments)" },

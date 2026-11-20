@@ -1,156 +1,295 @@
 # Sancus
 
-**The stablecoin account for global business.**
-*One account. Every rail. Every border.*
+**One USDC balance to pay suppliers, staff and families across borders, with an AI agent that does the paperwork and never moves money without you.**
 
-> Sancus was the Roman god of trust, oaths and contracts. Rome kept treaties between nations in his temple.
-> Sancus, the product, is a business account where the rules are enforced by code.
+> Sancus was the Roman god of trust, oaths and contracts. Sancus, the product, is a stablecoin account where the rules are enforced by code.
 
-Sancus is a stablecoin business account for companies trading across **Asia**. A company holds a USD balance backed by USDC and uses that one balance to receive payments, pay suppliers on local rails (PayNow, QRIS, PromptPay, plus ACH/wire for the US), and fund employee corporate cards. The blockchain stays invisible: the user picks **who** to pay, **how much**, and Sancus picks the **rail**.
+Sancus is a stablecoin business account built on **Arc** and the **Circle** developer suite. A company (or a person) holds one USD balance in USDC, then pays people in **Thailand (PromptPay), Indonesia (BI-FAST) and Brazil (Pix)**, or US bank accounts by ACH, from that one balance. The user picks *who* and *how much*; Sancus quotes the live rate, picks the rail and settles. The blockchain stays invisible.
 
-**Built on [Arc](https://docs.arc.io) (Circle's stablecoin L1) and the Circle developer suite:** developer-controlled wallets, Gateway (one USDC balance across chains), Gas Station and Nanopayments (x402).
+On top sits the **Sancus agent**: tell it, by text or by voice, what you want ("pay Siam Packaging 5,000 baht for invoice INV-88"). It looks things up, buys live route data with **x402 nanopayments** from its own budgeted wallet, and prepares every payment as a **signed card you confirm**. It can also open the right page and answer questions about the page you're on.
 
-> ⚠️ **Hackathon prototype.** Uses testnet USDC and provider test environments only. Circle wallets run on testnet; local QR rails and cards use real provider sandboxes when credentials are configured, with clearly labeled simulations as fallbacks. Nothing here handles production customer funds. Real banking, card issuing and cross-border payouts require licensed partners and regulatory compliance.
+> ⚠️ **Hackathon prototype on testnets.** Circle wallets, Gateway and x402 run on Arc Testnet; payout and card partners run in their sandboxes or as clearly labeled simulations. No real customer funds. See [What's real and what's simulated](#whats-real-and-whats-simulated).
+
+**Live app:** https://sancus-peach.vercel.app · **Demo logins:** in our Devpost submission
 
 ---
 
-## Example
+## Hackathon submission (UBC 2026)
 
-A Singapore trading company receives **$50,000 USDC** from a customer. From the same balance it:
+| | |
+|---|---|
+| **Main track** | Agentic Payments and AI |
+| **Chain award** | Best use of Arc |
+| **Bounty** | Best Project built with ElevenLabs |
+| **Required for the track** | [Agent decision loop and safety limits](#the-agent-decision-loop-and-safety-limits) |
+| **Required for Arc** | [How Sancus uses Arc](#how-sancus-uses-arc) and [contract addresses](#contract-addresses-arc-testnet-chain-id-5042002) |
+| **Required for ElevenLabs** | [Voice: how we use ElevenLabs](#voice-how-we-use-elevenlabs) |
 
-- pays a Singapore supplier in **SGD by PayNow** (USDC → SGD through a licensed partner, with an FX quote),
-- collects from Indonesian and Thai buyers by **QRIS** and **PromptPay**,
-- pays a US vendor by **ACH**,
-- sends **USDC** to another business onchain,
-- funds an employee's **virtual card** with a $500 limit.
+### What did we build?
+A multi-entity stablecoin account (global HQ, country branches, employees, and personal accounts) with local payouts, collections, cards, approvals, and an AI agent that can safely spend on the user's behalf.
 
-One dashboard, one ledger, one balance.
+### What problem does it solve?
+A company with suppliers and staff in emerging markets juggles a bank account per country, slow and expensive wires, and opaque FX. Families sending money home have the same problem at a smaller scale. Sancus gives them one dollar balance, live FX quotes, and local rails that arrive in seconds, plus spending controls so a business can let employees and an AI agent act without handing over the keys.
 
-## Features
+### What makes it unique?
+- **Both sides of agent payments:** the Sancus agent *pays* for data over x402 from a capped wallet, and Sancus *sells* its route quotes to other agents over x402 (revenue lands in the treasury).
+- **The agent can't move money on its own:** every action is an HMAC-signed, expiring proposal bound to the user and the exact request; only the user's Confirm (tap or voice) runs it.
+- **Voice that acts:** an "Ask Sancus" call on every page answers questions about the screen, navigates, and prepares payments you confirm by voice.
+- **Accounts that match real companies:** HQ → branches → people, each with its own wallet, balance, limits and permissions.
 
-| Feature | What it does | Prototype status |
-|---|---|---|
-| Business accounts | Register a company, invite employees, assign roles | Built |
-| USD treasury | USDC held in Circle developer-controlled wallets + a Gateway unified balance on Arc | **Real (testnet)** |
-| Crypto payments | Send and receive USDC to wallet addresses | **Real (testnet)** |
-| Singapore payouts | USDC → SGD via PayNow / FAST (StraitsX-style partner) | Sandbox or simulated |
-| Asia collections | QRIS (ID), PromptPay (TH) charges | **Real sandboxes** (`rails-demo/`) |
-| Bank transfers | ACH, wire (US) via Bridge-style partner | Sandbox or simulated |
-| Corporate cards | Virtual cards with limits, holds and settlement | **Marqeta sandbox** (`rails-demo/`) |
-| Earning treasury *(x402)* | Agents pay per call for Sancus routing quotes; revenue lands in the Gateway balance | Built (testnet) |
-| Payment routing | Picks the best rail by destination, currency, fee and speed | Built |
-| Spending controls | Employee budgets, per-payment limits, approvals | Built (onchain + app) |
-| Invoice payments | Upload an invoice and pay the supplier | Built |
-| Unified ledger | Double-entry ledger reconciling onchain and simulated payments | Built |
-| Event hedging *(stretch)* | Suggest prediction-market hedges for FX / macro risk | Stretch |
-| Tokenized stock treasury *(stretch)* | Hold part of the treasury in tokenized stocks | Stretch |
+---
 
 ## Architecture
 
-```
-                    ┌──────────────────────────────┐
-                    │   Next.js dashboard (web)    │
-                    └──────────────┬───────────────┘
-                                   │
-                    ┌──────────────▼───────────────┐
-                    │  API + core services (TS)    │
-                    │  • Payment router            │
-                    │  • Ledger (double-entry)     │
-                    │  • Policy / approvals        │
-                    │  • Rail adapters             │
-                    └──┬──────────┬──────────┬─────┘
-                       │          │          │
-          ┌────────────▼──────┐ ┌─▼────────┐ ┌▼───────────────────────┐
-          │ Circle suite (Arc)│ │PostgreSQL│ │ Payment partners        │
-          │ • Dev wallets     │ │          │ │ PayNow (StraitsX-style) │
-          │ • Gateway balance │ │          │ │ QRIS · PromptPay        │
-          │ • Gas Station     │ │          │ │ ACH (Bridge-style)      │
-          │ • Nanopayments    │ │          │ │ Cards (Marqeta)         │
-          │ SancusTreasury.sol│ │          │ │ FX quotes               │
-          │ (limits, holds)   │ │          │ │                         │
-          └───────────────────┘ └──────────┘ └─────────────────────────┘
-                         Arc testnet (chain ID 5042002)
+```mermaid
+flowchart LR
+  subgraph Browser
+    UI[Next.js app<br/>Home · Pay · Activity · Team · Branches · Agents]
+    Call[Ask Sancus voice call<br/>Web Speech STT + audio]
+  end
+
+  subgraph Server[Next.js route handlers]
+    Pay[Pay, quotes, payouts]
+    Agent[Agent loop<br/>OpenAI + tools]
+    Exec[Proposal executor<br/>HMAC check]
+    Speak[TTS proxy]
+    X402S[x402 paid endpoint<br/>/api/x402/route-quote]
+    Ledger[Ledger, approvals, policies]
+  end
+
+  subgraph Circle[Circle on Arc Testnet]
+    DCW[Developer-controlled wallets<br/>treasury + settlement per company]
+    GW[Gateway unified balance]
+    NANO[x402 batching / Nanopayments]
+    USDC[(Arc USDC)]
+  end
+
+  subgraph Partners[Sandboxes / simulations]
+    XEN[Xendit: PromptPay TH, BI-FAST ID]
+    PIX[PayZu: Pix BR]
+    ACH[Mock ACH rail]
+    CARD[Marqeta cards]
+    COL[Omise / Midtrans: QR collections]
+  end
+
+  DB[(Supabase Postgres<br/>RLS)]
+  EL[ElevenLabs TTS]
+  FX[ECB live FX]
+
+  UI --> Pay --> DCW
+  UI --> Agent
+  Call --> Agent
+  Call --> Speak --> EL
+  Agent -->|signed proposal| UI
+  UI -->|Confirm| Exec --> Pay
+  Agent -->|buy quote| NANO --> X402S
+  Pay --> XEN & PIX & ACH
+  Pay --> FX
+  DCW --> USDC
+  GW --> USDC
+  Server --> DB
+  Ledger --> DB
 ```
 
-## Tech stack
+**Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Supabase (Postgres + row-level security) · viem · Circle Developer-Controlled Wallets, Gateway, App Kit, x402 batching · OpenAI (agent) · ElevenLabs (voice) · Vercel.
 
-| Layer | Technology |
+The app started from Circle's [arc-fintech](https://github.com/circlefin/arc-fintech) sample (Apache-2.0) for auth, wallets and Gateway plumbing; everything under "Sancus" (accounts, payouts, agent, voice, x402, ledger, branches) was built during the hackathon. See [app/UPSTREAM.md](app/UPSTREAM.md).
+
+---
+
+## Features
+
+| Area | What it does |
 |---|---|
-| Frontend | Next.js (App Router) + Tailwind, starting from Circle's [arc-fintech](https://github.com/circlefin/arc-fintech) sample (Apache-2.0) |
-| Backend | TypeScript (Next.js route handlers + `packages/core`) |
-| Database | PostgreSQL (Supabase, as in arc-fintech) |
-| Chain | **Arc testnet**: Circle's L1, USDC is the gas token |
-| Wallets | Circle developer-controlled wallets (treasury, payout signer, AP agent); passkey (modular) wallets for admin approvals |
-| Balance | Circle Gateway: one USDC balance across Arc and other testnets; mint on whichever chain a payout partner needs |
-| Gas | Circle Gas Station (no gas tokens for users) |
-| Smart contracts | Solidity + OpenZeppelin, Foundry: spending limits, approvals, holds |
-| Agent payments | Circle Nanopayments / x402 (earnings settle into the Gateway balance) |
-| Stablecoin | Testnet USDC and EURC (faucet.circle.com) |
-| Fiat / cards / local rails | Adapter interface; real sandboxes where available (`rails-demo/`), simulated otherwise |
+| **Account types** | Business admin (whole company), Branch admin (one branch), Employee (card + limits), Personal (no business). Each sees only what its permissions allow. |
+| **Company tree** | Global HQ (US) with branches in Indonesia, Thailand, Brazil and the US. Each node has its own Circle treasury and settlement wallet; the org chart shows who works where. |
+| **Pay** | Pick a payee, enter what they get or what you send; the quote converts from USDC at the live ECB rate. PromptPay (TH), BI-FAST (ID), Pix (BR), ACH (US). |
+| **Scan a QR** | Camera or upload; reads EMVCo PromptPay, Pix and QRIS codes and pays them. |
+| **Approvals and limits** | Per-payment and daily limits per person; employee payment requests and payments over a rule wait for an approver (US ACH and treasury payouts today; extending to the PromptPay, BI-FAST and Pix routes is next). |
+| **Cards** | Employee virtual cards with monthly limits, holds and settlement. |
+| **Collections** | Receive by local QR (PromptPay, QRIS, Pix). |
+| **Ledger and activity** | Double-entry ledger; one activity feed across rails. |
+| **Agent** | Text or voice; balances, payees, live quotes, x402 route quotes, payments, collections, limit changes, opening pages. |
+| **Earning treasury** | Other agents pay $0.01 per call (x402) for Sancus route quotes. |
+
+---
+
+## How Sancus uses Arc
+
+Arc is the settlement layer: USDC is both the balance and the gas token, so fees are predictable and nobody needs a second token.
+
+1. **Treasury wallets on Arc.** Every company node gets Circle developer-controlled SCA wallets on Arc Testnet (a treasury and a settlement wallet) inside one wallet set per company.
+2. **Payouts settle onchain.** Before the partner pays out locally, the payout moves the dollar amount on Arc from the paying node's treasury to a settlement wallet (the stand-in for the payout partner's deposit address). The transfer runs through Circle App Kit from the Circle wallet, in fUSDC (our test settlement token) when it's enabled, otherwise Arc USDC, and the Arc transaction hash shows in the Process log.
+3. **Gateway unified balance.** Treasury deposits and the x402 revenue use Circle Gateway on Arc.
+4. **x402 nanopayments on Arc.** The agent's buyer wallet pays per request through Circle's x402 batching facilitator; the paid endpoint verifies and settles on Arc.
+5. **Local-currency tokens.** Collections mint matching mock local stablecoins (mTHB, mIDR, mBRL) on Arc into the branch wallet.
+
+### Contract addresses (Arc Testnet, chain ID 5042002)
+
+**Deployed by Sancus** (sources and deploy scripts in [app/contracts](app/contracts/README.md)):
+
+| Contract | Address |
+|---|---|
+| Sancus Face USDC (fUSDC), test settlement token | `0x5ae6d882b075628ea839e57cf422172434f27e0c` |
+| Sancus Mock Brazilian Real (mBRL) | `0xa4998745ede2f259f392ee4b71156badb5da8755` |
+| Sancus Mock Indonesian Rupiah (mIDR) | `0xdca139d380fbd00c61b4ed696d8f81e659957ae6` |
+| Sancus Mock Thai Baht (mTHB) | `0x00bf05794364ef67815094d7158a0270e555f944` |
+| Mock Equity Broker (treasury stretch) | `0x92a9e4cfaa4d35dd1f27a28c1728bdf1d5719a04` |
+
+**Circle / Arc contracts we use:**
+
+| Contract | Address |
+|---|---|
+| Arc Testnet USDC | `0x3600000000000000000000000000000000000000` |
+| Circle Gateway Wallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` |
+| Circle Gateway Minter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` |
+
+Explorer: https://explorer.testnet.arc.io
+
+---
+
+## The agent: decision loop and safety limits
+
+Code: [`app/api/sancus/agent/route.ts`](app/app/api/sancus/agent/route.ts), [`lib/sancus/agent/tools.ts`](app/lib/sancus/agent/tools.ts), [`lib/sancus/agent/proposals.ts`](app/lib/sancus/agent/proposals.ts), [`lib/sancus/agent/x402-wallet.ts`](app/lib/sancus/agent/x402-wallet.ts), [`app/api/sancus/agent/execute/route.ts`](app/app/api/sancus/agent/execute/route.ts).
+
+### Decision loop
+
+```
+user message (text or voice) + the page they're on
+        │
+        ▼
+1. Build context: account type, permissions, workspace, page text
+2. LLM picks a tool ──► tool calls the app's own API as the user (their session)
+        │                 • read: get_balances, list_recipients, quote_payment,
+        │                   recent_activity, my_spending, list_people
+        │                 • pay for data: buy_route_quote (x402, from the agent wallet)
+        │                 • act: propose_payment, propose_collection, propose_limits, open_page
+        ▼
+3. Tool result goes back to the LLM; repeat (max 12 steps)
+        │
+        ▼
+4. Reply (spoken in voice mode) + any proposal cards
+        │
+        ▼
+5. User taps Confirm or says "confirm"  ──► executor verifies the signature ──► runs the one API call
+```
+
+Progress streams to the browser as each tool starts and finishes, so both the chat and the voice call show what it's doing.
+
+### Safety limits
+
+| Limit | How it's enforced |
+|---|---|
+| **No money moves without the user** | Tools that change anything only create a *proposal*. It's HMAC-signed (`AGENT_PROPOSAL_SECRET`), bound to the user id, the exact method, path and body, and **expires after 10 minutes**. The executor re-verifies all of it before running. |
+| **Allowlisted endpoints** | Each proposal kind may call exactly one endpoint (payouts, Pix, ACH, collections, limits). A tampered proposal that points elsewhere is rejected. |
+| **Same permissions as the user** | Tools call the app's APIs with the user's own session, so account permissions, spending policies, limits and approvals apply exactly as in the UI. Tools the account can't use aren't offered (e.g. no payment tools for employees). |
+| **Budgeted data spending** | The agent pays for x402 data from its own wallet, not the treasury, under a **daily cap** enforced in code (`AGENT_X402_DAILY_CAP_USDC`, default $0.50); its instructions also limit it to 3 paid calls per request. Every payment is logged in Agent activity. |
+| **Idempotent execution** | Confirming twice can't pay twice: each proposal executes with an idempotency key (`agent-<proposal id>`). |
+| **Pause switch** | The agent can be paused from the Agents page; voice and chat stop accepting requests. |
+| **Bounded loop** | At most 12 tool steps per request; errors come back as text, never as silent retries. |
+
+---
+
+## Voice: how we use ElevenLabs
+
+Voice is how most people will use the agent: a hands-free call where Sancus listens, answers out loud, and acts on the page.
+
+| Piece | What we use |
+|---|---|
+| **Text-to-speech** | ElevenLabs **streaming TTS** (`/v1/text-to-speech/{voice}/stream`) with **Flash v2.5** (`eleven_flash_v2_5`, ~100 ms) and text normalization on, so amounts and currencies are read naturally. Default voice: Sarah (American English). |
+| **Low latency** | The reply is split into sentences that download in parallel and play back to back; fixed phrases ("Checking your balances", greetings) are pre-recorded on call start; the real answer interrupts any progress line. |
+| **Key safety** | The API key stays on the server: the browser plays audio from our proxy ([`app/api/sancus/agent/speak/route.ts`](app/app/api/sancus/agent/speak/route.ts)). |
+| **Listening** | Browser speech recognition (Chrome/Edge); "confirm", "cancel" and "end call" are handled locally. |
+
+Where it shows up:
+- **Ask Sancus** button at the top right of every page: a voice call that can answer questions about the page, open pages, and prepare payments you confirm by voice or tap ([`components/sancus-ui/agent-call.tsx`](app/components/sancus-ui/agent-call.tsx)).
+- **Voice mode** on the Agents page, with confirm cards and live progress ([`components/sancus-ui/agent-console.tsx`](app/components/sancus-ui/agent-console.tsx)).
+
+---
+
+## What's real and what's simulated
+
+| Part | Status |
+|---|---|
+| Circle developer-controlled wallets on Arc | **Real (testnet)** |
+| Circle Gateway unified balance | **Real (testnet)** |
+| x402 payments (agent pays, Sancus sells) | **Real (testnet)**, Circle x402 batching on Arc |
+| Onchain leg of a payout (treasury → settlement) | **Real (testnet)** Arc transaction, in fUSDC when enabled, otherwise Arc USDC |
+| Company balances | Arc testnet tokens; demo balances use **fUSDC**, our mintable test token (`SANCUS_FACE_USDC=false` switches back to Circle USDC), because faucet USDC is rate-limited |
+| Live FX quotes | **Real** ECB reference rates (Frankfurter), cached 10 minutes |
+| PromptPay (TH) and BI-FAST (ID) payouts | **Xendit test mode**; falls back to a labeled simulation when money-out isn't enabled |
+| Pix (BR) payouts | **PayZu sandbox** when a key is set, otherwise a labeled simulation |
+| US ACH | Mock rail with real onchain funding |
+| Cards | **Marqeta sandbox** |
+| QR collections | **Omise (PromptPay) and Midtrans (QRIS) sandboxes**, see `rails-demo/` |
+| AI agent | **Real** (OpenAI) |
+| Voice | **Real** (ElevenLabs) |
+
+---
 
 ## Repository layout
 
 ```
 sancus/
-├── app/                     # Next.js + Supabase app (from Circle's arc-fintech, Apache-2.0)
-│   ├── app/                 #   pages + API routes (wallets, Gateway, payouts, webhooks…)
-│   ├── lib/circle/          #   Circle wallets, Gateway, App Kit, EarnKit clients
-│   ├── supabase/            #   database migrations
-│   ├── contracts/           #   Arc Testnet contracts we deploy + use (see contracts/README.md)
-│   └── SANCUS-SETUP.md      #   how to run it locally
-├── rails-demo/              # Sandbox checks: Marqeta cards, QRIS, PromptPay, Pix
-├── docs/
-│   ├── brand/               # Logo, tokens, components
-│   └── research/            # Chain, ramp and building-block research
-├── BUILD.md                 # Build plan
-├── .env.example
-└── README.md
+├── app/                        # The Next.js app (started from Circle arc-fintech, Apache-2.0)
+│   ├── app/(sancus)/           #   Sancus pages: home, pay, activity, team, branches, agents, …
+│   ├── app/api/sancus/         #   Sancus APIs: payouts, quotes, agent, approvals, accounts, …
+│   ├── app/api/x402/           #   Paid endpoint sold to agents over x402
+│   ├── lib/sancus/             #   Core: accounts & permissions, payouts, FX, ledger, agent, rails
+│   ├── components/sancus-ui/   #   UI, incl. agent console and voice call
+│   ├── contracts/              #   Arc Testnet contracts we deploy and use
+│   ├── supabase/migrations/    #   Database schema
+│   └── tests/                  #   Vitest suite
+├── rails-demo/                 # Sandbox checks: Marqeta, Omise, Midtrans, PayZu
+└── docs/                       # Architecture notes, research, brand, wireframes
 ```
 
-## Getting started
+---
 
-**The app lives in [`app/`](app/).** Follow [app/SANCUS-SETUP.md](app/SANCUS-SETUP.md) to run it locally (Circle API key, entity secret, Supabase, `npm run dev`).
+## Running it locally
 
-> The commands below are from the original plan in [BUILD.md](BUILD.md) and will change as the contracts and core packages are added:
+Requirements: Node.js 22+, a Supabase project (or Docker for local Supabase), a Circle testnet API key and entity secret.
 
 ```bash
-pnpm install
-cp .env.example .env          # fill in RPC URL, keys, Privy app ID, DATABASE_URL
-pnpm db:migrate && pnpm db:seed
-pnpm contracts:deploy         # deploys SancusTreasury to the configured testnet
-pnpm dev                      # http://localhost:3000
+cd app
+npm install
+cp .env.example .env.local      # fill in the values below
+npx supabase db push            # or: npx supabase start && npx supabase migration up
+npm run dev                     # http://localhost:3000
 ```
 
-Get testnet USDC from the [Circle faucet](https://faucet.circle.com).
+| Variables | Used for |
+|---|---|
+| `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, `KIT_KEY` | Circle wallets, Gateway, App Kit |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | Database and auth |
+| `OPENAI_API_KEY` (optional `OPENAI_AGENT_MODEL`) | The agent |
+| `AGENT_PROPOSAL_SECRET` | Signing agent proposals |
+| `BUYER_PRIVATE_KEY`, `AGENT_X402_DAILY_CAP_USDC` | The agent's x402 wallet and its daily cap |
+| `SANCUS_X402_PAY_TO`, `SANCUS_X402_PRICE` | Where x402 revenue lands, and the price per call |
+| `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` | Voice |
+| `XENDIT_*`, `PAYZU_*`, `MARQETA_*`, `OMISE_*`, `MIDTRANS_*` | Partner sandboxes (optional; simulated without them) |
 
-## Engineering reports
+More detail: [app/SANCUS-SETUP.md](app/SANCUS-SETUP.md). Testnet USDC: https://faucet.circle.com (Arc Testnet). Run the tests with `npm test`.
 
-- [Admin route performance investigation](docs/ADMIN-ROUTE-PERFORMANCE-REPORT.md): repeated workspace requests, the client cache fix, verification evidence, and remaining first-load work.
+---
 
-## Demo script
+## Demo walkthrough
 
-1. **Create an account:** register *Lion City Trading Pte Ltd* (Singapore); Sancus creates its Circle wallets.
-2. **Receive funds:** deposit 10,000 testnet USDC into the Gateway balance (from Arc or another testnet).
-3. **Pay a crypto supplier:** send 1,000 USDC onchain on Arc; show the real transaction hash.
-4. **Pay a Singapore supplier:** S$2,000 by PayNow; show the FX quote, the USDC → SGD conversion and the payout status.
-5. **Approve a large payment:** a payment over the threshold waits for an admin to approve with a passkey.
-6. **Issue a card:** an employee card with a $500 limit; simulate a $100 purchase (hold → settle).
-7. **Earn:** an outside agent pays for a Sancus routing quote over x402; the revenue lands in the treasury.
-8. **Reconcile:** one dashboard with every payment, fee, pending hold and the available balance.
+1. **Business admin**: Home shows the company balance across HQ and branches; Branches shows the org chart.
+2. **Pay** Siam Packaging ฿5,000 by PromptPay: live quote in USDC, review, pay; the processing page shows each leg.
+3. **Ask Sancus** (top right): "pay Café do Sertão 2,000 reais for beans" → the agent quotes, prepares a card, you say "confirm".
+4. **x402**: ask the agent for the cheapest route into Indonesia; it pays $0.01 from its capped wallet and shows what it spent.
+5. **Employee**: card and limits; the agent answers "how much is left on my card?".
+6. **Personal account**: scan a PromptPay QR and pay it.
 
-## Competitive positioning
+---
 
-- **Brex / Ramp:** spend management and cards, built on traditional banking.
-- **Slash Global:** stablecoin-powered business banking and cards.
-- **Sancus:** a stablecoin treasury with an **extensible payment orchestration engine** that routes each payment across crypto, bank, local and card rails to optimize cost, FX and settlement speed, with spending rules enforced onchain.
+## What we'd build next
 
-## Roadmap
-
-- Live partner integrations: fiat on/off-ramp, ACH/wire, Pix/SPEI payouts, stablecoin-backed cards
-- Treasury yield (tokenized T-bills) and business financing
-- Payroll and accounts payable automation
-- Multi-currency balances and FX optimization
-- Prediction-market hedging for FX and macro events
+- Live payout partners (Xendit money-out, a licensed Pix provider) and a real USDC on/off-ramp
+- Approvals and limits on every rail, then enforced in a smart contract on Arc, not only in the app
+- ElevenLabs Agents for full-duplex voice
+- Treasury yield (tokenized T-bills) and payroll
 
 ## License
 
