@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { PayFlowHead } from "@/components/sancus-ui/pay-steps"
 import { StatusPill } from "@/components/sancus-ui/status-pill"
 import { balance } from "@/lib/sancus/demo-data"
-import { usePayFlow } from "@/lib/sancus/pay-flow"
+import { PAYMENT_LINK_PAYEE_PREFIX, usePayFlow } from "@/lib/sancus/pay-flow"
 
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
 import type { PixPaymentDto } from "@/lib/sancus/local-rails"
@@ -189,7 +189,11 @@ export default function PayDonePage() {
     )
   }
 
-  // Demo recipients (wireframe flow).
+  // Demo recipients (wireframe flow). A payment-link payee shows its own numbers, not the sample quote.
+  const fromLink = recipient.id.startsWith(PAYMENT_LINK_PAYEE_PREFIX)
+  const shown = fromLink
+    ? { total: view.totalLabel, rate: view.rateLabel, paidOut: view.localLabel }
+    : { total: quote.totalLabel, rate: quote.rateLabel, paidOut: quote.brlLabel }
   return (
     <div className="page">
       <PayFlowHead title="Payment sent" step={4} />
@@ -212,8 +216,13 @@ export default function PayDonePage() {
               Done. {recipient.name.split(" ")[0]} received {view.localLabel}.
             </h2>
             <p className="body muted" style={{ margin: 0, maxWidth: "62ch" }}>
-              {quote.totalLabel} left your balance · {state.rail} · ref pay_7f2a…c91
+              {shown.total} {fromLink ? "sent (simulated)" : "left your balance"} · {state.rail} · ref pay_7f2a…c91
             </p>
+            {fromLink ? (
+              <p className="body-s muted" style={{ margin: 0 }}>
+                <span className="sx-pill sx-pill--simulated">Simulated</span> Demo payment to a USDC address. No money moved.
+              </p>
+            ) : null}
           </div>
 
           <div style={{ display: "grid", gap: 0, marginTop: 8 }}>
@@ -221,20 +230,20 @@ export default function PayDonePage() {
               <i />
               <span className="body-strong">Funded from {fundingSource}</span>
               <StatusPill status="Settled" />
-              <span className="data">{quote.totalLabel}</span>
+              <span className="data">{shown.total}</span>
             </div>
             <div className="hop">
               <i />
               <span className="body-strong">Converted</span>
               <StatusPill status="Settled" />
-              <span className="data">{quote.rateLabel}</span>
+              <span className="data">{shown.rate}</span>
             </div>
             <div className="hop">
               <i />
               <span className="body-strong">Paid out via {state.rail}</span>
               <StatusPill status="Settled" />
               <span className="data">
-                {quote.brlLabel}
+                {shown.paidOut}
               </span>
             </div>
           </div>

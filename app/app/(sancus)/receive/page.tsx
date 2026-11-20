@@ -4,9 +4,12 @@ import Link from "next/link"
 import { useState } from "react"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
 import { PublicReceiveQr } from "@/components/sancus-ui/public-receive-qr"
+import { PersonalReceive } from "@/components/sancus/personal-receive"
 import { StaticReceiveLinks } from "@/components/sancus/static-receive-links"
 import { ledger } from "@/lib/sancus/demo-data"
 import { useLiveTreasury } from "@/lib/sancus/use-live-treasury"
+import { useAccount } from "@/lib/sancus/use-account"
+import { useWorkspace } from "@/lib/sancus/use-workspace"
 
 type DepositSource = "ach" | "usdc"
 
@@ -56,12 +59,36 @@ export default function ReceivePage() {
   const arcWallet = treasury.summary?.wallets.find((w) => w.blockchain === "ARC-TESTNET")
   const usdcAddress = treasury.loading ? "***" : arcWallet?.address ?? "0x4F2a9b1e…77d0c81E"
   const mercado = ledger.find((p) => p.id === "mercado")
+  const ws = useWorkspace()
+  const { account } = useAccount()
+  // Same rule as Home: guest demo and ADMIN always see the business view.
+  const isAdmin = !account || account.type === "ADMIN"
+  const personal = isAdmin ? false : ws.ready ? ws.isPersonal : !ws.hasBusiness
 
   function copy(text: string, id: string) {
     void navigator.clipboard?.writeText(text).then(() => {
       setCopied(id)
       setTimeout(() => setCopied(null), 1500)
     })
+  }
+
+  if (personal) {
+    return (
+      <div className="page">
+        <header className="page-head">
+          <div>
+            <Link href="/home" className="sx-btn sx-btn--quiet" style={{ justifySelf: "start" }}>
+              ← Home
+            </Link>
+            <h1 className="sx-h heading-2">Get paid</h1>
+            <p className="body-s muted" style={{ margin: 0 }}>
+              Let someone scan your QR or send USDC to your address.
+            </p>
+          </div>
+        </header>
+        <PersonalReceive />
+      </div>
+    )
   }
 
   return (

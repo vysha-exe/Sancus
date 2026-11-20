@@ -146,6 +146,34 @@ function flattenCompanies(nodes: CompanyNode[], out: CompanyNode[] = []) {
   return out
 }
 
+export const PAYMENT_LINK_PAYEE_PREFIX = "link-usdc-"
+
+/** A payee built from `?to=<0x address>&name=…&amount=…` (a personal payment link). Not saved. */
+function paymentLinkPayee(search: string): { recipient: Recipient; amount: string } | null {
+  const query = new URLSearchParams(search)
+  const address = query.get("to") ?? ""
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return null
+  const name = (query.get("name") ?? "").trim().slice(0, 40) || "Payment link"
+  const amountNumber = Number.parseFloat(query.get("amount") ?? "")
+  const amount = Number.isFinite(amountNumber) && amountNumber > 0 && amountNumber < 1_000_000 ? amountNumber.toFixed(2) : ""
+  const short = `${address.slice(0, 6)}…${address.slice(-4)}`
+  const initials = name.split(/\s+/).map((part) => part[0] ?? "").join("").slice(0, 2).toUpperCase() || "?"
+  return {
+    amount,
+    recipient: {
+      id: `${PAYMENT_LINK_PAYEE_PREFIX}${address.toLowerCase()}`,
+      name,
+      initials,
+      kind: "Friend",
+      detail: `Friend · USDC address ${short}`,
+      rail: "USDC",
+      country: "Arc network",
+      methods: [{ rail: "USDC", detail: short, tag: "Default" }],
+      history: "From a payment link",
+    },
+  }
+}
+
 export function PayFlowProvider({ children }: { children: ReactNode }) {
   const workspace = useWorkspace()
   const [state, setState] = useState<PayState>(defaultState)
@@ -159,10 +187,29 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   const idempotencyKey = useRef<string | null>(null)
 
   const [invoice, setInvoice] = useState<PayInvoice | null>(null)
+  // True once saved payees / payment-link / invoice preselection below has run.
+  const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      setInitialized(true)
       const saved = loadCustomPayees()
+
+      // Arrived from a personal payment link (/u/<address> → "Open it to pay"): preselect that
+      // USDC address and amount. USDC-address payees are demo-only, so this payment is simulated.
+      const linkPayee = paymentLinkPayee(window.location.search)
+      if (linkPayee) {
+        setCustomPayees([linkPayee.recipient, ...saved.filter((r) => r.id !== linkPayee.recipient.id)])
+        setState((s) => ({
+          ...s,
+          recipientId: linkPayee.recipient.id,
+          rail: linkPayee.recipient.rail,
+          usdAmount: linkPayee.amount,
+          localAmount: "",
+          side: "send",
+        }))
+        return
+      }
       setCustomPayees(saved)
 
       // Arrived from an invoice: preselect the matching payee, memo and amount, once.
@@ -248,11 +295,12 @@ export function PayFlowProvider({ children }: { children: ReactNode }) {
   )
 
   // The default payee isn't in this account's list (e.g. a personal account): select its first one.
+  // Waits for the preselection above, so it can't overwrite a payment-link or invoice payee.
   useEffect(() => {
-    if (recipient.id === state.recipientId) return
+    if (!initialized || recipient.id === state.recipientId) return
     const timer = window.setTimeout(() => setRecipientId(recipient.id), 0)
     return () => window.clearTimeout(timer)
-  }, [recipient.id, state.recipientId, setRecipientId])
+  }, [initialized, recipient.id, state.recipientId, setRecipientId])
 
   const addPayee = useCallback((input: NewPayeeInput) => {
     const built = buildCustomPayee(input)
