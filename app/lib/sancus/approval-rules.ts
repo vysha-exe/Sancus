@@ -45,6 +45,16 @@ export function checkApprover(approver: Approver, subject: ApprovalSubject): App
 }
 
 /**
+ * Approve or decline one waiting payment. Declining your own request is a withdrawal, not an
+ * approval: whoever asked may always take it back, even an account that can't approve anything
+ * (branch admins, employees). Everything else goes through checkApprover().
+ */
+export function checkDecision(approver: Approver, subject: ApprovalSubject, action: "approve" | "decline"): ApprovalCheck {
+  if (action === "decline" && subject.requesterId === approver.userId) return { ok: true }
+  return checkApprover(approver, subject)
+}
+
+/**
  * SEND     pays straight away when policy allows (admins, individuals)
  * REQUEST  every payment waits for an approver (employees)
  * null     can't start a payment at all
