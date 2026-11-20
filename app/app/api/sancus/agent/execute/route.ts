@@ -25,11 +25,13 @@ export const POST = withAuth(async (req, { user, supabase }) => {
     cache: "no-store",
   })
   const result = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  const transfer = result.transfer as { failureReason?: string | null } | undefined
   if (!res.ok) {
-    return NextResponse.json({ ok: false, error: (result.error as string) ?? `That didn't go through (${res.status})` }, { status: res.status })
+    const error = (result.error as string | undefined) ?? transfer?.failureReason ?? `That didn't go through (${res.status})`
+    return NextResponse.json({ ok: false, error }, { status: res.status })
   }
 
-  const record = (result.payout ?? result.payment ?? result.collection ?? result) as Record<string, unknown>
+  const record = (result.payout ?? result.payment ?? result.collection ?? result.transfer ?? result) as Record<string, unknown>
   const status = (record.status as string | undefined) ?? "done"
   // A repeated Confirm returns the original payment; don't log it twice.
   if (result.replayed) {

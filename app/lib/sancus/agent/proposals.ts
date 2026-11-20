@@ -5,7 +5,7 @@
 
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto"
 
-export type ProposalKind = "xendit" | "pix" | "ach" | "collection" | "limits"
+export type ProposalKind = "xendit" | "pix" | "ach" | "collection" | "limits" | "transfer"
 
 /** Each kind may only call one endpoint, whatever a tampered proposal says. */
 export const ALLOWED: Record<ProposalKind, { method: "POST" | "PATCH"; path: RegExp }> = {
@@ -14,6 +14,7 @@ export const ALLOWED: Record<ProposalKind, { method: "POST" | "PATCH"; path: Reg
   ach: { method: "POST", path: /^\/api\/sancus\/payments$/ },
   collection: { method: "POST", path: /^\/api\/sancus\/rails\/collections$/ },
   limits: { method: "PATCH", path: /^\/api\/sancus\/accounts\/[0-9a-f-]{36}$/ },
+  transfer: { method: "POST", path: /^\/api\/sancus\/internal-transfers$/ },
 }
 
 export type ProposalRequest = { method: "POST" | "PATCH"; path: string; body: Record<string, unknown>; idempotent: boolean }
