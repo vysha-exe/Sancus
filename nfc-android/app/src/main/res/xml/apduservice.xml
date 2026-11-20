@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+  android:description="@string/hce_desc"
+  android:requireDeviceUnlock="false">
+  <!-- ISO-DEP NDEF Type 4 Tag AID — category "other" so any reader (incl. Chrome Web NFC) can select it -->
+  <aid-group android:description="@string/hce_desc" android:category="other">
+    <aid-filter android:name="D2760000850101" />
+  </aid-group>
+</host-apdu-service>
