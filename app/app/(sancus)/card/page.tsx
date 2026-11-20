@@ -25,6 +25,7 @@ type Card = {
   simulated: boolean
 }
 type Purchase = { id: string; cardId: string | null; merchantName: string; amountMinor: string; currency: string; status: string; txHash: string | null; createdAt: string }
+type CardDetails = { pan: string; expiration: string; cvv: string }
 
 const MERCHANTS = ["Grab ride · Jakarta", "7-Eleven · Bangkok", "iFood · São Paulo", "Starbucks · Austin", "AWS"]
 const usd = (minor: number | string) => `$${(Number(minor) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -116,6 +117,7 @@ export default function CardPage() {
               <span>{card.fundingAccountId ? "Your branch account" : card.companyId ? "Company balance" : "Your Sancus balance"}</span>
             </div>
             <div className="kv"><span>Network</span><span>Marqeta {card.simulated ? "(sandbox, simulated)" : "sandbox"}</span></div>
+            <CardCredentials key={card.id} card={card} />
             {!isEmployee ? <IssueCard compact onIssued={onIssued} /> : null}
           </section>
 
@@ -153,6 +155,70 @@ export default function CardPage() {
           </section>
         </div>
       )}
+    </div>
+  )
+}
+
+function CardCredentials({ card }: { card: Card }) {
+  const [details, setDetails] = useState<CardDetails | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!details) return
+    const timer = window.setTimeout(() => setDetails(null), 60_000)
+    const hideWhenBackgrounded = () => {
+      if (document.visibilityState === "hidden") setDetails(null)
+    }
+    document.addEventListener("visibilitychange", hideWhenBackgrounded)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener("visibilitychange", hideWhenBackgrounded)
+    }
+  }, [details])
+
+  async function reveal() {
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/sancus/cards/${card.id}/details`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error ?? "Could not retrieve card details")
+      setDetails(body.details as CardDetails)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not retrieve card details")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!details) {
+    return (
+      <div style={{ display: "grid", gap: 8, justifyItems: "start" }}>
+        <button type="button" className="sx-btn sx-btn--secondary" onClick={reveal} disabled={busy || card.status !== "ACTIVE"}>
+          {busy ? "Retrieving…" : "View card details"}
+        </button>
+        {error ? <span className="body-s" role="alert" style={{ color: "var(--danger, #c0392b)" }}>{error}</span> : null}
+      </div>
+    )
+  }
+
+  const groupedPan = details.pan.replace(/(.{4})/g, "$1 ").trim()
+  const expiration = `${details.expiration.slice(0, 2)}/${details.expiration.slice(2)}`
+  return (
+    <div className="rail-tile" style={{ display: "grid", gap: 10 }}>
+      <div className="tile-head" style={{ margin: 0 }}>
+        <strong>Card details</strong>
+        <button type="button" className="sx-btn sx-btn--quiet sx-btn--sm" onClick={() => setDetails(null)}>Hide</button>
+      </div>
+      <div className="kv"><span>Card number</span><span className="data">{groupedPan}</span></div>
+      <div className="kv"><span>Expiration</span><span className="data">{expiration}</span></div>
+      <div className="kv"><span>Security code</span><span className="data">{details.cvv}</span></div>
+      <span className="body-s muted">Sandbox credentials hide automatically after 60 seconds.</span>
     </div>
   )
 }

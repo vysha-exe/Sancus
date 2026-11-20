@@ -1,7 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { formatUnits } from "viem"
-import { sendUsdcOnSameChainWithAppKit } from "@/lib/circle/app-kit-send"
+import type { Address } from "viem"
 import { FIXED_USD_RATES } from "./fixed-rates"
+import {
+  bankMinorFromTransportMinor,
+  burnTransportToBank,
+  executeFixedFx,
+  mintTransportFromBank,
+  quoteFixedFx,
+  transportMinorFromBankMinor,
+} from "./mock-fx"
 
 export type InternalTransferStatus =
   | "PENDING_APPROVAL"
@@ -54,6 +61,10 @@ export type InternalTransferRow = {
   circle_transaction_id: string | null
   usdc_tx_hash: string | null
   mint_tx_hash: string | null
+  source_token_mint_tx_hash: string | null
+  fx_tx_hash: string | null
+  fx_rate_version: number | string | null
+  destination_token_burn_tx_hash: string | null
   simulated: boolean
   created_at: string
   updated_at: string
@@ -105,6 +116,10 @@ export function toInternalTransferDto(row: InternalTransferRow, names?: { source
     circleTransactionId: row.circle_transaction_id,
     usdcTxHash: row.usdc_tx_hash,
     mintTxHash: row.mint_tx_hash,
+    sourceTokenMintTxHash: row.source_token_mint_tx_hash,
+    fxTxHash: row.fx_tx_hash,
+    fxRateVersion: row.fx_rate_version == null ? null : String(row.fx_rate_version),
+    destinationTokenBurnTxHash: row.destination_token_burn_tx_hash,
     simulated: row.simulated,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -141,6 +156,11 @@ export async function executeInternalTransfer(
   const ref = `sancus:internal:${row.id}`
   let holdReference: string | null = row.source_bank_hold_reference
   let bankCaptured = Boolean(row.source_bank_account_id && row.burn_tx_hash)
+  let sourceTokenMinted = Boolean(row.source_token_mint_tx_hash)
+  let fxSettled = Boolean(row.fx_tx_hash)
+  const sourceTokenMinor = row.source_bank_account_id
+    ? transportMinorFromBankMinor(row.source_currency, BigInt(row.source_amount_minor))
+    : BigInt(row.usdc_amount_minor)
   try {
     row = await save(supabase, row.id, { status: "SOURCE_RESERVED", failed_stage: null, failure_reason: null })
 
@@ -168,23 +188,65 @@ export async function executeInternalTransfer(
       }
     }
 
-    if (!row.circle_transaction_id) {
+    const expectedDestinationTokenMinor = quoteFixedFx(row.source_currency, row.destination_currency, sourceTokenMinor)
+    const expectedDestinationBankMinor = row.destination_bank_account_id
+      ? bankMinorFromTransportMinor(row.destination_currency, expectedDestinationTokenMinor)
+      : expectedDestinationTokenMinor
+    if (expectedDestinationBankMinor !== BigInt(row.destination_amount_minor)) {
+      throw Object.assign(new Error("Stored destination amount does not match the fixed FX contract quote"), { stage: "FX_QUOTE" })
+    }
+
+    if (row.source_bank_account_id && !row.source_token_mint_tx_hash) {
+      try {
+        const hash = await mintTransportFromBank(
+          row.source_currency,
+          row.source_address as Address,
+          BigInt(row.source_amount_minor),
+          `${ref}:source-bank-onramp`
+        )
+        sourceTokenMinted = true
+        row = await save(supabase, row.id, { source_token_mint_tx_hash: hash })
+      } catch (error) {
+        throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage: "SOURCE_TOKEN_MINT" })
+      }
+    }
+
+    if (!row.fx_tx_hash) {
       row = await save(supabase, row.id, { status: "USDC_PENDING" })
       try {
-        const sent = await sendUsdcOnSameChainWithAppKit({
-          sourceBlockchain: "ARC-TESTNET",
-          sourceWalletAddress: row.source_address,
-          recipientAddress: row.destination_address,
-          amount: formatUnits(BigInt(row.usdc_amount_minor), 6),
-          token: "fUSDC",
+        const converted = await executeFixedFx({
+          sourceCurrency: row.source_currency,
+          destinationCurrency: row.destination_currency,
+          sourceHolder: row.source_address as Address,
+          recipient: row.destination_address as Address,
+          sourceTokenMinor,
+          minDestinationTokenMinor: expectedDestinationTokenMinor,
+          ref: `${ref}:fixed-fx`,
         })
+        fxSettled = true
         row = await save(supabase, row.id, {
           status: "USDC_SETTLED",
-          circle_transaction_id: sent.txId,
-          usdc_tx_hash: sent.txHash ?? null,
+          circle_transaction_id: converted.txHash,
+          usdc_tx_hash: converted.txHash,
+          fx_tx_hash: converted.txHash,
+          fx_rate_version: converted.rateVersion.toString(),
         })
       } catch (error) {
-        throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage: "USDC_TRANSFER" })
+        throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage: "FIXED_FX" })
+      }
+    }
+
+    if (row.destination_bank_account_id && !row.destination_token_burn_tx_hash) {
+      try {
+        const hash = await burnTransportToBank(
+          row.destination_currency,
+          row.destination_address as Address,
+          expectedDestinationTokenMinor,
+          `${ref}:destination-bank-offramp`
+        )
+        row = await save(supabase, row.id, { destination_token_burn_tx_hash: hash })
+      } catch (error) {
+        throw Object.assign(error instanceof Error ? error : new Error(String(error)), { stage: "DESTINATION_TOKEN_BURN" })
       }
     }
 
@@ -210,8 +272,21 @@ export async function executeInternalTransfer(
   } catch (error) {
     const stage = typeof error === "object" && error && "stage" in error ? String(error.stage) : "SETTLEMENT"
     const message = error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500)
-    // Undo bank side-effects so a failed settlement doesn't strand operating-account funds.
-    if (row.source_bank_account_id && holdReference) {
+    // Before the FX conversion, unwind both the temporary token and bank debit. Once FX has
+    // settled, keep the destination token available so a retry can finish redemption/credit.
+    if (!fxSettled && sourceTokenMinted && row.source_bank_account_id) {
+      try {
+        await burnTransportToBank(
+          row.source_currency,
+          row.source_address as Address,
+          sourceTokenMinor,
+          `${ref}:failed-source-cleanup`
+        )
+      } catch {
+        /* best-effort cleanup; the transfer remains failed below */
+      }
+    }
+    if (!fxSettled && row.source_bank_account_id && holdReference) {
       try {
         if (bankCaptured) {
           await supabase.rpc("sancus_bank_post_credit", {
@@ -230,9 +305,13 @@ export async function executeInternalTransfer(
       }
     }
     try {
-      return await save(supabase, row.id, { status: "FAILED", failed_stage: stage, failure_reason: message })
+      return await save(supabase, row.id, {
+        status: !fxSettled && bankCaptured ? "REVERSED" : "FAILED",
+        failed_stage: stage,
+        failure_reason: message,
+      })
     } catch {
-      return { ...row, status: "FAILED", failed_stage: stage, failure_reason: message }
+      return { ...row, status: !fxSettled && bankCaptured ? "REVERSED" : "FAILED", failed_stage: stage, failure_reason: message }
     }
   }
 }
