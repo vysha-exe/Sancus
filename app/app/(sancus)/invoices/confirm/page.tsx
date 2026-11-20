@@ -24,6 +24,8 @@ function ConfirmInner() {
   const [bankName, setBankName] = useState("")
   const [accountName, setAccountName] = useState("")
   const [accountNumber, setAccountNumber] = useState("")
+  const [routingNumber, setRoutingNumber] = useState("")
+  const [accountType, setAccountType] = useState<"CHECKING" | "SAVINGS">("CHECKING")
   const [swift, setSwift] = useState("")
   const amountValue = useMemo(() => Number(amount.replace(/,/g, "")), [amount])
   const amountLabel = useMemo(() => Number.isFinite(amountValue) && amountValue > 0 ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountValue) : "—", [amountValue, currency])
@@ -52,6 +54,8 @@ function ConfirmInner() {
         setBankName(found.paymentDetails.bankName ?? "")
         setAccountName(found.paymentDetails.accountName ?? "")
         setAccountNumber(found.paymentDetails.accountNumber ?? "")
+        setRoutingNumber(found.paymentDetails.routingNumber ?? "")
+        setAccountType(found.paymentDetails.accountType ?? "CHECKING")
         setSwift(found.paymentDetails.swift ?? "")
         setPaid(found.status === "PAID")
       } catch {
@@ -67,7 +71,7 @@ function ConfirmInner() {
     const res = await fetch(`/api/sancus/invoices/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ supplierName: supplier.trim(), invoiceNumber: invoice.trim() || null, amount: amountValue, currency, dueDate: due || null, rail, paymentDetails: { bankName: bankName.trim() || null, accountName: accountName.trim() || null, accountNumber: accountNumber.trim() || null, swift: swift.trim() || null } }),
+      body: JSON.stringify({ supplierName: supplier.trim(), invoiceNumber: invoice.trim() || null, amount: amountValue, currency, dueDate: due || null, rail, paymentDetails: { bankName: bankName.trim() || null, accountName: accountName.trim() || null, accountNumber: accountNumber.trim() || null, routingNumber: routingNumber.trim() || null, accountType: rail === "ACH" ? accountType : null, swift: swift.trim() || null } }),
     })
     const body = (await res.json().catch(() => ({}))) as { invoice?: InvoiceDto; error?: string; issues?: { message: string }[] }
     if (!res.ok || !body.invoice) {
@@ -88,6 +92,12 @@ function ConfirmInner() {
     try {
       const updated = await save()
       if (!updated) return
+      const context: InvoicePayContext = { invoiceId: updated.id, supplier: supplier.trim(), amount: amountValue, currency, invoiceNumber: invoice.trim() || null, rail, paymentDetails: updated.paymentDetails }
+      sessionStorage.setItem(INVOICE_PAY_STORAGE_KEY, JSON.stringify(context))
+      if (rail === "ACH") {
+        router.push(`/pay/us-bank?invoiceId=${updated.id}`)
+        return
+      }
       // Sandbox: continuing marks the invoice paid and hands its details to the pay flow.
       const res = await fetch(`/api/sancus/invoices/${id}/pay`, { method: "POST" })
       if (!res.ok) {
@@ -95,8 +105,6 @@ function ConfirmInner() {
         setError(body.error ?? "Could not mark the invoice paid.")
         return
       }
-      const context: InvoicePayContext = { invoiceId: updated.id, supplier: supplier.trim(), amount: amountValue, currency, invoiceNumber: invoice.trim() || null }
-      sessionStorage.setItem(INVOICE_PAY_STORAGE_KEY, JSON.stringify(context))
       router.push(`/pay?invoiceId=${updated.id}`)
     } catch {
       setError("Could not reach Sancus. Try again.")
@@ -131,6 +139,10 @@ function ConfirmInner() {
             <label className="sx-field s6"><span className="sx-label">Bank</span><input className="sx-field__input" value={bankName} disabled={loading || paid} onChange={(e) => setBankName(e.target.value)} /></label>
             <label className="sx-field s6"><span className="sx-label">Account name</span><input className="sx-field__input" value={accountName} disabled={loading || paid} onChange={(e) => setAccountName(e.target.value)} /></label>
             <label className="sx-field s6"><span className="sx-label">Account number / IBAN</span><input className="sx-field__input" value={accountNumber} disabled={loading || paid} onChange={(e) => setAccountNumber(e.target.value)} /></label>
+            {rail === "ACH" ? <>
+              <label className="sx-field s6"><span className="sx-label">ABA routing number</span><input className="sx-field__input" inputMode="numeric" value={routingNumber} disabled={loading || paid} onChange={(e) => setRoutingNumber(e.target.value.replace(/\D/g, ""))} /></label>
+              <label className="sx-field s6"><span className="sx-label">Account type</span><select className="sx-field__input" value={accountType} disabled={loading || paid} onChange={(e) => setAccountType(e.target.value as "CHECKING" | "SAVINGS")}><option value="CHECKING">Checking</option><option value="SAVINGS">Savings</option></select></label>
+            </> : null}
             <label className="sx-field s6"><span className="sx-label">SWIFT / BIC</span><input className="sx-field__input" value={swift} disabled={loading || paid} onChange={(e) => setSwift(e.target.value)} /></label>
           </div>
           <div className="tile-foot"><span className="body-s muted">{saved ? "Saved." : "Check these details against the uploaded invoice."}</span><span style={{ display: "flex", gap: 8 }}><button type="button" className="sx-btn sx-btn--secondary" disabled={busy || loading || paid} onClick={() => void onSave()}>Save</button><button type="button" className="sx-btn sx-btn--quiet" onClick={() => router.push("/invoices")}>Upload a different file</button></span></div>

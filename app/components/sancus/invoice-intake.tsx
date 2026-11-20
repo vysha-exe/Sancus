@@ -26,6 +26,8 @@ export function InvoiceIntake() {
   const [bankName, setBankName] = useState("")
   const [accountName, setAccountName] = useState("")
   const [accountNumber, setAccountNumber] = useState("")
+  const [routingNumber, setRoutingNumber] = useState("")
+  const [accountType, setAccountType] = useState<"CHECKING" | "SAVINGS">("CHECKING")
   const [swift, setSwift] = useState("")
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -46,6 +48,8 @@ export function InvoiceIntake() {
     setBankName(invoice.paymentDetails.bankName ?? "")
     setAccountName(invoice.paymentDetails.accountName ?? "")
     setAccountNumber(invoice.paymentDetails.accountNumber ?? "")
+    setRoutingNumber(invoice.paymentDetails.routingNumber ?? "")
+    setAccountType(invoice.paymentDetails.accountType ?? "CHECKING")
     setSwift(invoice.paymentDetails.swift ?? "")
   }
 
@@ -80,6 +84,8 @@ export function InvoiceIntake() {
         bankName: bankName.trim() || null,
         accountName: accountName.trim() || null,
         accountNumber: accountNumber.trim() || null,
+        routingNumber: routingNumber.trim() || null,
+        accountType: rail === "ACH" ? accountType : null,
         swift: swift.trim() || null,
       },
     }
@@ -123,6 +129,10 @@ export function InvoiceIntake() {
           <label className="sx-field s4"><span className="sx-label">Bank</span><input className="sx-field__input" value={bankName} onChange={(event) => setBankName(event.target.value)} placeholder="Bank name" /></label>
           <label className="sx-field s4"><span className="sx-label">Account name</span><input className="sx-field__input" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Beneficiary name" /></label>
           <label className="sx-field s6"><span className="sx-label">Account number / IBAN</span><input className="sx-field__input" value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} placeholder="Account number" /></label>
+          {rail === "ACH" ? <>
+            <label className="sx-field s6"><span className="sx-label">ABA routing number</span><input className="sx-field__input" inputMode="numeric" value={routingNumber} onChange={(event) => setRoutingNumber(event.target.value.replace(/\D/g, ""))} placeholder="9 digits" /></label>
+            <label className="sx-field s6"><span className="sx-label">Account type</span><select className="sx-field__input" value={accountType} onChange={(event) => setAccountType(event.target.value as "CHECKING" | "SAVINGS")}><option value="CHECKING">Checking</option><option value="SAVINGS">Savings</option></select></label>
+          </> : null}
           <label className="sx-field s6"><span className="sx-label">SWIFT / BIC</span><input className="sx-field__input" value={swift} onChange={(event) => setSwift(event.target.value)} placeholder="Optional" /></label>
         </div>
         {error ? <p className="body-s" role="alert" style={{ margin: 0, color: "var(--danger, #c0392b)" }}>{error}</p> : null}

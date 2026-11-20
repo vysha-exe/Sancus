@@ -18,6 +18,8 @@ const patchSchema = z.object({
     bankName: z.string().trim().max(120).nullable().optional(),
     accountName: z.string().trim().max(160).nullable().optional(),
     accountNumber: z.string().trim().max(100).nullable().optional(),
+    routingNumber: z.string().trim().max(20).nullable().optional(),
+    accountType: z.enum(["CHECKING", "SAVINGS"]).nullable().optional(),
     swift: z.string().trim().max(34).nullable().optional(),
   }).optional(),
 })
