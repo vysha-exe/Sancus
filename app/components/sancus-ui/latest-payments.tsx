@@ -1,17 +1,15 @@
 "use client"
 
-// Home › Latest payments: live payouts from the backend, demo rows when there are none.
+// Home › Latest payments: live payouts from the backend (empty until the first payment).
+import Link from "next/link"
 import { PaymentRow } from "@/components/sancus-ui/payment-row"
-import { latestPayments, personalLatestPayments } from "@/lib/sancus/demo-data"
-import { useAccount } from "@/lib/sancus/use-account"
 import { useLiveActivity } from "@/lib/sancus/use-live-activity"
 
 const CAP = 5
 
 export function LatestPayments() {
-  const { source, payments, loading } = useLiveActivity()
-  const { account } = useAccount()
-  const rows = source === "live" ? payments : account?.type === "INDIVIDUAL" ? personalLatestPayments : latestPayments
+  const { payments, loading } = useLiveActivity()
+  const rows = payments
 
   if (loading) {
     return (
@@ -28,6 +26,22 @@ export function LatestPayments() {
         </div>
         <div className="tile-foot" style={{ marginTop: "auto" }}>
           <span className="body-s muted">***</span>
+        </div>
+      </>
+    )
+  }
+
+  if (rows.length === 0) {
+    return (
+      <>
+        <div className="empty" style={{ minHeight: 120 }}>
+          Nothing here yet. Your first payment will show up here.
+          <Link href="/pay" className="sx-btn sx-btn--secondary sx-btn--sm">
+            Pay someone
+          </Link>
+        </div>
+        <div className="tile-foot" style={{ marginTop: "auto" }}>
+          <span className="body-s muted">0 payments</span>
         </div>
       </>
     )

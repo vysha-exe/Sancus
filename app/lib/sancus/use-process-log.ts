@@ -12,7 +12,6 @@ import { SANCUS_DATA_CHANGED } from "@/lib/sancus/live-refresh"
 import {
   arcExplorer,
   buildPipeline,
-  demoProcessSeeds,
   type DestinationKind,
   type ProcessStep,
 } from "@/lib/sancus/process-pipeline"
@@ -460,34 +459,12 @@ export function useProcessLog(): { entries: ProcessLogEntry[]; loading: boolean;
         rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
 
         if (!cancelled) {
-          if (rows.length === 0) {
-            setEntries(
-              demoProcessSeeds().map((s) =>
-                wrap({
-                  ...s,
-                  simulated: true,
-                  source: "demo",
-                  explorerUrl: s.txHash ? arcExplorer(s.txHash) : null,
-                })
-              )
-            )
-          } else {
-            setEntries(rows)
-          }
+          setEntries(rows)
           setLoading(false)
         }
       } catch {
         if (!cancelled) {
-          setEntries(
-            demoProcessSeeds().map((s) =>
-              wrap({
-                ...s,
-                simulated: true,
-                source: "demo",
-                explorerUrl: s.txHash ? arcExplorer(s.txHash) : null,
-              })
-            )
-          )
+          setEntries([])
           setLoading(false)
         }
       }

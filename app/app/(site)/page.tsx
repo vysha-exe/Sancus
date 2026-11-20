@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { DemoLink } from "@/components/sancus-ui/demo-link"
 import { Temple } from "@/components/sancus-ui/temple"
 import { Ticks, VirtualCard } from "@/components/sancus-ui/virtual-card"
 
@@ -27,7 +26,9 @@ export default function SiteLandingPage() {
               <Link className="sx-btn sx-btn--primary" href="/sign-up">
                 Open your account
               </Link>
-              <DemoLink className="sx-btn sx-btn--secondary">Try the demo</DemoLink>
+              <Link className="sx-btn sx-btn--secondary" href="/sign-in">
+                Sign in
+              </Link>
             </div>
           </div>
           <div className="hero-art">

@@ -27,7 +27,13 @@ export function SignInForm() {
       resetAccountCache()
       const res = await fetch("/api/sancus/accounts/me", { cache: "no-store" })
       const body = res.ok ? ((await res.json()) as { account: AccountDto }) : null
-      router.push(body?.account?.homePath ?? "/home")
+      const account = body?.account
+      // No company yet → finish business onboarding instead of a personal empty shell.
+      if (account?.type === "INDIVIDUAL") {
+        router.push("/sign-up/company")
+        return
+      }
+      router.push(account?.homePath ?? "/home")
     } catch (err) {
       setError((err as Error).message)
       setBusy(false)
@@ -86,9 +92,6 @@ export function SignInForm() {
           <button type="submit" className="sx-btn sx-btn--primary" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </button>
-          <Link href="/demo" className="sx-btn sx-btn--secondary">
-            Try the demo
-          </Link>
         </div>
       </form>
     </AuthShell>

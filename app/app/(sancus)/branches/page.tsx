@@ -3,13 +3,7 @@
 // Sancus: one global treasury → direct country branches with operating accounts and cross-border wallets.
 import { useState, type FormEvent } from "react"
 import Link from "next/link"
-import {
-  buildCompanyTree,
-  ROLE_LABEL,
-  type CompanyNode,
-  type CompanyRow,
-  type CompanyWallet,
-} from "@/lib/sancus/companies"
+import { ROLE_LABEL, type CompanyNode } from "@/lib/sancus/companies"
 import { COUNTRIES, countryByCode } from "@/lib/sancus/countries"
 import { CompanyTreeDiagram } from "@/components/sancus-ui/company-tree-diagram"
 import { OrgChart } from "@/components/sancus-ui/org-chart"
@@ -28,30 +22,6 @@ const primaryBalance = (node: CompanyNode) => {
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
 const flag = (code: string) => countryByCode(code)?.flag ?? "🏳️"
 
-// Shown when signed out (mock UI mode).
-const demoTree: CompanyNode[] = (() => {
-  const t = (n: number) => `2026-11-18T00:00:0${n}Z`
-  const rows: CompanyRow[] = [
-    { id: "hq", parent_id: null, root_id: "hq", name: "Lion City Trading (Global)", country: "US", base_currency: "USD", created_at: t(0) },
-    { id: "id", parent_id: "hq", root_id: "hq", name: "Indonesia", country: "ID", base_currency: "IDR", created_at: t(1) },
-    { id: "th", parent_id: "hq", root_id: "hq", name: "Thailand", country: "TH", base_currency: "THB", created_at: t(2) },
-  ]
-  const w = (companyId: string, name: string, usdc: string): CompanyWallet => ({
-    walletId: `${companyId}-${name}`,
-    name,
-    address: "0x4F2a00000000000000000000000000000000c81E",
-    blockchain: "ARC-TESTNET",
-    companyId,
-    usdcMinor: usdc,
-  })
-  return buildCompanyTree(
-    rows,
-    [{ company_id: "hq", user_id: "demo", role: "OWNER", status: "ACTIVE" }],
-    [w("hq", "Global treasury", "6390340000"), w("id", "Indonesia treasury", "1200000000"), w("th", "Thailand treasury", "800000000")],
-    "demo"
-  )
-})()
-
 async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data: Record<string, unknown> }> {
   try {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
@@ -65,12 +35,12 @@ export default function BranchesPage() {
   const ws = useWorkspace()
   const companiesData = useCompanies()
   const accountState = useAccount()
-  const mode = !ws.ready || !accountState.ready ? "loading" : accountState.signedOut ? "demo" : "live"
+  const mode = !ws.ready || !accountState.ready ? "loading" : "live"
 
-  const tree = mode === "demo" ? demoTree : ws.tree
-  const nodes = mode === "demo" ? 2 : tree.reduce((sum, root) => sum + root.children.length, 0)
-  const walletCount = mode === "demo" ? 3 : companiesData.walletCount
-  const balancesReady = mode === "demo" || companiesData.balancesReady
+  const tree = ws.tree
+  const nodes = tree.reduce((sum, root) => sum + root.children.length, 0)
+  const walletCount = companiesData.walletCount
+  const balancesReady = companiesData.balancesReady
 
   return (
     <div className="page">

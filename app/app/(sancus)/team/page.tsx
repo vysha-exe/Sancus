@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { people } from "@/lib/sancus/demo-data"
 import { ROLE_LABEL, type CompanyNode, type Role } from "@/lib/sancus/companies"
 import type { MemberDto } from "@/lib/sancus/members"
 import { useWorkspace } from "@/lib/sancus/use-workspace"
@@ -43,7 +42,7 @@ function Chevron() {
 export default function TeamPage() {
   const ws = useWorkspace()
   const accountState = useAccount()
-  const [mode, setMode] = useState<"loading" | "live" | "demo">("loading")
+  const [mode, setMode] = useState<"loading" | "live">("loading")
   const [companyId, setCompanyId] = useState<string | null>(null)
   const companies = useMemo(() => flatten(ws.tree), [ws.tree])
   const [data, setData] = useState<MembersResponse | null>(null)
@@ -73,7 +72,11 @@ export default function TeamPage() {
     let cancelled = false
     ;(async () => {
       if (accountState.signedOut) {
-        if (!cancelled) setMode("demo")
+        // No guest demo team — sign in to manage a live roster.
+        if (!cancelled) {
+          setData(null)
+          setMode("live")
+        }
         return
       }
       try {
@@ -115,15 +118,6 @@ export default function TeamPage() {
     })
   }, [data, query, roleFilter])
 
-  const demoRows = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return people.filter((p) => {
-      if (q && !p.name.toLowerCase().includes(q)) return false
-      if (roleFilter !== "Role" && p.role !== roleFilter) return false
-      return true
-    })
-  }, [query, roleFilter])
-
   const eligibleCardholders = useMemo(
     () => (data?.members ?? []).filter(
       (member) => member.status === "ACTIVE" && Boolean(member.userId) && (member.role === "EMPLOYEE" || member.role === "FINANCE")
@@ -138,25 +132,6 @@ export default function TeamPage() {
   const roleOptions = ["Role", "Owner", "Admin", "Finance", "Employee", "Viewer"]
   const companyName = companies.find((c) => c.id === companyId)?.name ?? "this branch"
   const isViewer = data?.role === "VIEWER"
-
-  if (mode === "demo") {
-    return (
-      <div className="page">
-        <header className="page-head">
-          <div>
-            <h1 className="sx-h heading-2">Team</h1>
-            <p className="body-s muted" style={{ margin: 0 }}>
-              Demo people for Café Paulista. Create a global account under Branches to manage a live team.
-            </p>
-          </div>
-          <Link href="/branches" className="sx-btn sx-btn--primary">
-            Open Branches
-          </Link>
-        </header>
-        <DemoTable rows={demoRows} query={query} setQuery={setQuery} roleFilter={roleFilter} setRoleFilter={setRoleFilter} roleOptions={roleOptions} />
-      </div>
-    )
-  }
 
   return (
     <div className="page">
@@ -431,67 +406,5 @@ export default function TeamPage() {
         />
       ) : null}
     </div>
-  )
-}
-
-function DemoTable({
-  rows,
-  query,
-  setQuery,
-  roleFilter,
-  setRoleFilter,
-  roleOptions,
-}: {
-  rows: typeof people
-  query: string
-  setQuery: (v: string) => void
-  roleFilter: string
-  setRoleFilter: (v: string) => void
-  roleOptions: string[]
-}) {
-  return (
-    <section className="tile s12" aria-label="People">
-      <div className="tbl-wrap">
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>
-                <label className="th-search">
-                  <span className="vh">Search</span>
-                  <input placeholder="Name" value={query} onChange={(e) => setQuery(e.target.value)} />
-                </label>
-              </th>
-              <th>
-                <label className="th-filter">
-                  <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-                    {roleOptions.map((r) => (
-                      <option key={r}>{r}</option>
-                    ))}
-                  </select>
-                  <Chevron />
-                </label>
-              </th>
-              <th>Country</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id}>
-                <td>
-                  <Link href={p.id === "ana" ? "/team/ana" : "/team"} style={{ color: "inherit", textDecoration: "none" }}>
-                    <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <span className="av">{p.initials}</span>
-                      <b>{p.name}</b>
-                    </span>
-                  </Link>
-                </td>
-                <td>{p.role}</td>
-                <td>{p.country}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   )
 }

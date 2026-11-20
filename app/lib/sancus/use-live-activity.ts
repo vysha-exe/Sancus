@@ -313,11 +313,13 @@ export function useLiveActivity(): {
   }, [pending])
 
   if (loading && live === null) {
-    return { source: "demo", payments: [], loading: true }
+    return { source: "live", payments: [], loading: true }
   }
 
-  if (!live || live.length === 0) {
-    return { source: "demo", payments: demoLedger, loading }
+  // Empty live activity stays empty — do not inject Café Paulista demo rows into
+  // a real (or newly created) business account.
+  if (!live) {
+    return { source: "demo", payments: demoLedger, loading: false }
   }
 
   return { source: "live", payments: live, loading: false }

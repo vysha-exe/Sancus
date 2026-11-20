@@ -1,11 +1,10 @@
 "use client"
 
-// Live approval queue from GET /api/sancus/approvals, with demo data when signed out.
+// Live approval queue from GET /api/sancus/approvals.
 // Every hook instance listens for a window event so approving on one screen
 // updates the sidebar badge, Home tile and Activity tab straight away.
 
 import { useCallback, useEffect, useState } from "react"
-import { approvals as demoApprovals } from "@/lib/sancus/demo-data"
 import { displayMinor, SGD_DECIMALS, USDC_DECIMALS } from "@/lib/sancus/money"
 import type { AchPaymentDto } from "@/lib/sancus/ach"
 import type { PayoutDto } from "@/lib/sancus/payouts"
@@ -137,27 +136,6 @@ export function fromInternalTransfer(p: InternalTransferDto): ApprovalItem {
   }
 }
 
-const demoItems: ApprovalItem[] = demoApprovals.map((a) => ({
-  id: a.id,
-  who: a.who,
-  asker: a.who.split(" → ")[0]!,
-  initials: initials(a.who.split(" → ")[0]!),
-  to: a.who.split(" → ")[1] ?? "",
-  rail: "",
-  amountLabel: a.amount,
-  amountUsd: a.amountUsd,
-  reason: a.reason,
-  localAmount: a.amount,
-  rate: "",
-  fee: "",
-  arrival: "",
-  when: a.detail,
-  live: false,
-  canDecide: true,
-  cantDecideReason: null,
-  mine: false,
-}))
-
 type Result =
   | { ok: true; waiting: ApprovalItem[]; decided: ApprovalItem[] }
   | { ok: false; unauthorized: boolean; error?: string }
@@ -205,9 +183,10 @@ export function useLiveApprovals() {
       setState({ source: "live", waiting: r.waiting, decided: r.decided })
       setError(null)
     } else if (r.unauthorized) {
-      setState({ source: "demo", waiting: demoItems, decided: [] })
+      // Guest / signed-out: no seeded demo queue — product entry is real auth.
+      setState({ source: "live", waiting: [], decided: [] })
     } else if (!r.unauthorized && r.error) {
-      setState({ source: "demo", waiting: demoItems, decided: [] })
+      setState({ source: "live", waiting: [], decided: [] })
       setError(r.error)
     }
     setLoading(false)

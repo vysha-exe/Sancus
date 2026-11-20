@@ -1,8 +1,6 @@
-import type { Metadata } from "next"
-import { DemoPicker } from "@/components/sancus-ui/demo-picker"
+import { redirect } from "next/navigation"
 
-export const metadata: Metadata = { title: "Sancus · Try the demo" }
-
+/** Demo entry is retired; send people into the real account flow. */
 export default function DemoPage() {
-  return <DemoPicker />
+  redirect("/sign-up")
 }
